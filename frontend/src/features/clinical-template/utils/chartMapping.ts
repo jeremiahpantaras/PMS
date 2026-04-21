@@ -16,5 +16,4 @@ export const chartLabel: Record<ChartType, string> = {
   head: 'Head Chart',
   hand: 'Hand Chart',
   feet: 'Feet Chart',
-  spine: 'Spine Chart (deprecated)',
 };

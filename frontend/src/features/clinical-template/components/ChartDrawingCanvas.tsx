@@ -168,29 +168,7 @@ export const ChartDrawingCanvas: React.FC<ChartDrawingCanvasProps> = ({
 
   const name = chartLabel[chartType];
 
-  // ── Spine chart deprecation guard ────────────────────────────────────────
-  // Spine chart is deprecated for new records. Existing records remain viewable
-  // in disabled/read-only mode (handled below) but cannot be drawn on.
-  if (chartType === 'spine' && !disabled) {
-    return (
-      <div>
-        {label && (
-          <p className="text-xs font-medium text-gray-600 mb-1">
-            {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
-          </p>
-        )}
-        <div className="flex items-start gap-2 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3">
-          <span className="text-yellow-500 text-base leading-none mt-0.5">⚠️</span>
-          <p className="text-sm text-yellow-700">
-            Spine chart is no longer supported for new records. Existing records are preserved but cannot be edited.
-          </p>
-        </div>
-        {helpText && <p className="text-xs text-gray-400 mt-1 italic">{helpText}</p>}
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-    );
-  }
+
 
   // ── Disabled / Read-only mode ─────────────────────────────────────────────
   if (disabled) {

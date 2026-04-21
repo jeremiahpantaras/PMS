@@ -324,9 +324,7 @@ export const ViewClinicalNoteModal: React.FC<ViewClinicalNoteModalProps> = ({
                                   ? (chartValue as { canvas_image: string | null }).canvas_image
                                   : null;
                             const chartName =
-                              field.chartType === 'spine'
-                                ? 'Spine Chart'
-                                : field.chartType === 'head'
+                                 field.chartType === 'head'
                                   ? 'Head Chart'
                                   : 'Body Chart';
                             return (
