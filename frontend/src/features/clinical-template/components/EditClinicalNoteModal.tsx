@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, FileText, Loader2, Save, Calendar, ClipboardList, Eye } from 'lucide-react';
+import { X, FileText, FolderKanban, Loader2, Save, Calendar, ClipboardList, Eye } from 'lucide-react';
 import { getActiveTemplates, getNote, updateNote } from '../clinical-templates.api';
 import { getAppointments } from '@/features/appointments/appointment.api';
+import { assignNotesToCase, type PatientCase } from '@/features/patients/patientCases.storage';
 import { DynamicFormRenderer } from './DynamicFormRenderer';
 import { ChartDrawingCanvas } from './ChartDrawingCanvas';
 import type { ChartAnnotation } from './ChartDrawingCanvas';
@@ -14,6 +15,8 @@ interface EditClinicalNoteModalProps {
   onClose: () => void;
   noteId: number;
   onSuccess?: () => void;
+  patientId?: number;
+  cases?: PatientCase[];
 }
 
 // Helper to format time
@@ -52,6 +55,8 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
   onClose,
   noteId,
   onSuccess,
+  patientId,
+  cases,
 }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<ClinicalTemplate | null>(null);
@@ -62,10 +67,12 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [patientName, setPatientName] = useState<string>('');
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
 
   // Fetch note data and templates on mount
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setSelectedCaseId('');
     try {
       // First fetch the note to get patient info
       const noteData = await getNote(noteId);
@@ -185,6 +192,11 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
         content,
       });
 
+      // Assign to case if selected (local storage)
+      if (selectedCaseId && patientId) {
+        assignNotesToCase(patientId, [noteId], selectedCaseId);
+      }
+
       console.log('[EditClinicalNoteModal] Note updated successfully!');
       toast.success('Clinical note updated successfully');
       console.log('[EditClinicalNoteModal] Calling onSuccess callback...');
@@ -243,7 +255,7 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col overflow-hidden">
         {/* Preview Header */}
-        <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white p-4 flex-shrink-0">
+        <div className="bg-linear-to-r from-sky-600 to-sky-700 text-white p-4 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4" />
@@ -371,7 +383,7 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
                     return (
                       <div key={field.id || fieldIndex} className="mb-3 last:mb-0">
                         <p className="text-xs font-medium text-gray-600 mb-1">{field.label}</p>
-                        <div className="text-sm text-gray-900 bg-gray-50 rounded p-2 min-h-[32px]">
+                        <div className="text-sm text-gray-900 bg-gray-50 rounded p-2 min-h-8">
                           {displayValue()}
                         </div>
                       </div>
@@ -405,7 +417,7 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-350 h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
@@ -487,6 +499,29 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
                       Select the patient's session
                     </p>
                   </div>
+
+                  {/* Assign to Case — only shown when caller provides cases */}
+                  {cases && cases.length > 0 && (
+                    <div className="md:col-span-2">
+                      <label className="flex items-center gap-2 text-xs font-medium text-gray-600 mb-1.5">
+                        <FolderKanban className="w-4 h-4" />
+                        Assign Note to Case
+                      </label>
+                      <select
+                        value={selectedCaseId}
+                        onChange={(e) => setSelectedCaseId(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white"
+                      >
+                        <option value="">— Keep unassigned —</option>
+                        {cases.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.title} ({c.status})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">This note will be linked to the selected case on save.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Template Info */}

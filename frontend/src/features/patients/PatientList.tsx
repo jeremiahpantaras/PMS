@@ -99,10 +99,10 @@ export const PatientList: React.FC<PatientListProps> = ({
 
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold shrink-0 ${
                           isArchived
-                            ? 'bg-gradient-to-r from-amber-400 to-amber-500'
-                            : 'bg-gradient-to-r from-green-500 to-green-600'
+                            ? 'bg-linear-to-r from-amber-400 to-amber-500'
+                            : 'bg-linear-to-r from-green-500 to-green-600'
                         }`}>
                           {patient.first_name.charAt(0)}{patient.last_name.charAt(0)}
                         </div>
@@ -137,7 +137,7 @@ export const PatientList: React.FC<PatientListProps> = ({
                       <div className="flex items-center justify-center gap-2 flex-wrap">
                         {!isArchived && (
                           <button
-                            onClick={() => navigate(`/clients/${patient.id}`)}
+                            onClick={() => navigate(`/patients/${patient.id}/profile`)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
                           >
                             <ExternalLink className="w-4 h-4" />
@@ -191,7 +191,7 @@ export const PatientList: React.FC<PatientListProps> = ({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-6 py-4">
+        <div className="shrink-0 bg-white border-t border-gray-200 px-6 py-4">
           <div className="flex items-center justify-center gap-2">
             <button
               onClick={handlePrevPage}

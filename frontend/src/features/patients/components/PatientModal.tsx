@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, User, MapPin, Phone, Heart } from 'lucide-react';
 import type { Patient, CreatePatientData } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
@@ -24,7 +24,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
   const [errors,    setErrors]    = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'personal' | 'contact' | 'emergency' | 'medical'>('personal');
 
-  const emptyForm: CreatePatientData = {
+  const emptyForm = useMemo<CreatePatientData>(() => ({
     clinic:      user?.clinic || 0,
     first_name:  '', middle_name: '', last_name: '',
     date_of_birth: '', gender: 'M',
@@ -35,47 +35,49 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     medical_conditions: '', allergies: '', medications: '',
     send_email_notifications: true,
     sms_notifications_enabled: false,
-  };
+  }), [user?.clinic]);
+
+  const buildFormFromPatient = useCallback((currentPatient: Patient): CreatePatientData => ({
+    clinic:        currentPatient.clinic || user?.clinic || 0,
+    first_name:    currentPatient.first_name || '',
+    middle_name:   currentPatient.middle_name || '',
+    last_name:     currentPatient.last_name || '',
+    date_of_birth: currentPatient.date_of_birth || '',
+    gender:        currentPatient.gender || 'M',
+    email:         currentPatient.email || '',
+    phone:         currentPatient.phone || '',
+    address:       currentPatient.address || '',
+    city:          currentPatient.city || '',
+    province:      currentPatient.province || '',
+    postal_code:   currentPatient.postal_code || '',
+    emergency_contact_name:         currentPatient.emergency_contact_name || '',
+    emergency_contact_phone:        currentPatient.emergency_contact_phone || '',
+    emergency_contact_relationship: currentPatient.emergency_contact_relationship || '',
+    philhealth_number: currentPatient.philhealth_number || '',
+    hmo_provider:      currentPatient.hmo_provider      || '',
+    hmo_number:        currentPatient.hmo_number        || '',
+    medical_conditions: currentPatient.medical_conditions || '',
+    allergies:          currentPatient.allergies          || '',
+    medications:        currentPatient.medications        || '',
+    send_email_notifications: currentPatient.send_email_notifications ?? true,
+    sms_notifications_enabled: currentPatient.sms_notifications_enabled ?? false,
+  }), [user?.clinic]);
 
   const [formData, setFormData] = useState<CreatePatientData>(emptyForm);
-
-  useEffect(() => {
-    if (mode === 'edit' && patient) {
-      setFormData({
-        clinic:        patient.clinic,
-        first_name:    patient.first_name,
-        middle_name:   patient.middle_name || '',
-        last_name:     patient.last_name,
-        date_of_birth: patient.date_of_birth,
-        gender:        patient.gender,
-        email:         patient.email || '',
-        phone:         patient.phone,
-        address:       patient.address,
-        city:          patient.city,
-        province:      patient.province,
-        postal_code:   patient.postal_code || '',
-        emergency_contact_name:         patient.emergency_contact_name,
-        emergency_contact_phone:        patient.emergency_contact_phone,
-        emergency_contact_relationship: patient.emergency_contact_relationship,
-        philhealth_number: patient.philhealth_number || '',
-        hmo_provider:      patient.hmo_provider      || '',
-        hmo_number:        patient.hmo_number        || '',
-        medical_conditions: patient.medical_conditions || '',
-        allergies:          patient.allergies          || '',
-        medications:        patient.medications        || '',
-        send_email_notifications: patient.send_email_notifications ?? true,
-        sms_notifications_enabled: patient.sms_notifications_enabled ?? false,
-      });
-    }
-  }, [mode, patient]);
 
   useEffect(() => {
     if (!isOpen) {
       setFormData(emptyForm);
       setErrors({});
       setActiveTab('personal');
+      return;
     }
-  }, [isOpen, user]);
+
+    if (mode === 'edit' && patient) {
+      setFormData(buildFormFromPatient(patient));
+      setErrors({});
+    }
+  }, [isOpen, mode, patient, emptyForm, buildFormFromPatient]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -96,7 +98,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     setErrors((prev)   => ({ ...prev, city: '' }));
   };
 
-  const validate = (): boolean => {
+  const validate = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
     if (!formData.first_name.trim())   newErrors.first_name   = 'First name is required';
     if (!formData.last_name.trim())    newErrors.last_name    = 'Last name is required';
@@ -116,14 +118,15 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     if (formData.date_of_birth && new Date(formData.date_of_birth) > new Date())
       newErrors.date_of_birth = 'Date of birth cannot be in the future';
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) {
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
       // Auto-navigate to the tab containing the first error
-      const firstKey = Object.keys(errors)[0] || '';
+      const firstKey = Object.keys(validationErrors)[0] || '';
       if (['first_name', 'middle_name', 'last_name', 'date_of_birth', 'gender'].includes(firstKey))
         setActiveTab('personal');
       else if (['email', 'phone', 'address', 'city', 'province', 'postal_code'].includes(firstKey))
@@ -138,8 +141,9 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     try {
       await onSave(formData);
       onClose();
-    } catch (error: any) {
-      if (error.response?.data) setErrors(error.response.data);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: Record<string, string> } };
+      if (err.response?.data) setErrors(err.response.data);
     } finally {
       setIsLoading(false);
     }
@@ -168,9 +172,9 @@ export const PatientModal: React.FC<PatientModalProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Header ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-sky-600 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 bg-sky-600 rounded-xl flex items-center justify-center shrink-0">
                 <User className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -194,7 +198,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
           </div>
 
           {/* ── Tabs ── */}
-          <div className="flex border-b border-gray-200 bg-gray-50 px-4 flex-shrink-0 overflow-x-auto">
+          <div className="flex border-b border-gray-200 bg-gray-50 px-4 shrink-0 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -467,7 +471,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
             </div>
 
             {/* ── Footer ── */}
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 bg-gray-50 shrink-0">
               <button
                 type="button" onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

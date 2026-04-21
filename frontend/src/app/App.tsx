@@ -25,6 +25,12 @@ import { Reports }        from '@/features/reports/Reports';
 import { Manage }         from '@/features/manage/Manage';
 import { Setup }          from '@/features/setup/Setup';
 import { Profile }        from '@/features/profile/Profile';
+import PatientProfileLayout from '@/features/patients/PatientProfileLayout';
+import PatientProfilePage from '@/features/patients/PatientProfilePage';
+import PatientAppointmentsPage from '@/features/patients/PatientAppointmentsPage';
+import PatientCasesNotesPage from '@/features/patients/PatientCasesNotesPage';
+import PatientUnassignedNotesPage from '@/features/patients/PatientUnassignedNotesPage';
+import PatientDocumentsPage from '@/features/patients/PatientDocumentsPage';
 import { PatientProfile } from '@/features/patients/PatientProfile';
 import { ClinicMessages } from '@/features/clinic-messages/ClinicMessages';
 import { NoteEditor }     from '@/features/clinical-template/pages/NoteEditor';
@@ -71,7 +77,7 @@ const Unauthorized = () => (
 );
 
 const LoadingScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-blue-50">
+  <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-sky-50 to-blue-50">
     <div className="text-center">
       <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-sky-600 mx-auto mb-4"></div>
       <p className="text-gray-600 text-lg font-medium">Loading...</p>
@@ -143,7 +149,19 @@ function App() {
           <Route path="/reports"   element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/profile"   element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
-          <Route path="/patients/:patientId" element={<ProtectedRoute><PatientProfile /></ProtectedRoute>} />
+          <Route
+            path="/patients/:patientId"
+            element={<ProtectedRoute><PatientProfileLayout /></ProtectedRoute>}
+          >
+            <Route index element={<Navigate to="profile" replace />} />
+            <Route path="profile" element={<PatientProfilePage />} />
+            <Route path="appointments" element={<PatientAppointmentsPage />} />
+            <Route path="cases" element={<PatientCasesNotesPage />} />
+            <Route path="unassigned-notes" element={<PatientUnassignedNotesPage />} />
+            <Route path="notes" element={<Navigate to="../cases" replace />} />
+            <Route path="documents" element={<PatientDocumentsPage />} />
+          </Route>
+
           <Route path="/clients/:id"         element={<ProtectedRoute><PatientProfile /></ProtectedRoute>} />
 
           <Route path="/clinical-notes"         element={<ProtectedRoute><NoteEditor /></ProtectedRoute>} />

@@ -28,7 +28,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
 
   const handleViewFullDetails = () => {
     onClose();
-    navigate(`/clients/${patient.id}`);
+    navigate(`/patients/${patient.id}/profile`);
   };
 
   const InfoRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
@@ -55,11 +55,11 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Header ── */}
-          <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
+          <div className="shrink-0 bg-white border-b border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {/* Avatar */}
-                <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+                <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-base shrink-0">
                   {patient.first_name.charAt(0)}{patient.last_name.charAt(0)}
                 </div>
                 <div>
@@ -155,7 +155,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
           </div>
 
           {/* ── Footer ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 shrink-0">
             <button
               onClick={handleViewFullDetails}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors"
