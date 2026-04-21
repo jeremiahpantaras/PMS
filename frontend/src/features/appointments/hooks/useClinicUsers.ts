@@ -26,6 +26,61 @@ interface UserListResponse {
   length?: number;
 }
 
+let cachedClinicUsers: ClinicUser[] | null = null;
+let usersRequestInFlight: Promise<ClinicUser[]> | null = null;
+
+const mapAndSortUsers = (userList: BackendUser[]): ClinicUser[] => {
+  const mappedUsers: ClinicUser[] = userList.map((user: BackendUser) => ({
+    id: user.id,
+    name: `${user.first_name} ${user.last_name}`.trim() || user.email,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar || null,
+  }));
+
+  const roleOrder = { ADMIN: 1, PRACTITIONER: 2, STAFF: 3 };
+  mappedUsers.sort((a, b) => {
+    const roleCompare = roleOrder[a.role] - roleOrder[b.role];
+    if (roleCompare !== 0) return roleCompare;
+    return a.name.localeCompare(b.name);
+  });
+
+  return mappedUsers;
+};
+
+const fetchClinicUsers = async (): Promise<ClinicUser[]> => {
+  if (cachedClinicUsers) return cachedClinicUsers;
+  if (usersRequestInFlight) return usersRequestInFlight;
+
+  usersRequestInFlight = (async () => {
+    const response = await axiosInstance.get<UserListResponse | BackendUser[]>('/users/');
+
+    let userList: BackendUser[] = [];
+    if (Array.isArray(response.data)) {
+      userList = response.data;
+    } else if (response.data && 'results' in response.data && Array.isArray(response.data.results)) {
+      userList = response.data.results;
+    } else {
+      throw new Error('Unexpected response format from /users/ endpoint');
+    }
+
+    const users = mapAndSortUsers(userList);
+    cachedClinicUsers = users;
+    return users;
+  })();
+
+  try {
+    return await usersRequestInFlight;
+  } finally {
+    usersRequestInFlight = null;
+  }
+};
+
+export const resetClinicUsersCache = () => {
+  cachedClinicUsers = null;
+  usersRequestInFlight = null;
+};
+
 /**
  * Hook to fetch all clinic users (admin + practitioners + staff) for user selection.
  * Returns users in a simple format suitable for the UserSelector component.
@@ -34,67 +89,41 @@ interface UserListResponse {
  * block appointments can be visible across branches.
  */
 export const useClinicUsers = (clinicBranchId?: number | null) => {
-  const [users, setUsers] = useState<ClinicUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<ClinicUser[]>(cachedClinicUsers ?? []);
+  const [loading, setLoading] = useState(!cachedClinicUsers);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchUsers = async () => {
+      if (cachedClinicUsers) {
+        setUsers(cachedClinicUsers);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        // Fetch all users from the clinic family (no branch filter)
-        // This ensures we can select users from any branch for block appointment visibility
-        const response = await axiosInstance.get<UserListResponse | BackendUser[]>('/users/');
-        
-        console.log('[useClinicUsers] Raw response:', response.data);
-        
-        // Handle both paginated and non-paginated responses
-        let userList: BackendUser[] = [];
-        
-        if (Array.isArray(response.data)) {
-          // Direct array response
-          userList = response.data;
-        } else if (response.data && 'results' in response.data && Array.isArray(response.data.results)) {
-          // Paginated response
-          userList = response.data.results;
-        } else {
-          console.error('[useClinicUsers] Unexpected response format:', response.data);
-          throw new Error('Unexpected response format from /users/ endpoint');
-        }
-
-        console.log('[useClinicUsers] User list:', userList);
-        
-        // Map backend users to ClinicUser format
-        const mappedUsers: ClinicUser[] = userList.map((user: BackendUser) => ({
-          id: user.id,
-          name: `${user.first_name} ${user.last_name}`.trim() || user.email,
-          email: user.email,
-          role: user.role,
-          avatar: user.avatar || null,
-        }));
-
-        // Sort by role (ADMIN first, then PRACTITIONER, then STAFF) and then by name
-        const roleOrder = { 'ADMIN': 1, 'PRACTITIONER': 2, 'STAFF': 3 };
-        mappedUsers.sort((a, b) => {
-          const roleCompare = roleOrder[a.role] - roleOrder[b.role];
-          if (roleCompare !== 0) return roleCompare;
-          return a.name.localeCompare(b.name);
-        });
-
-        console.log('[useClinicUsers] Mapped users:', mappedUsers);
-        setUsers(mappedUsers);
+        const fetchedUsers = await fetchClinicUsers();
+        if (!isMounted) return;
+        setUsers(fetchedUsers);
       } catch (err: any) {
-        console.error('[useClinicUsers] Failed to fetch clinic users:', err);
-        console.error('[useClinicUsers] Error details:', err.response?.data);
+        if (!isMounted) return;
         setError(err.message || 'Failed to load users');
       } finally {
+        if (!isMounted) return;
         setLoading(false);
       }
     };
 
     fetchUsers();
+
+    return () => {
+      isMounted = false;
+    };
   }, [clinicBranchId]);
 
   return { users, loading, error };

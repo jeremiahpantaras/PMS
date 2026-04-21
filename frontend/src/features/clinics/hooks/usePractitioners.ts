@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getPractitioners } from '../clinic.api';
 import type { Practitioner } from '../clinic.api';
 import toast from 'react-hot-toast';
@@ -23,39 +23,29 @@ export const usePractitioners = (params?: UsePractitionersParams): UsePractition
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPractitioners = async () => {
+  const fetchPractitioners = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
       const response = await getPractitioners(params?.clinicBranchId);
-      console.log('[usePractitioners] 🔍 Raw API response:', response);
-      console.log('[usePractitioners] 🔍 Practitioners count:', response.practitioners?.length);
-      if (response.practitioners?.[0]) {
-        console.log('[usePractitioners] 🔍 First practitioner full data:', response.practitioners[0]);
-        console.log('[usePractitioners] 🔍 First practitioner availability:', response.practitioners[0].availability);
-      }
-      // Log all practitioners' availability status
-      response.practitioners?.forEach((prac, idx) => {
-        console.log(`[usePractitioners] 🔍 Practitioner ${idx + 1} (${prac.name}):`, {
-          hasAvailability: !!prac.availability,
-          availability: prac.availability,
-        });
-      });
       setPractitioners(response.practitioners);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch practitioners:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to load practitioners';
+      const errorMessage =
+        err && typeof err === 'object' && 'response' in err
+          ? ((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Failed to load practitioners')
+          : 'Failed to load practitioners';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, [params?.clinicBranchId]);
 
   useEffect(() => {
     fetchPractitioners();
-  }, [params?.clinicBranchId]); // ✅ Refetch when clinic branch changes
+  }, [fetchPractitioners]);
 
   return {
     practitioners,

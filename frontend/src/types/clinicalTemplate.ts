@@ -15,7 +15,7 @@ export type FieldType =
   | 'rich_text'
   | 'tags';
 
-export type ChartType = 'body' | 'spine' | 'head' | 'hand' | 'feet';
+export type ChartType = 'body' | 'head' | 'hand' | 'feet';
 
 export interface FieldOption {
   value: string;

@@ -6,8 +6,7 @@ import {
 } from 'date-fns';
 import { useAppointmentModal }   from './hooks/useAppointmentModal';
 import { useDragSelection }      from './hooks/useDragSelection';
-import { useAppointments }       from './hooks/useAppointments';
-import { useBlockAppointments }  from './hooks/useBlockAppointments';
+import { useCalendarData }       from './hooks/useCalendarData.ts';
 import { useBlockHover }         from './hooks/useBlockHover';
 import { useAppointmentDrag }    from './hooks/useAppointmentDrag';
 import { useBlockAppointmentDrag } from './hooks/useBlockAppointmentDrag';
@@ -117,6 +116,15 @@ type BlockColors =
 interface DragGhostProps {
   appointment: Appointment;
   position:    { x: number; y: number };
+}
+
+interface CalendarSlot {
+  hour: number;
+  quarter: number;
+  minutes: number;
+  label: string;
+  time: string;
+  isLunchBreak: boolean;
 }
 
 const DragGhost: React.FC<DragGhostProps> = ({ appointment, position }) => (
@@ -232,7 +240,7 @@ const computeColumnLayout = (
   return { aptStyles, blockStyles };
 };
 
-export const Calendar: React.FC<CalendarProps> = ({
+const CalendarComponent: React.FC<CalendarProps> = ({
   view,
   currentDate,
   onDateChange,
@@ -258,22 +266,6 @@ export const Calendar: React.FC<CalendarProps> = ({
   // Pass null for String ids so appointment filtering is effectively disabled for Staff.
   const numericPractitionerId: number | null =
     typeof selectedPractitionerId === 'number' ? selectedPractitionerId : null;
-
-  // ── DEBUG: Log when practitionerAvailability changes ──
-  React.useEffect(() => {
-    console.log('[Calendar] 📊 Practitioner Availability Changed:', {
-      hasAvailability: !!practitionerAvailability,
-      practitionerId: selectedPractitionerId,
-      availability: practitionerAvailability,
-      dutyDays: practitionerAvailability?.duty_days,
-      dutyHours: practitionerAvailability
-        ? `${practitionerAvailability.duty_start_time} - ${practitionerAvailability.duty_end_time}`
-        : 'N/A',
-      lunchHours: practitionerAvailability
-        ? `${practitionerAvailability.lunch_start_time} - ${practitionerAvailability.lunch_end_time}`
-        : 'N/A',
-    });
-  }, [practitionerAvailability, selectedPractitionerId]);
 
   // ── AVAILABILITY HELPER FUNCTIONS ──────────────────────────────────────────
   // Whether the allAvailabilities map has any entries
@@ -443,25 +435,47 @@ export const Calendar: React.FC<CalendarProps> = ({
     appointments,
     updateAppointmentInState,
     addAppointmentToState,
-    refetch,
-  } = useAppointments({
+    refetchAppointments: refetch,
+    blockAppointments,
+    updateBlockAppointmentInState,
+    refetchBlockAppointments,
+  } = useCalendarData({
     startDate,
     endDate,
     practitionerId: numericPractitionerId,
     clinicBranchId: selectedClinicBranchId,
+    blockClinicBranchId: null,
   });
 
-  // ── Block Appointments (Events) ───────────────────────────────────────────────
-  // Fetch ALL block appointments regardless of selected branch so they're visible to all branches
-  const {
-    blockAppointments,
-    updateBlockAppointmentInState,
-    refetch: refetchBlockAppointments,
-  } = useBlockAppointments({
-    startDate,
-    endDate,
-    clinicBranchId: null, // Always fetch all block appointments - they're visible to all branches
-  });
+  const appointmentsByDate = useMemo(() => {
+    const map: Record<string, Appointment[]> = {};
+    for (const apt of appointments) {
+      if (apt.status === 'CANCELLED') continue;
+      if (!map[apt.date]) map[apt.date] = [];
+      map[apt.date].push(apt);
+    }
+    return map;
+  }, [appointments]);
+
+  const blockAppointmentsByDate = useMemo(() => {
+    const map: Record<string, BlockAppointment[]> = {};
+    if (!Array.isArray(blockAppointments)) return map;
+
+    for (const block of blockAppointments) {
+      // Branch-tab scoping depends on visibility_type:
+      //   ALL      → show in every branch tab (global event)
+      //   SELECTED → show in every branch tab (backend already restricts who sees it)
+      //   SELF     → show only in the branch where the event was created
+      if (selectedClinicBranchId !== null && block.visibility_type === 'SELF' && block.clinic !== selectedClinicBranchId) {
+        continue;
+      }
+
+      if (!map[block.date]) map[block.date] = [];
+      map[block.date].push(block);
+    }
+
+    return map;
+  }, [blockAppointments, selectedClinicBranchId]);
 
   // ── Conflict detection for block appointments (must be after appointments is defined) ─────────────────────────────────
   const { getFirstConflict } = useBlockConflictDetection(appointments);
@@ -491,9 +505,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   // Use refreshKey to trigger re-fetch when events are created
   React.useEffect(() => {
-    console.log('[Calendar] refreshKey effect:', refreshKey);
     if (refreshKey && refreshKey > 0) {
-      console.log('[Calendar] Calling refetchBlockAppointments');
       refetchBlockAppointments();
     }
   }, [refreshKey, refetchBlockAppointments]);
@@ -521,28 +533,11 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
   }, [currentDate, onCalendarReady]);
 
-  // Helper to get block appointments for a specific date
-  const getBlockAppointmentsForDate = (date: Date): BlockAppointment[] => {
+  // O(1) lookup for block appointments by date (pre-indexed in memoized map)
+  const getBlockAppointmentsForDate = useCallback((date: Date): BlockAppointment[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    console.log('[Calendar] getBlockAppointmentsForDate:', { dateStr, blockAppointments });
-    if (!blockAppointments || !Array.isArray(blockAppointments)) {
-      console.log('[Calendar] No block appointments or not an array');
-      return [];
-    }
-    const filtered = blockAppointments.filter(apt => {
-      if (apt.date !== dateStr) return false;
-      // Branch-tab scoping depends on visibility_type:
-      //   ALL      → show in every branch tab (global event)
-      //   SELECTED → show in every branch tab (backend already restricts who sees it)
-      //   SELF     → show only in the branch where the event was created
-      if (selectedClinicBranchId !== null && apt.visibility_type === 'SELF' && apt.clinic !== selectedClinicBranchId) {
-        return false;
-      }
-      return true;
-    });
-    console.log('[Calendar] Filtered block appointments:', filtered);
-    return filtered;
-  };
+    return blockAppointmentsByDate[dateStr] ?? [];
+  }, [blockAppointmentsByDate]);
 
   // Helper to get style for block appointment
   // Calculate block appointment position based on current view
@@ -756,14 +751,13 @@ export const Calendar: React.FC<CalendarProps> = ({
     });
   }, [timeSlots, practitionerAvailability]);
 
-  const getAppointmentsForDate = (date: Date): Appointment[] => {
+  const getAppointmentsForDate = useCallback((date: Date): Appointment[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    // Filter out cancelled appointments - they should not appear in the calendar
-    return appointments.filter(apt => apt.date === dateStr && apt.status !== 'CANCELLED');
-  };
+    return appointmentsByDate[dateStr] ?? [];
+  }, [appointmentsByDate]);
 
-  const getAppointmentsForDay = (date: Date): Appointment[] =>
-    getAppointmentsForDate(date);
+  const getAppointmentsForDay = useCallback((date: Date): Appointment[] =>
+    getAppointmentsForDate(date), [getAppointmentsForDate]);
 
   // Calculate appointment position based on current view
   // For Day view with filtered slots, offset is based on duty_start_time
@@ -816,14 +810,14 @@ export const Calendar: React.FC<CalendarProps> = ({
     setIsViewOpen(true);
   };
 
-  const handleMouseDown = (_date: Date, slot: any) => {
+  const handleMouseDown = (_date: Date, slot: CalendarSlot) => {
     if (dragState.isDragging || blockDragState.isDragging) return;
     isDraggingRef.current    = false;
     dragStartTimeRef.current = Date.now();
     startSelection(slot);
   };
 
-  const handleMouseEnter = (slot: any) => {
+  const handleMouseEnter = (slot: CalendarSlot) => {
     if (dragState.isDragging || blockDragState.isDragging) return;
     if (selection.isSelecting) {
       const cur   = slot.hour * 4 + slot.quarter;
@@ -873,7 +867,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     handleMouseUp(date);
   };
 
-  const handleDoubleClick = (date: Date, slot: any) => {
+  const handleDoubleClick = (date: Date, slot: CalendarSlot) => {
     if (dragState.isDragging || dragState.isHolding || blockDragState.isDragging || blockDragState.isHolding) return;
     if (onSlotAction) {
       onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
@@ -1515,7 +1509,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       onDragMove(e);
       onBlockDragMove(e);
     },
-    onMouseUp:    (_e: React.MouseEvent) => {
+    onMouseUp:    () => {
       if (dragState.isHolding && !dragState.isDragging) cancelHold();
       if (blockDragState.isHolding && !blockDragState.isDragging) cancelBlockHold();
     },
@@ -2009,3 +2003,6 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   return null;
 };
+
+export const Calendar = React.memo(CalendarComponent);
+Calendar.displayName = 'Calendar';

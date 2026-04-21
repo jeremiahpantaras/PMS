@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout';
 import { ChevronLeft, ChevronRight, Filter, Building2, Users } from 'lucide-react';
 import { Calendar } from './Calendar';
@@ -64,7 +64,10 @@ export const Diary: React.FC = () => {
     if (isPractitioner && user?.practitioner_id) {
       own = practitioners.find(p => p.id === user.practitioner_id);
     } else if (isStaff) {
-      own = practitioners.find(p => p.role === 'STAFF' && (p as any).user_id === user?.id);
+      own = practitioners.find(p => {
+        const maybeUserId = (p as { user_id?: number }).user_id;
+        return p.role === 'STAFF' && maybeUserId === user?.id;
+      });
     }
     if (!own) return;
 
@@ -89,7 +92,7 @@ export const Diary: React.FC = () => {
     (isPractitioner || isStaff) && cachedOwnBranchId !== null && selectedClinicBranch === cachedOwnBranchId;
 
   // Compute the availability to pass to Calendar
-  const getPractitionerAvailability = () => {
+  const practitionerAvailabilityForCalendar = useMemo(() => {
     if (!selectedPractitioner) return undefined;
 
     // Find in current practitioners list (works for both number and string ids)
@@ -104,7 +107,7 @@ export const Diary: React.FC = () => {
     }
 
     return undefined;
-  };
+  }, [selectedPractitioner, practitioners, isPractitioner, isStaff, cachedOwnAvailability]);
 
   // Build a full availability map for ALL practitioners so Calendar can colour
   // every slot correctly even when no specific practitioner is selected.
@@ -145,10 +148,18 @@ export const Diary: React.FC = () => {
       : undefined),
     [comparePractitioners, practitioners],
   );
-  const comparePractitionerAName =
-    practitioners.find(p => p.id === comparePractitioners[0])?.name ?? 'Practitioner A';
-  const comparePractitionerBName =
-    practitioners.find(p => p.id === comparePractitioners[1])?.name ?? 'Practitioner B';
+  const comparePractitionerAName = useMemo(
+    () => practitioners.find(p => p.id === comparePractitioners[0])?.name ?? 'Practitioner A',
+    [practitioners, comparePractitioners],
+  );
+  const comparePractitionerBName = useMemo(
+    () => practitioners.find(p => p.id === comparePractitioners[1])?.name ?? 'Practitioner B',
+    [practitioners, comparePractitioners],
+  );
+  const comparePractitionerNames = useMemo<[string, string]>(
+    () => [comparePractitionerAName, comparePractitionerBName],
+    [comparePractitionerAName, comparePractitionerBName],
+  );
 
   const handlePrevious = () => {
     if (view === 'day') setCurrentDate(subDays(currentDate, 1));
@@ -164,10 +175,10 @@ export const Diary: React.FC = () => {
 
   const handleToday = () => setCurrentDate(new Date());
 
-  const handleDateChange = (date: Date) => {
+  const handleDateChange = useCallback((date: Date) => {
     setCurrentDate(date);
     if (view === 'month') setView('day');
-  };
+  }, [view]);
 
   const handlePractitionerSelect = (practitionerId: number | string | null) => {
     setSelectedPractitioner(practitionerId);
@@ -259,35 +270,44 @@ export const Diary: React.FC = () => {
   const [showEventViewModal, setShowEventViewModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<BlockAppointment | null>(null);
 
-  const handleEventClick = (event: BlockAppointment) => {
+  const handleEventClick = useCallback((event: BlockAppointment) => {
     setSelectedEvent(event);
     setShowEventViewModal(true);
-  };
+  }, []);
 
-  const handleEventUpdated = () => {
+  const handleEventUpdated = useCallback(() => {
     // Increment the refresh key to trigger Calendar to refetch block appointments
     setEventRefreshKey(prev => prev + 1);
-  };
+  }, []);
 
-  const handleEventDeleted = () => {
+  const handleEventDeleted = useCallback(() => {
     // Increment the refresh key to trigger Calendar to refetch block appointments
     setEventRefreshKey(prev => prev + 1);
-  };
+  }, []);
 
-  const handleEventCreated = (_event: BlockAppointment) => {
+  const handleEventCreated = useCallback((_event: BlockAppointment) => {
+    void _event;
     // Increment the refresh key to trigger Calendar to refetch block appointments
-    console.log('[Diary] handleEventCreated called with event:', _event);
     setEventRefreshKey(prev => prev + 1);
-  };
+  }, []);
+
+  const handleRecurringCreated = useCallback(() => {
+    setAppointmentRefreshKey(prev => prev + 1);
+  }, []);
 
   // ── Slot action (double-click or drag-select) → SelectOptionModal ──────
   // Available to all users: Admin, Practitioner, Staff
-  const handleSlotAction = (slot: {
+  const handleSlotAction = useCallback((slot: {
     date: Date; time: string; hour: number; minutes: number; duration: number;
   }) => {
     setPendingSlot(slot);
     setShowSelectOptionModal(true);
-  };
+  }, []);
+
+  const calendarCompareMode = useMemo(
+    () => (isAdmin || isPractitioner || isStaff) && compareMode && !isDuplicateComparePractitioner && (view === 'day' || view === 'week'),
+    [isAdmin, isPractitioner, isStaff, compareMode, isDuplicateComparePractitioner, view],
+  );
 
   const handleSelectOptionClose = () => {
     setShowSelectOptionModal(false);
@@ -743,17 +763,17 @@ export const Diary: React.FC = () => {
                 selectedClinicBranchId={selectedClinicBranch}
                 refreshKey={eventRefreshKey}
                 appointmentRefreshKey={appointmentRefreshKey}
-                onRecurringCreated={() => setAppointmentRefreshKey(prev => prev + 1)}
+                onRecurringCreated={handleRecurringCreated}
                 onEventClick={handleEventClick}
                 onSlotAction={handleSlotAction}
                 onAppointmentsReady={setCalendarAppointments}
                 onCalendarReady={setCalendarReadyDate}
-                practitionerAvailability={compareMode ? undefined : getPractitionerAvailability()}
+                practitionerAvailability={compareMode ? undefined : practitionerAvailabilityForCalendar}
                 allAvailabilities={calendarAllAvailabilities}
-                compareMode={(isAdmin || isPractitioner || isStaff) && compareMode && !isDuplicateComparePractitioner && (view === 'day' || view === 'week')}
+                compareMode={calendarCompareMode}
                 compareAvailabilityA={compareAvailabilityA}
                 compareAvailabilityB={compareAvailabilityB}
-                comparePractitionerNames={[comparePractitionerAName, comparePractitionerBName]}
+                comparePractitionerNames={comparePractitionerNames}
                 comparePractitionerIdA={typeof comparePractitioners[0] === 'number' ? comparePractitioners[0] : null}
                 comparePractitionerIdB={typeof comparePractitioners[1] === 'number' ? comparePractitioners[1] : null}
               />
