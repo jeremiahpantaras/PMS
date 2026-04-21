@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Bell, Mail, MessageSquare, Clock, Calendar, Users, Shield,
+  Bell, Mail, Clock,
   ChevronDown, ChevronRight, AlertCircle, Check, Loader2,
   Phone, Send, UserX, CalendarX, Heart,
 } from 'lucide-react';

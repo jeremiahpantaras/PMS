@@ -15,7 +15,6 @@ import {
   ReportHeader,
   PrintButton,
   openPrintWindow,
-  formatDate,
 } from '../../components/ReportShared';
 import toast from 'react-hot-toast';
 

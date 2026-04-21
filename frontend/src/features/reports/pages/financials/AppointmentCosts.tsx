@@ -18,7 +18,6 @@ import {
   openPrintWindow,
   StatusBadge,
   formatDate,
-  formatTime,
   todayISO,
   monthStart,
 } from '../../components/ReportShared';

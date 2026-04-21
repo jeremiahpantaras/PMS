@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Mail, MessageSquare, Check, X, AlertCircle, Loader2, Clock,
-  ChevronLeft, ChevronRight, Search, Filter, Send, Reply,
+  Mail, MessageSquare, Check, X, Loader2, Clock,
+  ChevronLeft, ChevronRight, Search, Send, Reply,
 } from 'lucide-react';
 import {
   communicationApi,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, AlertCircle, Building2, RefreshCw, Clock, Plus, Trash2 } from 'lucide-react';
-import type { CreateStaffData, StaffFormErrors, StaffMember, DutyDay } from '../../types/staff.types';
-import type { DutySchedule } from '@/features/clinics/clinic.api';
+import type { CreateStaffData, StaffFormErrors, StaffMember } from '../../types/staff.types';
+import type { DutySchedule, DutyDay } from '@/features/clinics/clinic.api';
 import { TITLE_OPTIONS, DISCIPLINE_OPTIONS, GENDER_OPTIONS } from '../../types/staff.types';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';
 
@@ -164,7 +164,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
       // Validate per-day blocks
       if (formData.duty_schedule) {
         for (const day of (formData.duty_days ?? [])) {
-          const blocks = formData.duty_schedule[day as DutyDay] ?? [];
+          const blocks = formData.duty_schedule[day] ?? [];
           for (const block of blocks) {
             if (!block.start || !block.end) {
               e.duty_schedule = `${day}: every block must have a start and end time`;
@@ -265,7 +265,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
 
   const removeBlock = (day: DutyDay, idx: number) => {
     const existing = formData.duty_schedule ?? {};
-    const blocks = (existing[day] ?? []).filter((_, i) => i !== idx);
+    const blocks = (existing[day] ?? []).filter((_: { start: string; end: string }, i: number) => i !== idx);
     const newSchedule = { ...existing, [day]: blocks } as DutySchedule;
     setFormData(prev => ({ ...prev, duty_schedule: newSchedule }));
   };
@@ -551,7 +551,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                                 </button>
                               </div>
                               <div className="space-y-2">
-                                {blocks.map((block, idx) => (
+                                {blocks.map((block: { start: string; end: string }, idx: number) => (
                                   <div key={idx} className="flex items-center gap-2">
                                     <input
                                       type="time"
