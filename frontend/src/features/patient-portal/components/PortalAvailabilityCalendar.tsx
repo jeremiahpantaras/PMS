@@ -236,11 +236,8 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
             <div key={wi} className="grid grid-cols-7 gap-1">
               {week.map((date, di) => {
                 const dateStr    = format(date, 'yyyy-MM-dd');
-                const isPast     = dateStr < todayStr;
-                const isOther    = !isSameMonth(date, calMonth);
                 const isToday    = isSameDay(date, new Date());
                 const isSelected = dateStr === selectedDate;
-                const isUnavailable = isDateUnavailable(date);
 
                 return (
                   <button
