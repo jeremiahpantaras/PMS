@@ -51,19 +51,6 @@ interface PaymentEntry {
   referenceNumber: string;
 }
 
-// Helper to get display name for payment method
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getPaymentMethodLabel = (method: PaymentMethod): string => {
-  const labels: Record<PaymentMethod, string> = {
-    CASH: 'Cash',
-    CREDIT_CARD: 'Credit Card',
-    DEBIT_CARD: 'Debit Card',
-    BANK_TRANSFER: 'Bank Transfer',
-    GCASH: 'GCash',
-  };
-  return labels[method] || method;
-};
-
 export default function GenerateNewInvoice() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
   const navigate = useNavigate();
@@ -298,7 +285,7 @@ export default function GenerateNewInvoice() {
     email: clinicProfile.email,
     website: clinicProfile.website,
     tinNumber: clinicProfile.tin,
-    logoUrl: clinicProfile.logo_url,
+    logoUrl: clinicProfile.logo_url ?? undefined,
   } : undefined;
 
   const previewNextAppointment: NextAppointmentInfo | null = nextAppointment
