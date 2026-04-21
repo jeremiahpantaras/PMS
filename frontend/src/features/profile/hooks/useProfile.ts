@@ -12,8 +12,6 @@ import toast from 'react-hot-toast';
 export const useProfile = (initialUser: User | null) => {
   const [user,              setUser]              = useState<User | null>(initialUser);
   const [isSaving,          setIsSaving]          = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [isRemovingAvatar,  setIsRemovingAvatar]  = useState(false);
   const [isResettingPw,     setIsResettingPw]     = useState(false);
   const [pendingAvatar,     setPendingAvatar]    = useState<File | null>(null);  // Avatar to be saved with profile
   const [avatarToRemove,    setAvatarToRemove]   = useState(false);  // Flag to remove avatar
@@ -96,15 +94,6 @@ export const useProfile = (initialUser: User | null) => {
     setAvatarToRemove(false);
   }, []);
 
-  /* ── Get pending avatar status for UI ── */
-  const getPendingAvatar = useCallback((): File | null => {
-    return pendingAvatar;
-  }, [pendingAvatar]);
-
-  const isAvatarPendingRemoval = useCallback((): boolean => {
-    return avatarToRemove;
-  }, [avatarToRemove]);
-
   /* ── Reset password ── */
   const doResetPassword = useCallback(async (): Promise<boolean> => {
     setIsResettingPw(true);
@@ -147,8 +136,6 @@ export const useProfile = (initialUser: User | null) => {
   return {
     user,
     isSaving,
-    isUploadingAvatar,  // Always false now (avatar handled in saveProfile)
-    isRemovingAvatar,   // Always false now (avatar handled in saveProfile)
     isResettingPw,
     refresh,
     saveProfile,

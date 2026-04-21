@@ -15,8 +15,6 @@ export const Profile: React.FC = () => {
   const {
     user,
     isSaving,
-    isUploadingAvatar,
-    isRemovingAvatar,
     isResettingPw,
     saveProfile,
     saveAvatar,
@@ -45,9 +43,6 @@ export const Profile: React.FC = () => {
     );
   }
 
-  const initials =
-    `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase() || '?';
-
   return (
     <DashboardLayout>
       <div className="h-full flex flex-col overflow-hidden">
@@ -66,8 +61,8 @@ export const Profile: React.FC = () => {
                                 flex flex-col items-center gap-5 sticky top-6">
                   <ProfileAvatarUpload
                     avatarUrl={user.avatar_url ?? user.avatar}
-                    isUploading={isUploadingAvatar}
-                    isRemoving={isRemovingAvatar}
+                    isUploading={false}
+                    isRemoving={false}
                     onFileSelect={saveAvatar}
                     onRemove={deleteAvatar}
                     disabled={!isEditing}  // Only allow avatar changes in edit mode

@@ -1,6 +1,15 @@
 import React from 'react';
 import { Clock, AlertCircle } from 'lucide-react';
-import type { UncompletedNote } from '../types/dashboard.types';
+
+interface UncompletedNote {
+  id: number;
+  patientName: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  practitioner: string;
+  caseType: string;
+  daysPending: number;
+}
 
 interface UncompletedNotesTableProps {
   notes: UncompletedNote[];
@@ -93,7 +102,7 @@ export const UncompletedNotesTable: React.FC<UncompletedNotesTableProps> = ({ no
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-gradient-to-r from-sky-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-bold text-xs">
-                        {note.patientName.split(' ').map(n => n[0]).join('')}
+                        {note.patientName.split(' ').map((n: string) => n[0]).join('')}
                       </span>
                     </div>
                     <span className="font-medium text-gray-900 text-sm">{note.patientName}</span>

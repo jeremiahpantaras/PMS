@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle, Clock, FileText, FolderKanban, Loader2, Pencil, User } from 'lucide-react';
+import { CheckCircle, Clock, FolderKanban, Loader2, Pencil, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EditClinicalNoteModal } from '@/features/clinical-template/components/EditClinicalNoteModal';
 import { ViewClinicalNoteModal } from '@/features/clinical-template/components/ViewClinicalNoteModal';

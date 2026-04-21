@@ -240,7 +240,7 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
                 const isOther    = !isSameMonth(date, calMonth);
                 const isToday    = isSameDay(date, new Date());
                 const isSelected = dateStr === selectedDate;
-                const disabled   = isPast || isOther;
+                const isUnavailable = isDateUnavailable(date);
 
                 return (
                   <button
