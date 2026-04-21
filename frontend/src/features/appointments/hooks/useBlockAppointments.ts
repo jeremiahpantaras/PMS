@@ -23,7 +23,6 @@ export const useBlockAppointments = ({
   const endDateStr = format(endDate, 'yyyy-MM-dd');
 
   const fetchBlockAppointments = useCallback(async () => {
-    console.log('[useBlockAppointments] Fetching block appointments:', { startDateStr, endDateStr, clinicBranchId });
     setLoading(true);
     setError(null);
 
@@ -37,10 +36,8 @@ export const useBlockAppointments = ({
       }
 
       const data = await getBlockAppointments(params);
-      console.log('[useBlockAppointments] Received data:', data);
       // Handle paginated response - API returns { count, results, ... }
       const items = Array.isArray(data) ? data : (data.results || []);
-      console.log('[useBlockAppointments] Setting block appointments:', items);
       setBlockAppointments(items as BlockAppointment[]);
     } catch (err: any) {
       console.error('Failed to fetch block appointments:', err);

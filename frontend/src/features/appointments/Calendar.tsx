@@ -261,18 +261,20 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   // ── DEBUG: Log when practitionerAvailability changes ──
   React.useEffect(() => {
-    console.log('[Calendar] 📊 Practitioner Availability Changed:', {
-      hasAvailability: !!practitionerAvailability,
-      practitionerId: selectedPractitionerId,
-      availability: practitionerAvailability,
-      dutyDays: practitionerAvailability?.duty_days,
-      dutyHours: practitionerAvailability
-        ? `${practitionerAvailability.duty_start_time} - ${practitionerAvailability.duty_end_time}`
-        : 'N/A',
-      lunchHours: practitionerAvailability
-        ? `${practitionerAvailability.lunch_start_time} - ${practitionerAvailability.lunch_end_time}`
-        : 'N/A',
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Calendar] 📊 Practitioner Availability Changed:', {
+        hasAvailability: !!practitionerAvailability,
+        practitionerId: selectedPractitionerId,
+        availability: practitionerAvailability,
+        dutyDays: practitionerAvailability?.duty_days,
+        dutyHours: practitionerAvailability
+          ? `${practitionerAvailability.duty_start_time} - ${practitionerAvailability.duty_end_time}`
+          : 'N/A',
+        lunchHours: practitionerAvailability
+          ? `${practitionerAvailability.lunch_start_time} - ${practitionerAvailability.lunch_end_time}`
+          : 'N/A',
+      });
+    }
   }, [practitionerAvailability, selectedPractitionerId]);
 
   // ── AVAILABILITY HELPER FUNCTIONS ──────────────────────────────────────────
@@ -491,9 +493,13 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   // Use refreshKey to trigger re-fetch when events are created
   React.useEffect(() => {
-    console.log('[Calendar] refreshKey effect:', refreshKey);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Calendar] refreshKey effect:', refreshKey);
+      if (refreshKey && refreshKey > 0) {
+        console.log('[Calendar] Calling refetchBlockAppointments');
+      }
+    }
     if (refreshKey && refreshKey > 0) {
-      console.log('[Calendar] Calling refetchBlockAppointments');
       refetchBlockAppointments();
     }
   }, [refreshKey, refetchBlockAppointments]);
@@ -521,28 +527,29 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
   }, [currentDate, onCalendarReady]);
 
-  // Helper to get block appointments for a specific date
-  const getBlockAppointmentsForDate = (date: Date): BlockAppointment[] => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    console.log('[Calendar] getBlockAppointmentsForDate:', { dateStr, blockAppointments });
-    if (!blockAppointments || !Array.isArray(blockAppointments)) {
-      console.log('[Calendar] No block appointments or not an array');
-      return [];
-    }
-    const filtered = blockAppointments.filter(apt => {
-      if (apt.date !== dateStr) return false;
+  // Memoized map: date string → filtered block appointments for O(1) lookup
+  const blockAppointmentsByDate = useMemo(() => {
+    const map: Record<string, BlockAppointment[]> = {};
+    if (!blockAppointments || !Array.isArray(blockAppointments)) return map;
+    for (const apt of blockAppointments) {
       // Branch-tab scoping depends on visibility_type:
       //   ALL      → show in every branch tab (global event)
       //   SELECTED → show in every branch tab (backend already restricts who sees it)
       //   SELF     → show only in the branch where the event was created
       if (selectedClinicBranchId !== null && apt.visibility_type === 'SELF' && apt.clinic !== selectedClinicBranchId) {
-        return false;
+        continue;
       }
-      return true;
-    });
-    console.log('[Calendar] Filtered block appointments:', filtered);
-    return filtered;
-  };
+      if (!map[apt.date]) map[apt.date] = [];
+      map[apt.date].push(apt);
+    }
+    return map;
+  }, [blockAppointments, selectedClinicBranchId]);
+
+  // Helper to get block appointments for a specific date (O(1) lookup)
+  const getBlockAppointmentsForDate = useCallback((date: Date): BlockAppointment[] => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return blockAppointmentsByDate[dateStr] ?? [];
+  }, [blockAppointmentsByDate]);
 
   // Helper to get style for block appointment
   // Calculate block appointment position based on current view

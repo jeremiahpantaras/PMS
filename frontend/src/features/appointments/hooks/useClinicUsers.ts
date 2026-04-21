@@ -48,8 +48,6 @@ export const useClinicUsers = (clinicBranchId?: number | null) => {
         // This ensures we can select users from any branch for block appointment visibility
         const response = await axiosInstance.get<UserListResponse | BackendUser[]>('/users/');
         
-        console.log('[useClinicUsers] Raw response:', response.data);
-        
         // Handle both paginated and non-paginated responses
         let userList: BackendUser[] = [];
         
@@ -64,8 +62,6 @@ export const useClinicUsers = (clinicBranchId?: number | null) => {
           throw new Error('Unexpected response format from /users/ endpoint');
         }
 
-        console.log('[useClinicUsers] User list:', userList);
-        
         // Map backend users to ClinicUser format
         const mappedUsers: ClinicUser[] = userList.map((user: BackendUser) => ({
           id: user.id,
@@ -83,7 +79,6 @@ export const useClinicUsers = (clinicBranchId?: number | null) => {
           return a.name.localeCompare(b.name);
         });
 
-        console.log('[useClinicUsers] Mapped users:', mappedUsers);
         setUsers(mappedUsers);
       } catch (err: any) {
         console.error('[useClinicUsers] Failed to fetch clinic users:', err);
