@@ -45,7 +45,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
             Sign out?
           </h2>
           <p className="text-sm text-gray-500">
-            Are you sure you want to sign out of CareNest PMS?
+            Are you sure you want to sign out of Malasakit?
           </p>
         </div>
 
