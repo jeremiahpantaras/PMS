@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, MapPin, Briefcase, Users } from 'lucide-react';
+import { ArrowLeft, MapPin, Briefcase } from 'lucide-react';
 
 export const Careers: React.FC = () => {
   const positions = [
