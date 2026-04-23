@@ -3,6 +3,9 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
+import cloudinary
+
+
 
 # Load environment variables
 load_dotenv()
@@ -116,6 +119,12 @@ CORS_ALLOWED_ORIGINS = [
     "https://malasakit-web.vercel.app",
     "https://malasakit.com",
 ]
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+)
 
 
 
