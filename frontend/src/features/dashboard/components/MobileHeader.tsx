@@ -22,7 +22,7 @@ export const MobileHeader: React.FC = () => {
       {/* Center: Logo */}
       <div className="flex items-center space-x-2">
         <img src={MESLogo} alt="MES Logo" className="h-8 w-auto" />
-        <span className="font-bold text-lg text-gray-900">MES PMS</span>
+        <span className="font-bold text-lg text-gray-900">Malasakit</span>
       </div>
 
       {/* Right: User Avatar */}

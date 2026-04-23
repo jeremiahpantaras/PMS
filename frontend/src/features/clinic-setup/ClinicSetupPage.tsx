@@ -193,7 +193,7 @@ export const ClinicSetupPage: React.FC = () => {
         setAuth({ ...user, clinic_setup_complete: true }, tokens);
       }
 
-      toast.success('Clinic profile saved! Welcome to MES PMS.');
+      toast.success('Clinic profile saved! Welcome to Malasakit EMR Solutions.');
       navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
@@ -295,7 +295,7 @@ export const ClinicSetupPage: React.FC = () => {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="e.g. MES Health Clinic"
+                placeholder="e.g. Malasakit Health Clinic"
                 className={`w-full px-4 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-sky-400
                   ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-sky-400'}`}
               />

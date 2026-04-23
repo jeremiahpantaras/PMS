@@ -116,7 +116,7 @@ export const ForgotPassword: React.FC = () => {
             <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
               <KeyRound className="w-7 h-7 text-white" />
             </div>
-            <span className="text-2xl font-bold text-white">MES</span>
+            <span className="text-2xl font-bold text-white">Malasakit</span>
           </div>
         </div>
 
@@ -154,7 +154,7 @@ export const ForgotPassword: React.FC = () => {
 
         {/* Footer */}
         <div className="relative z-10 text-blue-200 text-sm">
-          © 2024 MES - Malasakit EMR Solutions
+          © 2026 Malasakit EMR Solutions
         </div>
       </div>
 
@@ -177,7 +177,7 @@ export const ForgotPassword: React.FC = () => {
             <div className="w-10 h-10 bg-gradient-to-br from-sky-600 to-blue-600 rounded-xl flex items-center justify-center">
               <KeyRound className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">MES</span>
+            <span className="text-xl font-bold text-gray-900">Malasakit</span>
           </div>
 
           {/* Header */}

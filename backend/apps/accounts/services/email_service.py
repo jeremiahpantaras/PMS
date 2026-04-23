@@ -16,7 +16,7 @@ class EmailService:
         Send welcome email with auto-generated credentials.
         """
         try:
-            subject = f'Welcome to MES PMS - Your Account Credentials'
+            subject = f'Welcome to Malasakit EMR Solutions - Your Account Credentials'
             
             # HTML content
             html_message = f"""
@@ -45,8 +45,8 @@ class EmailService:
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>🎉 Welcome to MES PMS!</h1>
-                        <p>Your Practice Management System</p>
+                        <h1>🎉 Welcome to Malasakit EMR Solutions!</h1>
+                        <p>Your Clinic Management System</p>
                     </div>
                     
                     <div class="content">
@@ -77,11 +77,11 @@ class EmailService:
                         </div>
                         
                         <p>Best regards,<br>
-                        <strong>The MES PMS Team</strong></p>
+                        <strong>The Malasakit EMR Solutions Team</strong></p>
                     </div>
                     
                     <div class="footer">
-                        <p>© 2026 MES PMS. All rights reserved.</p>
+                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
                     </div>
                 </div>
             </body>
@@ -90,7 +90,7 @@ class EmailService:
             
             # Plain text fallback
             plain_message = f"""
-            Welcome to MES PMS!
+            Welcome to Malasakit EMR Solutions!
             
             Hello {user_name},
             
@@ -102,7 +102,7 @@ class EmailService:
             Login: {settings.FRONTEND_URL}/login
             
             Best regards,
-            MES PMS Team
+            Malasakit EMR Solutions Team
             """
             
             # Create email with explicit encoding
@@ -133,7 +133,7 @@ class EmailService:
     def send_password_reset_email(user_email: str, user_name: str, new_password: str) -> bool:
         """Send a new auto-generated password to the user's email."""
         try:
-            subject = 'MES PMS — Your Password Has Been Reset'
+            subject = 'Malasakit EMR Solutions — Your Password Has Been Reset'
 
             html_message = f"""
             <!DOCTYPE html>
@@ -165,7 +165,7 @@ class EmailService:
                 <div class="container">
                     <div class="header">
                         <h1>🔐 Password Reset</h1>
-                        <p>MES Practice Management System</p>
+                        <p>Malasakit EMR Solutions</p>
                     </div>
                     <div class="content">
                         <h2>Hello {user_name},</h2>
@@ -198,10 +198,10 @@ class EmailService:
                         <p>If you did not request this reset, contact your administrator
                            immediately.</p>
 
-                        <p>Best regards,<br><strong>The MES PMS Team</strong></p>
+                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
                     </div>
                     <div class="footer">
-                        <p>© 2026 MES PMS. All rights reserved.</p>
+                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
                     </div>
                 </div>
             </body>
@@ -209,7 +209,7 @@ class EmailService:
             """
 
             plain_message = f"""
-            MES PMS — Password Reset
+            Malasakit EMR Solutions — Password Reset
 
             Hello {user_name},
 
@@ -223,7 +223,7 @@ class EmailService:
             You will be prompted to change this password after login.
 
             Best regards,
-            MES PMS Team
+            Malasakit EMR Solutions Team
             """
 
             email = EmailMultiAlternatives(
@@ -246,7 +246,7 @@ class EmailService:
     def send_verification_code_email(user_email: str, user_name: str, code: str) -> bool:
         """Send verification code for password reset process."""
         try:
-            subject = 'MES PMS — Password Reset Verification Code'
+            subject = 'Malasakit EMR Solutions — Password Reset Verification Code'
 
             html_message = f"""
             <!DOCTYPE html>
@@ -275,7 +275,7 @@ class EmailService:
                 <div class="container">
                     <div class="header">
                         <h1>🔐 Password Reset</h1>
-                        <p>MES Practice Management System</p>
+                        <p>Malasakit EMR Solutions</p>
                     </div>
                     <div class="content">
                         <h2>Hello {user_name},</h2>
@@ -295,10 +295,10 @@ class EmailService:
                             </ul>
                         </div>
 
-                        <p>Best regards,<br><strong>The MES PMS Team</strong></p>
+                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
                     </div>
                     <div class="footer">
-                        <p>© 2026 MES PMS. All rights reserved.</p>
+                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
                     </div>
                 </div>
             </body>
@@ -306,7 +306,7 @@ class EmailService:
             """
 
             plain_message = f"""
-            MES PMS — Password Reset Verification Code
+            Malasakit EMR Solutions — Password Reset Verification Code
 
             Hello {user_name},
 
@@ -319,7 +319,7 @@ class EmailService:
             If you didn't request this, please ignore this email.
 
             Best regards,
-            MES PMS Team
+            Malasakit EMR Solutions Team
             """
 
             email = EmailMultiAlternatives(

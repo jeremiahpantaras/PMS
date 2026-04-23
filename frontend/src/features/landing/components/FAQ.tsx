@@ -40,7 +40,7 @@ export const FAQ: React.FC = () => {
             Frequently Asked Questions
           </h2>
           <p className="mt-6 text-lg sm:text-xl text-gray-600 leading-relaxed font-body">
-            Everything you need to know about MES PMS
+            Everything you need to know about Malasakit EMR Solutions
           </p>
         </div>
 

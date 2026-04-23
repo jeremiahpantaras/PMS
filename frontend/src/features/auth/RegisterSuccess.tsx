@@ -62,7 +62,7 @@ export const RegisterSuccess: React.FC = () => {
               <h1 className="text-3xl font-bold text-white">
                 Account Created!
               </h1>
-              <p className="text-white/80">Welcome to MES, {companyName}</p>
+              <p className="text-white/80">Welcome to Malasakit EMR Solutions, {companyName}</p>
             </div>
           </div>
           
@@ -73,7 +73,7 @@ export const RegisterSuccess: React.FC = () => {
 
         {/* Footer */}
         <div className="relative z-10 text-white/60 text-sm">
-          © 2024 MES - Malasakit EMR Solutions
+          © 2026 Malasakit EMR Solutions
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export const RegisterSuccess: React.FC = () => {
             {/* Title */}
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900">Account Created Successfully!</h2>
-              <p className="mt-2 text-gray-600">Welcome to MES - Malasakit EMR Solutions</p>
+              <p className="mt-2 text-gray-600">Welcome to Malasakit EMR Solutions</p>
             </div>
 
             {/* Email Status */}

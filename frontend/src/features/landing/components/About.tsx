@@ -77,7 +77,7 @@ export const About: React.FC = () => {
         <div className="mt-16 bg-gradient-to-r from-clinical-cloud to-care-blue/5 rounded-3xl p-10 sm:p-12">
           <div className="max-w-3xl mx-auto text-center">
             <p className="text-lg sm:text-xl text-gray-600 leading-relaxed font-body">
-              Founded by healthcare professionals and technologists, MES was born from 
+              Founded by healthcare professionals and technologists, Malasakit EMR Solution was born from 
               firsthand experience with outdated practice management systems. We believe 
               that technology should enhance patient care, not complicate it.
             </p>

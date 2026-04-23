@@ -139,7 +139,7 @@ export const Footer: React.FC = () => {
         <div className="mt-16 pt-10 border-t border-white/10">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <p className="text-base text-white/60 font-body">
-              © {currentYear} Malasakit. All rights reserved.
+              © {currentYear} Malasakit EMR Solutions. All rights reserved.
             </p>
             <div className="flex items-center space-x-8">
               <a href="#" className="text-base text-white/60 hover:text-white transition-colors font-body">Twitter</a>

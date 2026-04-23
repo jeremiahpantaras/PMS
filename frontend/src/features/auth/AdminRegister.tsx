@@ -200,7 +200,7 @@ export const AdminRegister: React.FC = () => {
 
         {/* Footer */}
         <div className="relative z-10 text-white/60 text-sm">
-          © 2024 MES - Malasakit EMR Solutions
+          © 2026 Malasakit EMR Solutions
         </div>
       </div>
 
