@@ -7,6 +7,9 @@ import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute } from
 import { LogoutConfirmModal } from '@/components/modals/LogoutConfirmModal';
 import { useLogoutConfirm } from '@/hooks/useLogoutConfirm';
 
+//vercel web analytics
+import { Analytics } from "@vercel/analytics/react";
+
 // Public Pages
 import { LandingPage }            from '@/features/landing/LandingPage';
 import { Login }                  from '@/features/auth/Login';
@@ -215,6 +218,7 @@ function App() {
         <ClinicMessagesGuard />
         <NotificationBellGuard />
         <GlobalLogoutModal />
+        <Analytics />
       </BrowserRouter>
     </SidebarProvider>
   );
