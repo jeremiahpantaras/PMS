@@ -353,3 +353,35 @@ class PortalBooking(TimeStampedModel):
             suffix = get_random_string(6).upper()
             self.reference_number = f"BK-{prefix}-{suffix}"
         super().save(*args, **kwargs)
+
+
+class PatientConsent(TimeStampedModel):
+    """Stores legally required privacy consent with e-signature for portal bookings."""
+
+    patient = models.ForeignKey(
+        Patient,
+        on_delete=models.CASCADE,
+        related_name='consents',
+        null=True,
+        blank=True,
+    )
+    portal_link = models.ForeignKey(
+        PortalLink,
+        on_delete=models.CASCADE,
+        related_name='consents',
+    )
+    full_name = models.CharField(max_length=255)
+    email = models.EmailField()
+    consent_text = models.TextField()
+    signature = models.TextField()  # base64 image string
+
+    class Meta:
+        db_table = 'patient_consents'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['portal_link', 'email']),
+            models.Index(fields=['patient', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} Consent"

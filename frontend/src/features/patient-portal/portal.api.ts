@@ -1,5 +1,11 @@
 import axios from 'axios';
-import type { PortalData, BookingPayload, BookingConfirmation } from './types/portal';
+import type {
+  PortalData,
+  BookingPayload,
+  BookingConfirmation,
+  PortalConsentPayload,
+  PortalConsentResponse,
+} from './types/portal';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api';
 
@@ -33,6 +39,17 @@ export const submitBooking = async (
 ): Promise<BookingConfirmation> => {
   const res = await publicApi.post<BookingConfirmation>(
     `/public/portal/${token}/book/`,
+    payload,
+  );
+  return res.data;
+};
+
+export const createPortalConsent = async (
+  token: string,
+  payload: PortalConsentPayload,
+): Promise<PortalConsentResponse> => {
+  const res = await publicApi.post<PortalConsentResponse>(
+    `/public/portal/${token}/consent/`,
     payload,
   );
   return res.data;

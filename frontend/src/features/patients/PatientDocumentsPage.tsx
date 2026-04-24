@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Eye, FileText, Files } from 'lucide-react';
 import { openPrintNote } from '@/features/clinical-template/clinical-templates.api';
 import { ViewClinicalNoteModal } from '@/features/clinical-template/components/ViewClinicalNoteModal';
 import { usePatientProfileContext } from './context/PatientProfileContext';
 import { getCaseIdForNote, listPatientCases } from './patientCases.storage';
+import { getPatientConsents, type PatientConsentRecord } from './patient.api';
 import { formatDate } from './patientProfile.utils.tsx';
 
 interface PatientDocumentItem {
@@ -12,6 +13,11 @@ interface PatientDocumentItem {
   type: 'Clinical' | 'Consent' | 'Legal';
   uploadedAt: string;
   noteId?: number;
+  consentId?: number;
+  consentText?: string;
+  signature?: string;
+  signerName?: string;
+  signerEmail?: string;
   caseTitle?: string;
   isAvailable: boolean;
 }
@@ -19,6 +25,37 @@ interface PatientDocumentItem {
 export const PatientDocumentsPage = () => {
   const { patient, clinicalNotes, loadingNotes } = usePatientProfileContext();
   const [viewingNoteId, setViewingNoteId] = useState<number | null>(null);
+  const [consents, setConsents] = useState<PatientConsentRecord[]>([]);
+  const [loadingConsents, setLoadingConsents] = useState(false);
+  const [viewingConsent, setViewingConsent] = useState<PatientConsentRecord | null>(null);
+
+  useEffect(() => {
+    if (!patient) return;
+
+    let mounted = true;
+    setLoadingConsents(true);
+
+    getPatientConsents(patient.id)
+      .then((data) => {
+        if (mounted) {
+          setConsents(data);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setConsents([]);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoadingConsents(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [patient]);
 
   const patientCases = useMemo(() => {
     if (!patient) return [];
@@ -43,27 +80,23 @@ export const PatientDocumentsPage = () => {
       };
     });
 
-    const legalDocs: PatientDocumentItem[] = [
-      {
-        id: 'consent_form_placeholder',
-        title: 'Consent to Treatment Form',
-        type: 'Consent',
-        uploadedAt: patient.created_at,
-        isAvailable: false,
-      },
-      {
-        id: 'privacy_notice_placeholder',
-        title: 'Data Privacy Agreement',
-        type: 'Legal',
-        uploadedAt: patient.created_at,
-        isAvailable: false,
-      },
-    ];
+    const consentDocs: PatientDocumentItem[] = consents.map((consent) => ({
+      id: `consent_${consent.id}`,
+      title: 'Data Privacy Consent Form',
+      type: 'Consent',
+      uploadedAt: consent.created_at,
+      consentId: consent.id,
+      consentText: consent.consent_text,
+      signature: consent.signature,
+      signerName: consent.full_name,
+      signerEmail: consent.email,
+      isAvailable: true,
+    }));
 
-    return [...noteDocs, ...legalDocs].sort(
+    return [...noteDocs, ...consentDocs].sort(
       (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
     );
-  }, [clinicalNotes, patient, patientCases]);
+  }, [clinicalNotes, consents, patient, patientCases]);
 
   if (!patient) {
     return (
@@ -93,7 +126,7 @@ export const PatientDocumentsPage = () => {
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-4">
-          {loadingNotes ? (
+          {loadingNotes || loadingConsents ? (
             <div className="py-10 text-center text-sm text-gray-500">Loading documents...</div>
           ) : documents.length === 0 ? (
             <div className="py-10 text-center">
@@ -130,10 +163,19 @@ export const PatientDocumentsPage = () => {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        disabled={!documentItem.isAvailable || !documentItem.noteId}
+                        disabled={!documentItem.isAvailable || (!documentItem.noteId && !documentItem.consentId)}
                         onClick={() => {
                           if (documentItem.noteId) {
                             setViewingNoteId(documentItem.noteId);
+                            return;
+                          }
+                          if (documentItem.consentId) {
+                            const selectedConsent = consents.find(
+                              (consent) => consent.id === documentItem.consentId
+                            );
+                            if (selectedConsent) {
+                              setViewingConsent(selectedConsent);
+                            }
                           }
                         }}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-sky-700 bg-sky-50 rounded-lg hover:bg-sky-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -170,6 +212,48 @@ export const PatientDocumentsPage = () => {
           onClose={() => setViewingNoteId(null)}
           noteId={viewingNoteId}
         />
+      )}
+
+      {viewingConsent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Data Privacy Consent Form</h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Signed by {viewingConsent.full_name} ({viewingConsent.email}) on {formatDate(viewingConsent.created_at)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingConsent(null)}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Consent Text</p>
+                <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  {viewingConsent.consent_text}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">E-signature</p>
+                <div className="border border-gray-200 rounded-xl p-3 bg-white">
+                  <img
+                    src={viewingConsent.signature}
+                    alt={`Signature of ${viewingConsent.full_name}`}
+                    className="max-h-48 object-contain"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

@@ -78,6 +78,7 @@ export interface BookingPayload {
   service:            number;
   branch?:            number | null;
   practitioner?:      number | null;
+  consent_id?:        number;
   patient_first_name: string;
   patient_last_name:  string;
   patient_email:      string;
@@ -89,6 +90,7 @@ export interface BookingPayload {
 
 export interface BookingConfirmation {
   id:                          number;
+  patient_id?:                 number;
   reference_number:            string;
   status:                      string;
   patient_first_name:          string;
@@ -106,6 +108,22 @@ export interface BookingConfirmation {
   clinic_name:                 string;
   branch_name:                 string | null;
   created_at:                  string;
+}
+
+export interface PortalConsentPayload {
+  full_name: string;
+  email: string;
+  consent_text: string;
+  signature: string;
+}
+
+export interface PortalConsentResponse {
+  id: number;
+  full_name: string;
+  email: string;
+  consent_text: string;
+  signature: string;
+  created_at: string;
 }
 
 export interface SlotsResponse {

@@ -12,12 +12,14 @@ from .models import (
     Patient, IntakeForm,
     ServiceCategory, PortalService,
     PortalLink, PortalBooking,
+    PatientConsent,
 )
 from .serializers import (
     PatientSerializer, IntakeFormSerializer,
     ServiceCategorySerializer, PortalServiceSerializer,
     PortalLinkPublicSerializer, PortalLinkAdminSerializer,
     PortalBookingCreateSerializer, PortalBookingResponseSerializer,
+    PatientConsentSerializer, PublicPatientConsentCreateSerializer,
 )
 import logging
 
@@ -185,6 +187,16 @@ class PatientViewSet(viewsets.ModelViewSet):
         patient    = self.get_object()
         forms      = patient.intake_forms.all()
         serializer = IntakeFormSerializer(forms, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='consents')
+    def consents(self, request, pk=None):
+        patient = self.get_object()
+        consents = PatientConsent.objects.filter(
+            patient=patient,
+            patient__clinic=request.user.clinic,
+        ).order_by('-created_at')
+        serializer = PatientConsentSerializer(consents, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'], url_path='archive')
@@ -433,6 +445,19 @@ class PublicPortalBookView(APIView):
         validated  = serializer.validated_data
         service_obj = validated.get('service')
         prac_obj    = validated.get('practitioner')
+        consent_id  = validated.get('consent_id')
+
+        consent = None
+        if consent_id:
+            consent = PatientConsent.objects.filter(
+                id=consent_id,
+                portal_link=portal_link,
+            ).first()
+            if not consent:
+                return Response(
+                    {'detail': 'Consent record not found or invalid.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if service_obj and prac_obj:
             assigned_ids = list(service_obj.assigned_practitioners.values_list('id', flat=True))
             if assigned_ids and prac_obj.id not in assigned_ids:
@@ -450,7 +475,11 @@ class PublicPortalBookView(APIView):
             booking.save(update_fields=['status', 'updated_at'])
 
             # Create patient + diary appointment
-            _confirm_portal_booking(booking, confirmed_by_user=None)
+            patient, _appointment = _confirm_portal_booking(booking, confirmed_by_user=None)
+
+            if consent and consent.patient_id is None:
+                consent.patient = patient
+                consent.save(update_fields=['patient', 'updated_at'])
 
             logger.info(
                 f"Portal booking #{booking.reference_number} auto-confirmed "
@@ -473,6 +502,23 @@ class PublicPortalBookView(APIView):
             booking, context={'request': request}
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PublicPortalConsentCreateView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, token: str):
+        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+
+        serializer = PublicPatientConsentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        consent = serializer.save(portal_link=portal_link)
+        return Response(
+            PublicPatientConsentCreateSerializer(consent).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PublicAvailableSlotsView(APIView):

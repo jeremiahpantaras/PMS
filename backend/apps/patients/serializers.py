@@ -3,7 +3,7 @@ from apps.clinics.services.models import Service as ClinicService
 from .models import (
     Patient, IntakeForm,
     ServiceCategory, PortalService,
-    PortalLink, PortalBooking,
+    PortalLink, PortalBooking, PatientConsent,
 )
 
 
@@ -351,14 +351,21 @@ class PortalLinkAdminSerializer(serializers.ModelSerializer):
 
 
 class PortalBookingCreateSerializer(serializers.ModelSerializer):
+    consent_id = serializers.IntegerField(write_only=True, required=True)
+
     class Meta:
         model  = PortalBooking
         fields = [
+            'consent_id',
             'service', 'practitioner',
             'patient_first_name', 'patient_last_name',
             'patient_email', 'patient_phone',
             'notes', 'appointment_date', 'appointment_time',
         ]
+
+    def create(self, validated_data):
+        validated_data.pop('consent_id', None)
+        return super().create(validated_data)
 
     def validate_service(self, value):
         if not value.is_active:
@@ -383,7 +390,9 @@ class PortalBookingResponseSerializer(serializers.ModelSerializer):
     )
     practitioner_name           = serializers.SerializerMethodField()
     practitioner_specialization = serializers.SerializerMethodField()
+    patient_id                 = serializers.SerializerMethodField()
     clinic_name                 = serializers.CharField(source='portal_link.clinic.name', read_only=True)
+    branch_name                = serializers.SerializerMethodField()
 
     class Meta:
         model  = PortalBooking
@@ -395,7 +404,8 @@ class PortalBookingResponseSerializer(serializers.ModelSerializer):
             'notes',
             'service_name', 'service_duration', 'service_price',
             'practitioner_name', 'practitioner_specialization',
-            'clinic_name',
+            'patient_id',
+            'clinic_name', 'branch_name',
             'created_at',
         ]
 
@@ -404,3 +414,43 @@ class PortalBookingResponseSerializer(serializers.ModelSerializer):
 
     def get_practitioner_specialization(self, obj) -> str | None:
         return obj.practitioner.specialization if obj.practitioner else None
+
+    def get_branch_name(self, obj) -> str | None:
+        branch = getattr(obj.portal_link, 'branch', None)
+        return branch.name if branch else None
+
+    def get_patient_id(self, obj):
+        if obj.appointment and obj.appointment.patient_id:
+            return obj.appointment.patient_id
+        return None
+
+
+class PatientConsentSerializer(serializers.ModelSerializer):
+    patient_name = serializers.CharField(source='patient.get_full_name', read_only=True)
+
+    class Meta:
+        model = PatientConsent
+        fields = [
+            'id',
+            'patient',
+            'patient_name',
+            'portal_link',
+            'full_name',
+            'email',
+            'consent_text',
+            'signature',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'patient_name']
+
+
+class PublicPatientConsentCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientConsent
+        fields = ['id', 'full_name', 'email', 'consent_text', 'signature', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate_signature(self, value: str):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Signature is required.')
+        return value

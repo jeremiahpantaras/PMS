@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 
-import { fetchPortal, submitBooking }        from '../portal.api';
+import { createPortalConsent, fetchPortal, submitBooking } from '../portal.api';
 import { PortalSidebar }                     from '../components/PortalSidebar';
 import { BranchStep }                        from '../components/BranchStep';
 import { PractitionerStep }                  from '../components/PractitionerStep';
 import { ServiceList }                       from '../components/ServiceList';
 import { PortalAvailabilityCalendar }        from '../components/PortalAvailabilityCalendar';
 import { PatientDetailsForm }                from '../components/PatientDetailsForm';
+import { TermsAndConditionsModal }           from '../components/TermsAndConditionsModal';
+import { ConsentFormModal }                  from '../components/ConsentFormModal';
 import { PortalFooterActions }               from '../components/PortalFooterActions';
 
 import type {
@@ -66,6 +68,12 @@ export const PortalHome: React.FC = () => {
   const [formData,   setFormData]   = useState<PatientFormData>(EMPTY_FORM);
   const [formError,  setFormError]  = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedConsent, setAcceptedConsent] = useState(false);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [consentText, setConsentText] = useState<string>('');
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
 
   // ── Load portal ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -150,9 +158,24 @@ export const PortalHome: React.FC = () => {
       appointment_time:   selectedSlot,
     };
 
+    if (!acceptedTerms || !acceptedConsent || !signatureData) {
+      setFormError('Please complete Terms, Data Privacy Consent, and signature before booking.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const confirmation = await submitBooking(token, payload);
+      const consent = await createPortalConsent(token, {
+        full_name: `${formData.first_name} ${formData.last_name}`.trim(),
+        email: formData.email,
+        consent_text: consentText,
+        signature: signatureData,
+      });
+
+      const confirmation = await submitBooking(token, {
+        ...payload,
+        consent_id: consent.id,
+      });
       navigate(`/portal/${token}/success`, { state: { confirmation } });
     } catch (err: any) {
       setFormError(
@@ -364,6 +387,12 @@ export const PortalHome: React.FC = () => {
               formData={formData}
               formError={formError}
               onChange={setFormData}
+              acceptedTerms={acceptedTerms}
+              acceptedConsent={acceptedConsent}
+              signatureReady={Boolean(signatureData)}
+              onTermsChange={setAcceptedTerms}
+              onOpenTerms={() => setShowTermsModal(true)}
+              onOpenConsent={() => setShowConsentModal(true)}
             />
           )}
         </div>
@@ -418,6 +447,23 @@ export const PortalHome: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <TermsAndConditionsModal
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+      />
+
+      <ConsentFormModal
+        isOpen={showConsentModal}
+        patientFullName={`${formData.first_name} ${formData.last_name}`.trim()}
+        patientEmail={formData.email}
+        onClose={() => setShowConsentModal(false)}
+        onSigned={(signature, legalText) => {
+          setSignatureData(signature);
+          setConsentText(legalText);
+          setAcceptedConsent(true);
+        }}
+      />
     </div>
   );
 };

@@ -14,12 +14,24 @@ interface PatientDetailsFormProps {
   formData:  PatientFormData;
   formError: string | null;
   onChange:  (data: PatientFormData) => void;
+  acceptedTerms: boolean;
+  acceptedConsent: boolean;
+  signatureReady: boolean;
+  onTermsChange: (checked: boolean) => void;
+  onOpenTerms: () => void;
+  onOpenConsent: () => void;
 }
 
 export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
   formData,
   formError,
   onChange,
+  acceptedTerms,
+  acceptedConsent,
+  signatureReady,
+  onTermsChange,
+  onOpenTerms,
+  onOpenConsent,
 }) => {
   const set = (field: keyof PatientFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -150,6 +162,58 @@ export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
               placeholder="Any additional information for the practitioner..."
             />
           </div>
+        </div>
+
+        {/* Compliance */}
+        <div className="border-t border-gray-100 pt-4 space-y-3">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => onTermsChange(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm text-gray-700">
+              I agree to the{' '}
+              <button
+                type="button"
+                onClick={onOpenTerms}
+                className="text-sky-600 underline hover:text-sky-700"
+              >
+                Terms & Conditions
+              </button>{' '}
+              <span className="text-red-500">*</span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer" onClick={onOpenConsent}>
+            <input
+              type="checkbox"
+              checked={acceptedConsent}
+              readOnly
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm text-gray-700">
+              I consent to the{' '}
+              <button
+                type="button"
+                onClick={onOpenConsent}
+                className="text-sky-600 underline hover:text-sky-700"
+              >
+                Data Privacy Policy
+              </button>{' '}
+              <span className="text-red-500">*</span>
+              <span className="block text-xs text-gray-500 mt-1">
+                A signed consent form is required before booking can proceed.
+              </span>
+            </span>
+          </label>
+
+          {acceptedConsent && (
+            <p className={`text-xs ${signatureReady ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {signatureReady ? 'Consent signed and saved.' : 'Consent checked but signature is missing.'}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -20,6 +20,18 @@ export interface ArchiveResponse {
   archived_by?: string;
 }
 
+export interface PatientConsentRecord {
+  id: number;
+  patient: number | null;
+  patient_name?: string;
+  portal_link: number;
+  full_name: string;
+  email: string;
+  consent_text: string;
+  signature: string;
+  created_at: string;
+}
+
 /**
  * Get all patients with filters
  */
@@ -94,5 +106,13 @@ export const restorePatient = async (id: number): Promise<ArchiveResponse> => {
  */
 export const getPatientIntakeForms = async (patientId: number) => {
   const response = await axiosInstance.get(`/patients/${patientId}/intake_forms/`);
+  return response.data;
+};
+
+/**
+ * Get patient legal/privacy consents
+ */
+export const getPatientConsents = async (patientId: number): Promise<PatientConsentRecord[]> => {
+  const response = await axiosInstance.get<PatientConsentRecord[]>(`/patients/${patientId}/consents/`);
   return response.data;
 };

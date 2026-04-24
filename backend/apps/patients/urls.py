@@ -5,6 +5,7 @@ from .views import (
     ServiceCategoryViewSet, PortalServiceViewSet,    # ✅ PortalServiceViewSet
     PortalLinkViewSet, PortalBookingAdminViewSet,
     PublicPortalView, PublicPortalBookView, PublicAvailableSlotsView,
+    PublicPortalConsentCreateView,
 )
 
 router = DefaultRouter()
@@ -27,6 +28,11 @@ urlpatterns = [
         'public/portal/<str:token>/book/',
         PublicPortalBookView.as_view(),
         name='public-portal-book',
+    ),
+    path(
+        'public/portal/<str:token>/consent/',
+        PublicPortalConsentCreateView.as_view(),
+        name='public-portal-consent',
     ),
     path(
         'public/portal/<str:token>/slots/',
