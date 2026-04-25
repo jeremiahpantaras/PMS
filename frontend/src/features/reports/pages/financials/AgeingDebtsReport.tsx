@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { Clock, AlertTriangle, DollarSign, FileText } from 'lucide-react';
+import { Clock, AlertTriangle, DollarSign } from 'lucide-react';
 import {
-  DateRangePicker,
   ReportHeader,
   StatCard,
   ReportLoading,
@@ -10,8 +9,6 @@ import {
   PrintButton,
   openPrintWindow,
   formatDate,
-  monthStart,
-  todayISO,
   StatusBadge,
 } from '../../components/ReportShared';
 import {
@@ -24,13 +21,6 @@ import {
 
 const formatPeso = (n: number) =>
   '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const BUCKET_LABELS: Record<string, string> = {
-  '0_30':    '0–30 days',
-  '31_60':   '31–60 days',
-  '61_90':   '61–90 days',
-  '90_plus': '90+ days',
-};
 
 const BUCKET_STYLES: Record<string, string> = {
   '0_30':    'bg-yellow-50 text-yellow-700 border-yellow-200',

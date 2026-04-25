@@ -239,7 +239,6 @@ function buildBulkPrintHtml(data: BulkFinancialExportResponse): string {
 
   // ── Ageing Debts ──────────────────────────────────────────────────────────
   const { summary: as, debts } = data.ageing_debts;
-  const buckets = ['0_30', '31_60', '61_90', '90_plus'] as const;
 
   const ageingRows = debts.length > 0
     ? debts.map(d => {
