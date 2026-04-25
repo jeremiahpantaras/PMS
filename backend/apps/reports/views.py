@@ -1106,3 +1106,661 @@ class ReportViewSet(viewsets.ModelViewSet):
             },
             'appointments': items,
         })
+
+    # ── 3. Banking Report ─────────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='banking')
+    def banking(self, request):
+        """
+        GET /api/reports/banking/
+        Tracks actual money flow: all payments grouped by payment method.
+
+        Query params:
+            start_date      (YYYY-MM-DD)
+            end_date        (YYYY-MM-DD)
+            payment_method  (str)   optional — CASH | GCASH | BANK_TRANSFER | etc. | ALL
+            branch_id       (int)   optional
+            practitioner_id (int)   optional
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        qs = (
+            Payment.objects
+            .filter(
+                invoice__clinic_id__in=all_branch_ids,
+                payment_date__range=[start, end],
+            )
+            .select_related(
+                'invoice__patient',
+                'invoice__appointment',
+                'received_by',
+            )
+            .order_by('payment_date', 'payment_method')
+        )
+
+        payment_method_filter = request.query_params.get('payment_method', '').upper()
+        branch_id             = request.query_params.get('branch_id')
+        practitioner_id       = request.query_params.get('practitioner_id')
+
+        if payment_method_filter and payment_method_filter not in ('', 'ALL'):
+            qs = qs.filter(payment_method=payment_method_filter)
+        if branch_id:
+            try:
+                qs = qs.filter(invoice__clinic_id=int(branch_id))
+            except (ValueError, TypeError):
+                pass
+        if practitioner_id:
+            try:
+                qs = qs.filter(invoice__appointment__practitioner_id=int(practitioner_id))
+            except (ValueError, TypeError):
+                pass
+
+        items = []
+        for payment in qs:
+            inv          = payment.invoice
+            patient_name = inv.patient.get_full_name() if inv.patient else ''
+            items.append({
+                'payment_id':       payment.id,
+                'date':             str(payment.payment_date),
+                'payment_method':   payment.payment_method,
+                'receipt_number':   payment.receipt_number,
+                'reference_number': payment.reference_number or '',
+                'patient_name':     patient_name,
+                'invoice_number':   inv.invoice_number,
+                'description':      f"Invoice {inv.invoice_number}",
+                'amount':           float(payment.amount),
+                'notes':            payment.notes or '',
+            })
+
+        method_totals: dict = {}
+        for item in items:
+            m = item['payment_method']
+            method_totals[m] = round(method_totals.get(m, 0.0) + item['amount'], 2)
+
+        grand_total = round(sum(i['amount'] for i in items), 2)
+
+        return Response({
+            'report_type':  'BANKING',
+            'tab':          'FINANCIAL',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters': {
+                'payment_method':  payment_method_filter or 'ALL',
+                'branch_id':       branch_id,
+                'practitioner_id': practitioner_id,
+            },
+            'summary': {
+                'method_totals':      method_totals,
+                'grand_total':        grand_total,
+                'total_transactions': len(items),
+            },
+            'payments': items,
+        })
+
+    # ── 4. Ageing Debts Report ────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='ageing_debts')
+    def ageing_debts(self, request):
+        """
+        GET /api/reports/ageing_debts/
+        Unpaid / partially-paid invoices grouped into aging buckets.
+
+        Query params:
+            branch_id       (int)   optional
+            practitioner_id (int)   optional
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        today = timezone.now().date()
+
+        qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                status__in=['PENDING', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .select_related('patient')
+            .order_by('invoice_date', 'invoice_number')
+        )
+
+        branch_id       = request.query_params.get('branch_id')
+        practitioner_id = request.query_params.get('practitioner_id')
+        if branch_id:
+            try:
+                qs = qs.filter(clinic_id=int(branch_id))
+            except (ValueError, TypeError):
+                pass
+        if practitioner_id:
+            try:
+                qs = qs.filter(appointment__practitioner_id=int(practitioner_id))
+            except (ValueError, TypeError):
+                pass
+
+        bucket_totals = {'0_30': 0.0, '31_60': 0.0, '61_90': 0.0, '90_plus': 0.0}
+        items = []
+
+        for inv in qs:
+            days_overdue = (today - inv.invoice_date).days
+            balance      = float(inv.balance_due)
+
+            if days_overdue <= 30:
+                bucket = '0_30'
+            elif days_overdue <= 60:
+                bucket = '31_60'
+            elif days_overdue <= 90:
+                bucket = '61_90'
+            else:
+                bucket = '90_plus'
+
+            bucket_totals[bucket] = round(bucket_totals[bucket] + balance, 2)
+
+            items.append({
+                'invoice_id':     inv.id,
+                'invoice_number': inv.invoice_number,
+                'invoice_date':   str(inv.invoice_date),
+                'due_date':       str(inv.due_date) if inv.due_date else None,
+                'patient_id':     inv.patient_id,
+                'patient_name':   inv.patient.get_full_name() if inv.patient else '',
+                'patient_number': inv.patient.patient_number if inv.patient else '',
+                'total_amount':   float(inv.total_amount),
+                'amount_paid':    float(inv.amount_paid),
+                'balance_due':    balance,
+                'status':         inv.status,
+                'days_overdue':   days_overdue,
+                'bucket':         bucket,
+                '0_30':           balance if bucket == '0_30'    else 0.0,
+                '31_60':          balance if bucket == '31_60'   else 0.0,
+                '61_90':          balance if bucket == '61_90'   else 0.0,
+                '90_plus':        balance if bucket == '90_plus' else 0.0,
+            })
+
+        grand_total = round(sum(i['balance_due'] for i in items), 2)
+
+        return Response({
+            'report_type':  'AGEING_DEBTS',
+            'tab':          'FINANCIAL',
+            'generated_at': timezone.now().isoformat(),
+            'filters': {
+                'branch_id':       branch_id,
+                'practitioner_id': practitioner_id,
+            },
+            'summary': {
+                'total_outstanding': grand_total,
+                'total_invoices':    len(items),
+                'bucket_totals':     bucket_totals,
+            },
+            'debts': items,
+        })
+
+    # ── 5. Revenue Report ─────────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='revenue')
+    def revenue(self, request):
+        """
+        GET /api/reports/revenue/
+        Invoice items grouped by service description.
+
+        Query params:
+            start_date  (YYYY-MM-DD)
+            end_date    (YYYY-MM-DD)
+        """
+        from apps.billing.models import InvoiceItem
+
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        active_invoice_ids = list(
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .values_list('id', flat=True)
+        )
+
+        services_qs = (
+            InvoiceItem.objects
+            .filter(invoice_id__in=active_invoice_ids)
+            .values('description')
+            .annotate(
+                total_quantity=Sum('quantity'),
+                total_revenue=Sum('total'),
+                item_count=Count('id'),
+            )
+            .order_by('-total_revenue')
+        )
+
+        invoice_agg = Invoice.objects.filter(
+            clinic_id__in=all_branch_ids,
+            is_deleted=False,
+            invoice_date__range=[start, end],
+            status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+        ).aggregate(
+            total_revenue=Sum('total_amount'),
+            total_paid=Sum('amount_paid'),
+            total_balance=Sum('balance_due'),
+        )
+
+        service_items = [
+            {
+                'service_type': item['description'],
+                'quantity':     float(item['total_quantity'] or 0),
+                'total_amount': float(item['total_revenue'] or 0),
+                'item_count':   item['item_count'],
+            }
+            for item in services_qs
+        ]
+
+        return Response({
+            'report_type':  'REVENUE',
+            'tab':          'FINANCIAL',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters':      {},
+            'summary': {
+                'total_revenue':  float(invoice_agg['total_revenue']  or 0),
+                'total_paid':     float(invoice_agg['total_paid']     or 0),
+                'total_balance':  float(invoice_agg['total_balance']  or 0),
+                'total_services': len(service_items),
+                'total_invoices': len(active_invoice_ids),
+            },
+            'services': service_items,
+        })
+
+    # ── 6. Categories Report ──────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='categories')
+    def categories_report(self, request):
+        """
+        GET /api/reports/categories/
+        Revenue grouped by appointment type (clinical category).
+
+        Query params:
+            start_date  (YYYY-MM-DD)
+            end_date    (YYYY-MM-DD)
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .select_related('appointment')
+        )
+
+        category_map: dict = {}
+        for inv in qs:
+            cat = (
+                inv.appointment.appointment_type if inv.appointment else None
+            ) or 'UNCATEGORIZED'
+            if cat not in category_map:
+                category_map[cat] = {
+                    'total_revenue':  0.0,
+                    'total_payments': 0.0,
+                    'invoice_count':  0,
+                }
+            entry = category_map[cat]
+            entry['total_revenue']  = round(entry['total_revenue']  + float(inv.total_amount), 2)
+            entry['total_payments'] = round(entry['total_payments'] + float(inv.amount_paid),  2)
+            entry['invoice_count'] += 1
+
+        items = [
+            {
+                'category':       cat,
+                'total_revenue':  vals['total_revenue'],
+                'total_payments': vals['total_payments'],
+                'outstanding':    round(vals['total_revenue'] - vals['total_payments'], 2),
+                'invoice_count':  vals['invoice_count'],
+            }
+            for cat, vals in sorted(category_map.items(), key=lambda x: -x[1]['total_revenue'])
+        ]
+
+        grand_revenue  = round(sum(i['total_revenue']  for i in items), 2)
+        grand_payments = round(sum(i['total_payments'] for i in items), 2)
+
+        return Response({
+            'report_type':  'CATEGORIES',
+            'tab':          'FINANCIAL',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters':      {},
+            'summary': {
+                'total_revenue':    grand_revenue,
+                'total_payments':   grand_payments,
+                'outstanding':      round(grand_revenue - grand_payments, 2),
+                'total_categories': len(items),
+            },
+            'categories': items,
+        })
+
+    # ── 7. Account Credits Report ─────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='account_credits')
+    def account_credits(self, request):
+        """
+        GET /api/reports/account_credits/
+        Per-patient billing summary: total invoiced vs. paid vs. outstanding.
+
+        Query params:
+            start_date  (YYYY-MM-DD)
+            end_date    (YYYY-MM-DD)
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+            )
+            .select_related('patient')
+            .values(
+                'patient__id',
+                'patient__first_name',
+                'patient__last_name',
+                'patient__patient_number',
+            )
+            .annotate(
+                credit_created=Sum('total_amount'),
+                credit_used=Sum('amount_paid'),
+                outstanding=Sum('balance_due'),
+                invoice_count=Count('id'),
+            )
+            .order_by('patient__last_name', 'patient__first_name')
+        )
+
+        items = [
+            {
+                'patient_id':      row['patient__id'],
+                'patient_name':    (
+                    f"{row['patient__first_name']} {row['patient__last_name']}".strip()
+                ),
+                'patient_number':  row['patient__patient_number'],
+                'credit_created':  round(float(row['credit_created']  or 0), 2),
+                'credit_used':     round(float(row['credit_used']     or 0), 2),
+                'credit_refunded': 0.0,
+                'balance':         round(float(row['outstanding']     or 0), 2),
+                'invoice_count':   row['invoice_count'],
+            }
+            for row in qs
+        ]
+
+        return Response({
+            'report_type':  'ACCOUNT_CREDITS',
+            'tab':          'FINANCIAL',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters':      {},
+            'summary': {
+                'total_credit_created': round(sum(i['credit_created'] for i in items), 2),
+                'total_credit_used':    round(sum(i['credit_used']    for i in items), 2),
+                'total_balance':        round(sum(i['balance']        for i in items), 2),
+                'total_accounts':       len(items),
+            },
+            'accounts': items,
+        })
+
+    # ── 8. Financial Bulk Export ──────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='financial_bulk_export')
+    def financial_bulk_export(self, request):
+        """
+        GET /api/reports/financial_bulk_export/
+        Aggregates all 5 financial reports in a single response for bulk export.
+
+        Query params:
+            start_date  (YYYY-MM-DD)
+            end_date    (YYYY-MM-DD)
+        """
+        from apps.billing.models import InvoiceItem
+
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+        today      = timezone.now().date()
+        now_iso    = timezone.now().isoformat()
+
+        # ── Banking ───────────────────────────────────────────────────────────
+        payments_qs = (
+            Payment.objects
+            .filter(
+                invoice__clinic_id__in=all_branch_ids,
+                payment_date__range=[start, end],
+            )
+            .select_related('invoice__patient')
+            .order_by('payment_date', 'payment_method')
+        )
+        payment_items = []
+        for p in payments_qs:
+            inv = p.invoice
+            payment_items.append({
+                'payment_id':       p.id,
+                'date':             str(p.payment_date),
+                'payment_method':   p.payment_method,
+                'receipt_number':   p.receipt_number or '',
+                'reference_number': p.reference_number or '',
+                'patient_name':     inv.patient.get_full_name() if inv.patient else '',
+                'invoice_number':   inv.invoice_number,
+                'amount':           float(p.amount),
+            })
+        method_totals: dict = {}
+        for item in payment_items:
+            m = item['payment_method']
+            method_totals[m] = round(method_totals.get(m, 0.0) + item['amount'], 2)
+        banking_data = {
+            'summary': {
+                'method_totals':      method_totals,
+                'grand_total':        round(sum(i['amount'] for i in payment_items), 2),
+                'total_transactions': len(payment_items),
+            },
+            'payments': payment_items,
+        }
+
+        # ── Ageing Debts ──────────────────────────────────────────────────────
+        debts_qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                status__in=['PENDING', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .select_related('patient')
+            .order_by('invoice_date')
+        )
+        bucket_totals = {'0_30': 0.0, '31_60': 0.0, '61_90': 0.0, '90_plus': 0.0}
+        debt_items = []
+        for inv in debts_qs:
+            days = (today - inv.invoice_date).days
+            bal  = float(inv.balance_due)
+            if days <= 30:
+                bucket = '0_30'
+            elif days <= 60:
+                bucket = '31_60'
+            elif days <= 90:
+                bucket = '61_90'
+            else:
+                bucket = '90_plus'
+            bucket_totals[bucket] = round(bucket_totals[bucket] + bal, 2)
+            debt_items.append({
+                'invoice_id':     inv.id,
+                'invoice_number': inv.invoice_number,
+                'invoice_date':   str(inv.invoice_date),
+                'patient_name':   inv.patient.get_full_name() if inv.patient else '',
+                'patient_number': inv.patient.patient_number if inv.patient else '',
+                'total_amount':   float(inv.total_amount),
+                'amount_paid':    float(inv.amount_paid),
+                'balance_due':    bal,
+                'status':         inv.status,
+                'days_overdue':   days,
+                'bucket':         bucket,
+            })
+        ageing_data = {
+            'summary': {
+                'total_outstanding': round(sum(i['balance_due'] for i in debt_items), 2),
+                'total_invoices':    len(debt_items),
+                'bucket_totals':     bucket_totals,
+            },
+            'debts': debt_items,
+        }
+
+        # ── Revenue ───────────────────────────────────────────────────────────
+        active_inv_ids = list(
+            Invoice.objects.filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            ).values_list('id', flat=True)
+        )
+        services_qs = (
+            InvoiceItem.objects
+            .filter(invoice_id__in=active_inv_ids)
+            .values('description')
+            .annotate(
+                total_quantity=Sum('quantity'),
+                total_revenue=Sum('total'),
+                item_count=Count('id'),
+            )
+            .order_by('-total_revenue')
+        )
+        inv_agg = Invoice.objects.filter(
+            clinic_id__in=all_branch_ids,
+            is_deleted=False,
+            invoice_date__range=[start, end],
+            status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+        ).aggregate(
+            total_revenue=Sum('total_amount'),
+            total_paid=Sum('amount_paid'),
+            total_balance=Sum('balance_due'),
+        )
+        service_items = [
+            {
+                'service_type': i['description'],
+                'quantity':     float(i['total_quantity'] or 0),
+                'total_amount': float(i['total_revenue'] or 0),
+                'item_count':   i['item_count'],
+            }
+            for i in services_qs
+        ]
+        revenue_data = {
+            'summary': {
+                'total_revenue':  float(inv_agg['total_revenue']  or 0),
+                'total_paid':     float(inv_agg['total_paid']     or 0),
+                'total_balance':  float(inv_agg['total_balance']  or 0),
+                'total_services': len(service_items),
+                'total_invoices': len(active_inv_ids),
+            },
+            'services': service_items,
+        }
+
+        # ── Categories ────────────────────────────────────────────────────────
+        cat_qs = (
+            Invoice.objects.filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            ).select_related('appointment')
+        )
+        category_map: dict = {}
+        for inv in cat_qs:
+            cat = (
+                inv.appointment.appointment_type if inv.appointment else None
+            ) or 'UNCATEGORIZED'
+            if cat not in category_map:
+                category_map[cat] = {'total_revenue': 0.0, 'total_payments': 0.0, 'invoice_count': 0}
+            entry = category_map[cat]
+            entry['total_revenue']  = round(entry['total_revenue']  + float(inv.total_amount), 2)
+            entry['total_payments'] = round(entry['total_payments'] + float(inv.amount_paid),  2)
+            entry['invoice_count'] += 1
+        cat_items = [
+            {
+                'category':       cat,
+                'total_revenue':  vals['total_revenue'],
+                'total_payments': vals['total_payments'],
+                'outstanding':    round(vals['total_revenue'] - vals['total_payments'], 2),
+                'invoice_count':  vals['invoice_count'],
+            }
+            for cat, vals in sorted(category_map.items(), key=lambda x: -x[1]['total_revenue'])
+        ]
+        categories_data = {
+            'summary': {
+                'total_revenue':    round(sum(i['total_revenue']  for i in cat_items), 2),
+                'total_payments':   round(sum(i['total_payments'] for i in cat_items), 2),
+                'outstanding':      round(sum(i['outstanding']    for i in cat_items), 2),
+                'total_categories': len(cat_items),
+            },
+            'categories': cat_items,
+        }
+
+        # ── Account Credits ───────────────────────────────────────────────────
+        credits_qs = (
+            Invoice.objects.filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+            )
+            .select_related('patient')
+            .values(
+                'patient__id',
+                'patient__first_name',
+                'patient__last_name',
+                'patient__patient_number',
+            )
+            .annotate(
+                credit_created=Sum('total_amount'),
+                credit_used=Sum('amount_paid'),
+                outstanding=Sum('balance_due'),
+                invoice_count=Count('id'),
+            )
+            .order_by('patient__last_name', 'patient__first_name')
+        )
+        credit_items = [
+            {
+                'patient_id':      r['patient__id'],
+                'patient_name':    f"{r['patient__first_name']} {r['patient__last_name']}".strip(),
+                'patient_number':  r['patient__patient_number'],
+                'credit_created':  round(float(r['credit_created']  or 0), 2),
+                'credit_used':     round(float(r['credit_used']     or 0), 2),
+                'credit_refunded': 0.0,
+                'balance':         round(float(r['outstanding']     or 0), 2),
+                'invoice_count':   r['invoice_count'],
+            }
+            for r in credits_qs
+        ]
+        credits_data = {
+            'summary': {
+                'total_credit_created': round(sum(i['credit_created'] for i in credit_items), 2),
+                'total_credit_used':    round(sum(i['credit_used']    for i in credit_items), 2),
+                'total_balance':        round(sum(i['balance']        for i in credit_items), 2),
+                'total_accounts':       len(credit_items),
+            },
+            'accounts': credit_items,
+        }
+
+        return Response({
+            'report_type':  'FINANCIAL_BULK',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': now_iso,
+            'clinic_name':  getattr(main_clinic, 'name', str(main_clinic)),
+            'generated_by': request.user.get_full_name() or request.user.username,
+            'banking':         banking_data,
+            'ageing_debts':    ageing_data,
+            'revenue':         revenue_data,
+            'categories':      categories_data,
+            'account_credits': credits_data,
+        })

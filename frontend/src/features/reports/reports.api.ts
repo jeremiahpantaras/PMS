@@ -350,3 +350,270 @@ export const getAppointmentCosts = async (
   const response = await axiosInstance.get('/reports/appointment_costs/', { params });
   return response.data;
 };
+
+// ─── Banking Report ───────────────────────────────────────────────────────────
+
+export interface BankingPaymentItem {
+  payment_id:       number;
+  date:             string;
+  payment_method:   string;
+  receipt_number:   string;
+  reference_number: string;
+  patient_name:     string;
+  invoice_number:   string;
+  description:      string;
+  amount:           number;
+  notes:            string;
+}
+
+export interface BankingSummary {
+  method_totals:      Record<string, number>;
+  grand_total:        number;
+  total_transactions: number;
+}
+
+export interface BankingResponse {
+  report_type:  string;
+  tab:          string;
+  start_date:   string;
+  end_date:     string;
+  generated_at: string;
+  filters:      Record<string, unknown>;
+  summary:      BankingSummary;
+  payments:     BankingPaymentItem[];
+}
+
+export interface BankingParams extends ReportDateRange {
+  payment_method?:  string;
+  branch_id?:       number;
+  practitioner_id?: number;
+}
+
+export const getBanking = async (
+  params?: BankingParams
+): Promise<BankingResponse> => {
+  const response = await axiosInstance.get('/reports/banking/', { params });
+  return response.data;
+};
+
+// ─── Ageing Debts Report ──────────────────────────────────────────────────────
+
+export interface AgeingDebtItem {
+  invoice_id:     number;
+  invoice_number: string;
+  invoice_date:   string;
+  due_date:       string | null;
+  patient_id:     number;
+  patient_name:   string;
+  patient_number: string;
+  total_amount:   number;
+  amount_paid:    number;
+  balance_due:    number;
+  status:         string;
+  days_overdue:   number;
+  bucket:         '0_30' | '31_60' | '61_90' | '90_plus';
+  '0_30':         number;
+  '31_60':        number;
+  '61_90':        number;
+  '90_plus':      number;
+}
+
+export interface AgeingDebtsSummary {
+  total_outstanding: number;
+  total_invoices:    number;
+  bucket_totals: {
+    '0_30':    number;
+    '31_60':   number;
+    '61_90':   number;
+    '90_plus': number;
+  };
+}
+
+export interface AgeingDebtsResponse {
+  report_type:  string;
+  tab:          string;
+  generated_at: string;
+  filters:      Record<string, unknown>;
+  summary:      AgeingDebtsSummary;
+  debts:        AgeingDebtItem[];
+}
+
+export interface AgeingDebtsParams {
+  branch_id?:       number;
+  practitioner_id?: number;
+}
+
+export const getAgeingDebts = async (
+  params?: AgeingDebtsParams
+): Promise<AgeingDebtsResponse> => {
+  const response = await axiosInstance.get('/reports/ageing_debts/', { params });
+  return response.data;
+};
+
+// ─── Revenue Report ───────────────────────────────────────────────────────────
+
+export interface RevenueServiceItem {
+  service_type: string;
+  quantity:     number;
+  total_amount: number;
+  item_count:   number;
+}
+
+export interface RevenueSummary {
+  total_revenue:  number;
+  total_paid:     number;
+  total_balance:  number;
+  total_services: number;
+  total_invoices: number;
+}
+
+export interface RevenueResponse {
+  report_type:  string;
+  tab:          string;
+  start_date:   string;
+  end_date:     string;
+  generated_at: string;
+  filters:      Record<string, unknown>;
+  summary:      RevenueSummary;
+  services:     RevenueServiceItem[];
+}
+
+export const getRevenue = async (
+  params?: ReportDateRange
+): Promise<RevenueResponse> => {
+  const response = await axiosInstance.get('/reports/revenue/', { params });
+  return response.data;
+};
+
+// ─── Categories Report ────────────────────────────────────────────────────────
+
+export interface CategoryReportItem {
+  category:       string;
+  total_revenue:  number;
+  total_payments: number;
+  outstanding:    number;
+  invoice_count:  number;
+}
+
+export interface CategoriesSummary {
+  total_revenue:    number;
+  total_payments:   number;
+  outstanding:      number;
+  total_categories: number;
+}
+
+export interface CategoriesResponse {
+  report_type:  string;
+  tab:          string;
+  start_date:   string;
+  end_date:     string;
+  generated_at: string;
+  filters:      Record<string, unknown>;
+  summary:      CategoriesSummary;
+  categories:   CategoryReportItem[];
+}
+
+export const getCategories = async (
+  params?: ReportDateRange
+): Promise<CategoriesResponse> => {
+  const response = await axiosInstance.get('/reports/categories/', { params });
+  return response.data;
+};
+
+// ─── Account Credits Report ───────────────────────────────────────────────────
+
+export interface AccountCreditItem {
+  patient_id:      number;
+  patient_name:    string;
+  patient_number:  string;
+  credit_created:  number;
+  credit_used:     number;
+  credit_refunded: number;
+  balance:         number;
+  invoice_count:   number;
+}
+
+export interface AccountCreditsSummary {
+  total_credit_created: number;
+  total_credit_used:    number;
+  total_balance:        number;
+  total_accounts:       number;
+}
+
+export interface AccountCreditsResponse {
+  report_type:  string;
+  tab:          string;
+  start_date:   string;
+  end_date:     string;
+  generated_at: string;
+  filters:      Record<string, unknown>;
+  summary:      AccountCreditsSummary;
+  accounts:     AccountCreditItem[];
+}
+
+export const getAccountCredits = async (
+  params?: ReportDateRange
+): Promise<AccountCreditsResponse> => {
+  const response = await axiosInstance.get('/reports/account_credits/', { params });
+  return response.data;
+};
+
+// ─── Financial Bulk Export ────────────────────────────────────────────────────
+
+export interface BulkBankingData {
+  summary: BankingSummary;
+  payments: BankingPaymentItem[];
+}
+
+export interface BulkAgeingData {
+  summary: AgeingDebtsSummary;
+  debts: {
+    invoice_id:     number;
+    invoice_number: string;
+    invoice_date:   string;
+    patient_name:   string;
+    patient_number: string;
+    total_amount:   number;
+    amount_paid:    number;
+    balance_due:    number;
+    status:         string;
+    days_overdue:   number;
+    bucket:         string;
+  }[];
+}
+
+export interface BulkRevenueData {
+  summary: RevenueSummary;
+  services: RevenueServiceItem[];
+}
+
+export interface BulkCategoriesData {
+  summary: CategoriesSummary;
+  categories: CategoryReportItem[];
+}
+
+export interface BulkAccountCreditsData {
+  summary: AccountCreditsSummary;
+  accounts: AccountCreditItem[];
+}
+
+export interface BulkFinancialExportResponse {
+  report_type:     string;
+  start_date:      string;
+  end_date:        string;
+  generated_at:    string;
+  clinic_name:     string;
+  generated_by:    string;
+  banking:         BulkBankingData;
+  ageing_debts:    BulkAgeingData;
+  revenue:         BulkRevenueData;
+  categories:      BulkCategoriesData;
+  account_credits: BulkAccountCreditsData;
+}
+
+export const getFinancialBulkExport = async (
+  params?: ReportDateRange
+): Promise<BulkFinancialExportResponse> => {
+  const response = await axiosInstance.get('/reports/financial_bulk_export/', { params });
+  return response.data;
+};

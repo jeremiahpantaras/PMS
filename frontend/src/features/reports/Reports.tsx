@@ -5,8 +5,14 @@ import { UninvoicedBookings } from './pages/administration/UninvoicedBookings';
 import { Cancellations }      from './pages/administration/Cancellations';
 import { ClientCases }        from './pages/clinic/ClientCases';
 import { ClinicalNotes }      from './pages/clinic/ClinicalNotes';
-import { InventoryItems }     from './pages/financials/InventoryItems';
-import { AppointmentCosts }   from './pages/financials/AppointmentCosts';
+import { InventoryItems }       from './pages/financials/InventoryItems';
+import { AppointmentCosts }     from './pages/financials/AppointmentCosts';
+import { BankingReport }        from './pages/financials/BankingReport';
+import { AgeingDebtsReport }    from './pages/financials/AgeingDebtsReport';
+import { RevenueReport }        from './pages/financials/RevenueReport';
+import { CategoriesReport }     from './pages/financials/CategoriesReport';
+import { AccountCreditsReport } from './pages/financials/AccountCreditsReport';
+import { BulkFinancialReport }  from './pages/financials/BulkFinancialReport';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,7 +22,13 @@ type ReportMenu =
   | 'clients_cases'
   | 'clinical_notes'
   | 'inventory_items'
-  | 'appointment_costs';
+  | 'appointment_costs'
+  | 'banking'
+  | 'ageing_debts'
+  | 'revenue'
+  | 'categories'
+  | 'account_credits'
+  | 'bulk_financial';
 
 interface MenuItem {
   id:    ReportMenu;
@@ -70,6 +82,12 @@ const CARDS: SectionCard[] = [
     items: [
       { id: 'inventory_items',   label: 'Inventory Items'   },
       { id: 'appointment_costs', label: 'Appointment Costs' },
+      { id: 'banking',           label: 'Banking'           },
+      { id: 'ageing_debts',      label: 'Ageing Debts'      },
+      { id: 'revenue',           label: 'Revenue'           },
+      { id: 'categories',        label: 'Categories'        },
+      { id: 'account_credits',   label: 'Account Credits'   },
+      { id: 'bulk_financial',     label: '⬇ Export All (PDF)' },
     ],
   },
 ];
@@ -81,6 +99,12 @@ const REPORT_LABELS: Record<ReportMenu, string> = {
   clinical_notes:      'Clinical Notes',
   inventory_items:     'Inventory Items',
   appointment_costs:   'Appointment Costs',
+  banking:             'Banking',
+  ageing_debts:        'Ageing Debts',
+  revenue:             'Revenue',
+  categories:          'Categories',
+  account_credits:     'Account Credits',
+  bulk_financial:      'Bulk Financial Export',
 };
 
 const SECTION_FOR_MENU: Record<ReportMenu, string> = {
@@ -90,6 +114,12 @@ const SECTION_FOR_MENU: Record<ReportMenu, string> = {
   clinical_notes:      'Clinic',
   inventory_items:     'Financial',
   appointment_costs:   'Financial',
+  banking:             'Financial',
+  ageing_debts:        'Financial',
+  revenue:             'Financial',
+  categories:          'Financial',
+  account_credits:     'Financial',
+  bulk_financial:      'Financial',
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -105,6 +135,12 @@ export const Reports: React.FC = () => {
       case 'clinical_notes':      return <ClinicalNotes />;
       case 'inventory_items':     return <InventoryItems />;
       case 'appointment_costs':   return <AppointmentCosts />;
+      case 'banking':             return <BankingReport />;
+      case 'ageing_debts':        return <AgeingDebtsReport />;
+      case 'revenue':             return <RevenueReport />;
+      case 'categories':          return <CategoriesReport />;
+      case 'account_credits':     return <AccountCreditsReport />;
+      case 'bulk_financial':       return <BulkFinancialReport />;
       default:                    return null;
     }
   };
