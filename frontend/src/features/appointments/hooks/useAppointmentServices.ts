@@ -1,34 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { clinicServicesApi } from '@/features/manage/services/clinic-services.api';
 import type { ClinicService } from '@/features/manage/services/clinic-services.api';
-
 
 
 /**
  * Lightweight hook used inside AppointmentModal / AppointmentEditForm.
  * Fetches only active services for the appointment service picker.
+ *
+ * Uses React Query with the shared 'clinic-services' key — deduplicated
+ * and cached across all components (including the billing invoice page).
  */
 export const useAppointmentServices = () => {
-  const [services, setServices] = useState<ClinicService[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const { data, isLoading, error } = useQuery<ClinicService[]>({
+    queryKey: ['clinic-services'],
+    queryFn: async () => {
+      const data = await clinicServicesApi.list();
+      return data.filter(s => s.is_active);
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
+    throwOnError: false,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    const fetch = async () => {
-      setLoading(true);
-      try {
-        const data = await clinicServicesApi.list();
-        if (!cancelled) setServices(data.filter(s => s.is_active));
-      } catch {
-        if (!cancelled) setError('Failed to load services.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    fetch();
-    return () => { cancelled = true; };
-  }, []);
-
-  return { services, loading, error };
+  return {
+    services: data ?? [],
+    loading: isLoading,
+    error: error ? 'Failed to load services.' : null,
+  };
 };

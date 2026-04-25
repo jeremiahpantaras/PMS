@@ -32,10 +32,12 @@ export const useAppointments = ({
 
     try {
       // FIX: Build params with proper typing
+      // page_size is capped at 200; date-range filtering on the backend
+      // ensures results are already scoped to the visible calendar window.
       const apptParams: { start_date: string; end_date: string; practitioner?: number; page_size?: number } = {
         start_date: startDateStr,
         end_date:   endDateStr,
-        page_size:  1000,
+        page_size:  200,
       };
       if (practitionerId !== null) apptParams.practitioner = practitionerId;
 

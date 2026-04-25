@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getClinicBranches } from '../clinic.api';
 import type { ClinicBranch } from '@/types/clinic';
 import toast from 'react-hot-toast';
+import { useCallback } from 'react';
 
 interface UseClinicBranchesReturn {
   branches: ClinicBranch[];
@@ -11,42 +12,42 @@ interface UseClinicBranchesReturn {
   refetch: () => Promise<void>;
 }
 
+export const CLINIC_BRANCHES_QUERY_KEY = ['clinic-branches'] as const;
+
 /**
- * Hook to fetch and manage clinic branches
+ * Hook to fetch and manage clinic branches.
+ * Uses React Query for automatic deduplication and caching — multiple
+ * components calling this hook simultaneously make only ONE network request.
  */
 export const useClinicBranches = (): UseClinicBranchesReturn => {
-  const [branches, setBranches] = useState<ClinicBranch[]>([]);
-  const [mainClinicId, setMainClinicId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
 
-  const fetchBranches = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
+  const { data, isLoading, error } = useQuery({
+    queryKey: CLINIC_BRANCHES_QUERY_KEY,
+    queryFn: async () => {
       const response = await getClinicBranches();
-      setBranches(response.branches);
-      setMainClinicId(response.main_clinic_id);
-    } catch (err: any) {
-      console.error('Failed to fetch clinic branches:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to load clinic branches';
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return response;
+    },
+    staleTime: 5 * 60 * 1000, // treat as fresh for 5 min
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
+    throwOnError: false,
+  });
 
-  useEffect(() => {
-    fetchBranches();
-  }, []);
+  if (error) {
+    const msg = (error as any)?.response?.data?.detail || 'Failed to load clinic branches';
+    toast.error(msg);
+  }
+
+  const refetch = useCallback(async () => {
+    await qc.invalidateQueries({ queryKey: CLINIC_BRANCHES_QUERY_KEY });
+  }, [qc]);
 
   return {
-    branches,
-    mainClinicId,
-    loading,
-    error,
-    refetch: fetchBranches,
+    branches: data?.branches ?? [],
+    mainClinicId: data?.main_clinic_id ?? null,
+    loading: isLoading,
+    error: error ? ((error as any)?.response?.data?.detail || 'Failed to load clinic branches') : null,
+    refetch,
   };
 };

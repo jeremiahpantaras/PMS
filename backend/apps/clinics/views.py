@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from django.core.cache import cache
 from .models import Clinic, Practitioner, Location
 from .serializers import (
     ClinicSerializer,
@@ -55,15 +56,22 @@ class ClinicViewSet(viewsets.ModelViewSet):
             return Response({'branches': []})
 
         main_clinic = user.clinic.main_clinic
+        cache_key   = f'clinic_branches_{main_clinic.id}'
+        cached      = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         branches    = Clinic.objects.filter(
             Q(id=main_clinic.id) | Q(parent_clinic=main_clinic)
         ).filter(is_deleted=False, is_active=True).order_by('-is_main_branch', 'name')
 
         serializer = ClinicBranchSerializer(branches, many=True)
-        return Response({
+        result = {
             'branches':       serializer.data,
             'main_clinic_id': main_clinic.id,
-        })
+        }
+        cache.set(cache_key, result, timeout=300)  # 5-minute cache
+        return Response(result)
 
     # ── POST /api/clinics/{id}/create_branch/ ────────────────────────────────
     @action(detail=True, methods=['post'])
@@ -91,6 +99,8 @@ class ClinicViewSet(viewsets.ModelViewSet):
         serializer = ClinicSerializer(data=branch_data)
         if serializer.is_valid():
             serializer.save()
+            # Invalidate branch cache for this clinic family
+            cache.delete(f'clinic_branches_{main_clinic.id}')
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -132,6 +142,9 @@ class ClinicViewSet(viewsets.ModelViewSet):
 
         # Save profile fields + mark setup complete
         serializer.save(setup_complete=True)
+
+        # Invalidate branch cache since profile data is included in branch responses
+        cache.delete(f'clinic_branches_{clinic.main_clinic.id}')
 
         logger.info(
             "Clinic profile setup completed for '%s' by %s",

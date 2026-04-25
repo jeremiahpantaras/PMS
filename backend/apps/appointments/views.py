@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from datetime import datetime, timedelta
 import pytz
 from .models import Appointment, PractitionerSchedule, AppointmentReminder, BlockAppointment, RebookingLink
@@ -21,6 +21,7 @@ from .serializers import (
 )
 from apps.patients.models import PortalBooking
 from apps.clinics.models import Clinic
+from apps.billing.models import Invoice
 from apps.appointments.email_service import (
     send_appointment_reminder_email,
     send_appointment_cancellation_email,
@@ -29,6 +30,7 @@ from apps.appointments.email_service import (
 from apps.appointments.sms_service import send_appointment_reminder_sms
 from apps.appointments.reminder_service import send_all_reminders, send_bulk_all_reminders
 from apps.appointments.filters import AppointmentFilter
+from django.core.cache import cache
 
 import logging
 logger = logging.getLogger(__name__)
@@ -38,7 +40,22 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     """CRUD operations for appointments"""
 
     queryset = Appointment.objects.filter(is_deleted=False).select_related(
-        'patient', 'practitioner__user', 'location', 'clinic', 'created_by', 'updated_by'
+        'patient',
+        'practitioner__user',
+        'practitioner__user__clinic_branch',  # avoids extra query for branch_id / avatar
+        'service',                             # avoids extra queries for service_name/color/duration
+        'location',
+        'clinic',
+        'created_by',
+        'updated_by',
+        'cancelled_by',
+    ).prefetch_related(
+        # Prefetch only non-deleted invoices (just the id) to resolve has_invoice without N+1
+        Prefetch(
+            'billing_invoices',
+            queryset=Invoice.objects.filter(is_deleted=False).only('id'),
+            to_attr='_active_invoices',
+        ),
     )
     serializer_class   = AppointmentSerializer
     permission_classes = [IsAuthenticated]
@@ -849,6 +866,13 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             return Response({'practitioners': []})
 
         main_clinic    = user.clinic.main_clinic
+        clinic_branch_param = request.query_params.get('clinic_branch', '')
+
+        cache_key = f'practitioners_{main_clinic.id}_{clinic_branch_param}'
+        cached    = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         all_branch_ids = list(
             main_clinic.get_all_branches().values_list('id', flat=True)
         )
@@ -859,7 +883,6 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             user__is_deleted=False,
         ).select_related('user', 'clinic', 'user__clinic_branch')
 
-        clinic_branch_param = request.query_params.get('clinic_branch')
         if clinic_branch_param:
             try:
                 branch_id = int(clinic_branch_param)
@@ -933,7 +956,9 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 'role': 'STAFF',
             })
 
-        return Response({'practitioners': practitioners_data})
+        result = {'practitioners': practitioners_data}
+        cache.set(cache_key, result, timeout=300)  # 5-minute cache
+        return Response(result)
 
     # ── Reminders (existing) ──────────────────────────────────────────────────
     @action(detail=True, methods=['post'], url_path='send_reminder')

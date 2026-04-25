@@ -52,38 +52,25 @@ class AppointmentSerializer(serializers.ModelSerializer):
         ]
 
     def get_has_invoice(self, obj) -> bool:
-        """Check if this appointment has a non-deleted invoice."""
+        """Check if this appointment has a non-deleted invoice.
+        Uses _active_invoices prefetch when available to avoid N+1 queries.
+        """
+        active_invoices = getattr(obj, '_active_invoices', None)
+        if active_invoices is not None:
+            return len(active_invoices) > 0
         return obj.billing_invoices.filter(is_deleted=False).exists()
 
     def get_practitioner_avatar(self, obj) -> str | None:
         """Get practitioner avatar URL from user model with full absolute URL."""
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        logger.info(f"[AppointmentSerializer] get_practitioner_avatar called for appointment {obj.id}")
-        logger.info(f"[AppointmentSerializer] practitioner: {obj.practitioner}")
-        
         if obj.practitioner and obj.practitioner.user:
             user = obj.practitioner.user
-            logger.info(f"[AppointmentSerializer] user: {user.email}, avatar field: {user.avatar}")
-            
-            # Check for avatar field
             avatar = getattr(user, 'avatar', None)
             if avatar:
-                logger.info(f"[AppointmentSerializer] avatar found: {avatar}")
                 request = self.context.get('request')
                 if request:
-                    # Build absolute URL like UserSerializer does
                     if hasattr(avatar, 'url'):
-                        avatar_url = request.build_absolute_uri(avatar.url)
-                        logger.info(f"[AppointmentSerializer] built URL: {avatar_url}")
-                        return avatar_url
-                    # If it's already a string (URL)
+                        return request.build_absolute_uri(avatar.url)
                     return str(avatar)
-            else:
-                logger.info(f"[AppointmentSerializer] No avatar field on user")
-        else:
-            logger.info(f"[AppointmentSerializer] No practitioner or practitioner.user")
         return None
 
     def get_branch_id(self, obj) -> int | None:

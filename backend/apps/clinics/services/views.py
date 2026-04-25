@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.cache import cache
 from .models import Service
 from .serializers import ServiceSerializer
 import logging
@@ -38,16 +39,35 @@ class ServiceViewSet(viewsets.ModelViewSet):
             return qs.filter(clinic=user.clinic)
         return qs.none()
 
+    def list(self, request, *args, **kwargs):
+        """Override list to add per-clinic caching (5 min)."""
+        user = request.user
+        clinic_id = user.clinic_id if user.clinic else None
+        if clinic_id:
+            cache_key = f'clinic_services_{clinic_id}'
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
+        response = super().list(request, *args, **kwargs)
+
+        if clinic_id and response.status_code == 200:
+            cache.set(f'clinic_services_{clinic_id}', response.data, timeout=300)
+
+        return response
+
     def perform_create(self, serializer):
         practitioners = serializer.validated_data.pop('assigned_practitioners', [])
         service = serializer.save(clinic=self.request.user.clinic)
         service.assigned_practitioners.set(practitioners)
+        cache.delete(f'clinic_services_{self.request.user.clinic_id}')
 
     def perform_update(self, serializer):
         practitioners = serializer.validated_data.pop('assigned_practitioners', None)
         service = serializer.save()
         if practitioners is not None:
             service.assigned_practitioners.set(practitioners)
+        cache.delete(f'clinic_services_{self.request.user.clinic_id}')
 
     def destroy(self, request, *args, **kwargs):
         """Soft-delete instead of hard delete."""
@@ -55,6 +75,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
         instance.is_deleted = True
         instance.is_active  = False
         instance.save()
+        cache.delete(f'clinic_services_{request.user.clinic_id}')
         logger.info(
             f"Service '{instance.name}' soft-deleted by {request.user.email}"
         )
@@ -69,6 +90,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
         service = self.get_object()
         service.is_active = not service.is_active
         service.save(update_fields=['is_active'])
+        cache.delete(f'clinic_services_{request.user.clinic_id}')
         return Response(
             {
                 'id':        service.id,
