@@ -314,6 +314,11 @@ class PortalBooking(TimeStampedModel):
     patient_last_name  = models.CharField(max_length=100)
     patient_email      = models.EmailField()
     patient_phone      = models.CharField(max_length=20)
+    patient_date_of_birth = models.DateField(
+        null=True,
+        blank=True,
+        help_text='Date of birth collected during portal booking.',
+    )
     notes              = models.TextField(blank=True)
 
     appointment_date = models.DateField()

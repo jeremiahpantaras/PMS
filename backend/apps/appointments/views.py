@@ -1,13 +1,14 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db.models import Q
 from datetime import datetime, timedelta
 import pytz
-from .models import Appointment, PractitionerSchedule, AppointmentReminder, BlockAppointment
+from .models import Appointment, PractitionerSchedule, AppointmentReminder, BlockAppointment, RebookingLink
 from .serializers import (
     AppointmentSerializer,
     AppointmentEditSerializer,
@@ -1248,3 +1249,118 @@ class BlockAppointmentViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = BlockAppointmentSerializer(queryset, many=True)
         return Response(serializer.data)
+
+
+# ── Public Rebooking Views (no auth required) ─────────────────────────────────
+
+class PublicRebookingLinkView(APIView):
+    """
+    GET  /api/appointments/rebook/<uuid:token>/  — validate token & return prefill data
+    POST /api/appointments/rebook/<uuid:token>/  — submit rebooking
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def _get_valid_link(self, token):
+        """Return RebookingLink or None if invalid."""
+        try:
+            link = RebookingLink.objects.select_related(
+                'patient', 'appointment__practitioner__user',
+                'appointment__clinic', 'appointment__service',
+            ).get(token=token)
+        except RebookingLink.DoesNotExist:
+            return None, Response(
+                {'detail': 'Invalid rebooking link.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if link.is_used:
+            return None, Response(
+                {'detail': 'This rebooking link has already been used.', 'code': 'used'},
+                status=status.HTTP_410_GONE,
+            )
+        if link.is_expired:
+            return None, Response(
+                {'detail': 'This rebooking link has expired.', 'code': 'expired'},
+                status=status.HTTP_410_GONE,
+            )
+        return link, None
+
+    def get(self, request, token):
+        link, err = self._get_valid_link(token)
+        if err:
+            return err
+
+        appt = link.appointment
+        return Response({
+            'patient_first_name': link.patient.first_name,
+            'service_name':       appt.service.name if appt.service else appt.appointment_type,
+            'practitioner_name':  (
+                appt.practitioner.user.get_full_name()
+                if appt.practitioner else 'Any Available'
+            ),
+            'clinic_name':        appt.clinic.name if appt.clinic else '',
+            'original_date':      str(appt.date),
+            'original_start_time': appt.start_time.strftime('%H:%M'),
+            'expires_at':         link.expires_at.isoformat(),
+        })
+
+    def post(self, request, token):
+        link, err = self._get_valid_link(token)
+        if err:
+            return err
+
+        date_str       = request.data.get('date', '').strip()
+        start_time_str = request.data.get('start_time', '').strip()
+        end_time_str   = request.data.get('end_time', '').strip()
+
+        if not date_str or not start_time_str or not end_time_str:
+            return Response(
+                {'detail': 'date, start_time, and end_time are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            new_date       = datetime.strptime(date_str, '%Y-%m-%d').date()
+            new_start_time = datetime.strptime(start_time_str, '%H:%M').time()
+            new_end_time   = datetime.strptime(end_time_str, '%H:%M').time()
+        except ValueError:
+            return Response(
+                {'detail': 'Invalid date/time format. Use YYYY-MM-DD and HH:MM.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        original = link.appointment
+        duration = (
+            original.duration_minutes
+            if original.duration_minutes
+            else int((datetime.combine(new_date, new_end_time) -
+                      datetime.combine(new_date, new_start_time)).total_seconds() // 60)
+        )
+
+        new_appt = Appointment.objects.create(
+            clinic=original.clinic,
+            patient=link.patient,
+            practitioner=original.practitioner,
+            service=original.service,
+            appointment_type=original.appointment_type,
+            status='SCHEDULED',
+            date=new_date,
+            start_time=new_start_time,
+            end_time=new_end_time,
+            duration_minutes=duration,
+            chief_complaint=original.chief_complaint or '',
+            notes=f'Rebooked via secure link (original appt #{original.id})',
+        )
+
+        link.is_used = True
+        link.used_at = timezone.now()
+        link.new_appointment = new_appt
+        link.save(update_fields=['is_used', 'used_at', 'new_appointment'])
+
+        return Response({
+            'detail': 'Appointment successfully booked!',
+            'appointment_id': new_appt.id,
+            'date': str(new_appt.date),
+            'start_time': new_appt.start_time.strftime('%H:%M'),
+            'end_time': new_appt.end_time.strftime('%H:%M'),
+        }, status=status.HTTP_201_CREATED)

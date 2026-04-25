@@ -1,0 +1,23 @@
+APPOINTMENT CONFIRMED — {{ clinic_name }}
+
+Hi {{ patient_first_name }},
+
+Your appointment has been successfully booked.
+
+APPOINTMENT DETAILS
+--------------------
+Date:         {{ appointment_date }}
+Time:         {{ appointment_time }}
+Service:      {{ service_name }}
+{% if practitioner_name %}Practitioner: {{ practitioner_name }}
+{% endif %}Location:     {{ location_name }}
+{% if duration_minutes %}Duration:     {{ duration_minutes }} minutes
+{% endif %}
+{% if booking_reference %}Booking Ref:  {{ booking_reference }}
+{% endif %}
+We look forward to seeing you. If you need to reschedule or cancel,
+please contact us as soon as possible.
+
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}

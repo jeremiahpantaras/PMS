@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, Heart, MapPin, Phone, ShieldCheck, User, X, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, MapPin, Phone, ShieldCheck, User, X, XCircle } from 'lucide-react';
 import type { ClientFormRequestRecord } from '../patient.api';
 import type { Patient } from '@/types/patient';
 import { formatDate, formatDateTime, getGenderLabel } from '../patientProfile.utils.tsx';
@@ -35,7 +35,7 @@ export const ViewClientFormModal = ({ isOpen, req, patient, onClose }: Props) =>
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-50"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
         onClick={onClose}
       />
 

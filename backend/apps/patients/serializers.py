@@ -360,7 +360,7 @@ class PortalBookingCreateSerializer(serializers.ModelSerializer):
             'consent_id',
             'service', 'practitioner',
             'patient_first_name', 'patient_last_name',
-            'patient_email', 'patient_phone',
+            'patient_email', 'patient_phone', 'patient_date_of_birth',
             'notes', 'appointment_date', 'appointment_time',
         ]
 

@@ -75,17 +75,18 @@ export interface PortalData {
 }
 
 export interface BookingPayload {
-  service:            number;
-  branch?:            number | null;
-  practitioner?:      number | null;
-  consent_id?:        number;
-  patient_first_name: string;
-  patient_last_name:  string;
-  patient_email:      string;
-  patient_phone:      string;
-  notes:              string;
-  appointment_date:   string;
-  appointment_time:   string;
+  service:                number;
+  branch?:                number | null;
+  practitioner?:          number | null;
+  consent_id?:            number;
+  patient_first_name:     string;
+  patient_last_name:      string;
+  patient_email:          string;
+  patient_phone:          string;
+  patient_date_of_birth:  string;
+  notes:                  string;
+  appointment_date:       string;
+  appointment_time:       string;
 }
 
 export interface BookingConfirmation {

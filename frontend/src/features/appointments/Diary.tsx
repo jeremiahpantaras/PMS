@@ -161,19 +161,23 @@ export const Diary: React.FC = () => {
     [comparePractitionerAName, comparePractitionerBName],
   );
 
-  const handlePrevious = () => {
-    if (view === 'day') setCurrentDate(subDays(currentDate, 1));
-    else if (view === 'week') setCurrentDate(subWeeks(currentDate, 1));
-    else setCurrentDate(subMonths(currentDate, 1));
-  };
+  const handlePrevious = useCallback(() => {
+    setCurrentDate(prev => {
+      if (view === 'day') return subDays(prev, 1);
+      if (view === 'week') return subWeeks(prev, 1);
+      return subMonths(prev, 1);
+    });
+  }, [view]);
 
-  const handleNext = () => {
-    if (view === 'day') setCurrentDate(addDays(currentDate, 1));
-    else if (view === 'week') setCurrentDate(addWeeks(currentDate, 1));
-    else setCurrentDate(addMonths(currentDate, 1));
-  };
+  const handleNext = useCallback(() => {
+    setCurrentDate(prev => {
+      if (view === 'day') return addDays(prev, 1);
+      if (view === 'week') return addWeeks(prev, 1);
+      return addMonths(prev, 1);
+    });
+  }, [view]);
 
-  const handleToday = () => setCurrentDate(new Date());
+  const handleToday = useCallback(() => setCurrentDate(new Date()), []);
 
   const handleDateChange = useCallback((date: Date) => {
     setCurrentDate(date);
@@ -226,7 +230,7 @@ export const Diary: React.FC = () => {
     comparePractitioners[1] !== null &&
     comparePractitioners[0] === comparePractitioners[1];
 
-  const getDateRangeText = () => {
+  const dateRangeText = useMemo(() => {
     if (view === 'day') return format(currentDate, 'EEEE, MMMM d, yyyy');
     if (view === 'week') {
       const weekStart = new Date(currentDate);
@@ -236,7 +240,7 @@ export const Diary: React.FC = () => {
       return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
     }
     return format(currentDate, 'MMMM yyyy');
-  };
+  }, [view, currentDate]);
 
   const currentMonth = new Date();
   const nextMonth = addMonths(currentMonth, 1);
@@ -246,8 +250,14 @@ export const Diary: React.FC = () => {
     setView('day');
   };
 
-  const selectedPractitionerName = practitioners.find(p => p.id === selectedPractitioner)?.name;
-  const selectedBranchName = branches.find(b => b.id === selectedClinicBranch)?.name;
+  const selectedPractitionerName = useMemo(
+    () => practitioners.find(p => p.id === selectedPractitioner)?.name,
+    [practitioners, selectedPractitioner],
+  );
+  const selectedBranchName = useMemo(
+    () => branches.find(b => b.id === selectedClinicBranch)?.name,
+    [branches, selectedClinicBranch],
+  );
 
   // ── Modal State ─────────────────────────────────────────────────────────────
   // Select-option modal (admin double-click / drag-select on calendar)
@@ -450,7 +460,7 @@ export const Diary: React.FC = () => {
                   </div>
 
                   <h2 className="text-lg font-semibold text-trust-harbor">
-                    {getDateRangeText()}
+                    {dateRangeText}
                   </h2>
 
                   {/* Active branch badge */}

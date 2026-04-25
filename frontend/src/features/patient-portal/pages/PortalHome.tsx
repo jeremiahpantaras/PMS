@@ -144,15 +144,19 @@ export const PortalHome: React.FC = () => {
     if (!formData.phone.trim()) {
       setFormError('Phone number is required.'); return;
     }
+    if (!formData.date_of_birth) {
+      setFormError('Date of birth is required.'); return;
+    }
 
     const payload: BookingPayload = {
-      service:            selectedService.id,
-      branch:             selectedBranch?.id ?? null,
-      practitioner:       selectedPractitioner?.id ?? null,
-      patient_first_name: formData.first_name,
-      patient_last_name:  formData.last_name,
-      patient_email:      formData.email,
-      patient_phone:      formData.phone,
+      service:               selectedService.id,
+      branch:                selectedBranch?.id ?? null,
+      practitioner:          selectedPractitioner?.id ?? null,
+      patient_first_name:    formData.first_name,
+      patient_last_name:     formData.last_name,
+      patient_email:         formData.email,
+      patient_phone:         formData.phone,
+      patient_date_of_birth: formData.date_of_birth,
       notes:              formData.notes,
       appointment_date:   selectedDate,
       appointment_time:   selectedSlot,

@@ -1,5 +1,8 @@
+import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+from datetime import timedelta
 from apps.common.models import TimeStampedModel, SoftDeleteModel
 
 
@@ -351,3 +354,70 @@ class BlockAppointment(TimeStampedModel, SoftDeleteModel):
     def clean(self):
         if self.start_time and self.end_time and self.end_time <= self.start_time:
             raise ValidationError('End time must be after start time')
+
+
+# ── Rebooking Link ────────────────────────────────────────────────────────────
+
+def _default_rebooking_expires():
+    return timezone.now() + timedelta(hours=72)
+
+
+class RebookingLink(TimeStampedModel):
+    """
+    Secure one-time rebooking link sent to patients after a DNA/decline.
+
+    The token is a UUID; the link expires after 72 hours and becomes invalid
+    once used.  The frontend page at /rebook/{token} prefills appointment
+    details (read-only) and lets the patient choose a new date/time.
+    """
+
+    patient = models.ForeignKey(
+        'patients.Patient',
+        on_delete=models.CASCADE,
+        related_name='rebooking_links',
+    )
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name='rebooking_links',
+        help_text='The original missed/declined appointment this link relates to.',
+    )
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        db_index=True,
+        editable=False,
+    )
+    expires_at = models.DateTimeField(default=_default_rebooking_expires)
+    is_used = models.BooleanField(
+        default=False,
+        help_text='True once the patient has used this link to rebook.',
+    )
+    used_at = models.DateTimeField(null=True, blank=True)
+    new_appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_from_rebooking_links',
+        help_text='The new appointment created when the patient used this link.',
+    )
+
+    class Meta:
+        db_table = 'rebooking_links'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['patient', 'is_used']),
+        ]
+
+    def __str__(self):
+        return f"RebookingLink {self.token} — patient {self.patient_id}"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.is_used and not self.is_expired

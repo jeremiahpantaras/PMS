@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reschedule Your Appointment</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1a1a2e;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f8;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td align="center" style="background:#6366f1;padding:28px 40px 24px;">
+              {% if clinic_logo_url %}
+              <img src="{{ clinic_logo_url }}" alt="{{ clinic_name }}" style="display:block;margin:0 auto 14px;max-height:56px;max-width:200px;object-fit:contain;" />
+              {% endif %}
+              <div style="display:inline-block;background:rgba(255,255,255,0.2);border-radius:50%;width:48px;height:48px;line-height:48px;text-align:center;margin-bottom:10px;">
+                <span style="font-size:22px;">📅</span>
+              </div>
+              <h1 style="color:#ffffff;font-size:22px;font-weight:700;margin:0 0 4px;">Reschedule Your Appointment</h1>
+              <p style="color:#e0e7ff;font-size:13px;margin:0;">{{ clinic_name }}</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 40px;">
+              <p style="font-size:16px;font-weight:600;margin:0 0 6px;">Hi {{ patient_first_name }},</p>
+              <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 8px;">
+                Thanks for letting us know. We understand plans change, and we're here to help you reschedule
+                your appointment that was originally booked for:
+              </p>
+
+              <!-- Original appointment info -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="font-size:13px;color:#4338ca;font-weight:600;margin:0 0 6px;">Original Appointment</p>
+                    <p style="font-size:14px;color:#1f2937;margin:0;">{{ appointment_date }} at {{ appointment_time }}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ booking_url }}"
+                       style="display:inline-block;background:#6366f1;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;">
+                      Rebook My Appointment
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0 0 24px;">
+                This link expires in 72 hours and can only be used once.
+              </p>
+
+              <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0 0 20px;">
+                If the button above doesn't work, copy and paste this URL into your browser:
+              </p>
+              <p style="font-size:12px;color:#6366f1;word-break:break-all;margin:0 0 24px;">{{ booking_url }}</p>
+
+              <!-- Contact block -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;font-size:13px;color:#374151;line-height:1.8;">
+                    <strong style="color:#111827;display:block;margin-bottom:4px;">{{ clinic_name }}</strong>
+                    {% if clinic_phone %}📞 {{ clinic_phone }}<br />{% endif %}
+                    {% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;text-align:center;font-size:12px;color:#9ca3af;">
+              This is an automated notification from {{ clinic_name }}. Please do not reply directly to this email.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

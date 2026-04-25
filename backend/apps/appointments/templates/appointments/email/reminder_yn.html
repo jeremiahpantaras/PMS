@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appointment Reminder</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1a1a2e;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f8;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td align="center" style="background:#f59e0b;padding:28px 40px 24px;">
+              {% if clinic_logo_url %}
+              <img src="{{ clinic_logo_url }}" alt="{{ clinic_name }}" style="display:block;margin:0 auto 14px;max-height:56px;max-width:200px;object-fit:contain;" />
+              {% endif %}
+              <div style="display:inline-block;background:rgba(255,255,255,0.2);border-radius:50%;width:48px;height:48px;line-height:48px;text-align:center;margin-bottom:10px;">
+                <span style="font-size:22px;">🔔</span>
+              </div>
+              <h1 style="color:#ffffff;font-size:22px;font-weight:700;margin:0 0 4px;">Appointment Reminder</h1>
+              <p style="color:#fef3c7;font-size:13px;margin:0;">{{ clinic_name }}</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 40px;">
+              <p style="font-size:16px;font-weight:600;margin:0 0 6px;">Hi {{ patient_first_name }},</p>
+              <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
+                This is a friendly reminder for your upcoming appointment.
+              </p>
+
+              <!-- Detail card -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:18px 24px 10px;">
+                    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#92400e;margin:0 0 14px;">Your Appointment</p>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
+                      <tr>
+                        <td width="38%" style="font-size:13px;color:#6b7280;padding-bottom:2px;">Date</td>
+                        <td width="62%" style="font-size:13px;font-weight:600;color:#111827;padding-bottom:2px;">{{ appointment_date }}</td>
+                      </tr>
+                    </table>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
+                      <tr>
+                        <td width="38%" style="font-size:13px;color:#6b7280;padding-bottom:2px;">Time</td>
+                        <td width="62%" style="font-size:13px;font-weight:600;color:#111827;padding-bottom:2px;">{{ appointment_time }}</td>
+                      </tr>
+                    </table>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
+                      <tr>
+                        <td width="38%" style="font-size:13px;color:#6b7280;padding-bottom:2px;">Service</td>
+                        <td width="62%" style="font-size:13px;font-weight:600;color:#111827;padding-bottom:2px;">{{ appointment_type }}</td>
+                      </tr>
+                    </table>
+                    {% if practitioner_name %}
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
+                      <tr>
+                        <td width="38%" style="font-size:13px;color:#6b7280;padding-bottom:2px;">Practitioner</td>
+                        <td width="62%" style="font-size:13px;font-weight:600;color:#111827;padding-bottom:2px;">{{ practitioner_name }}</td>
+                      </tr>
+                    </table>
+                    {% endif %}
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:0;">
+                      <tr>
+                        <td width="38%" style="font-size:13px;color:#6b7280;padding-bottom:2px;">Location</td>
+                        <td width="62%" style="font-size:13px;font-weight:600;color:#111827;padding-bottom:2px;">{{ location_name }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr><td style="height:8px;"></td></tr>
+              </table>
+
+              <!-- Y/N confirmation note -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:16px 20px;text-align:center;">
+                    <p style="font-size:14px;color:#166534;font-weight:600;margin:0 0 4px;">Please confirm your attendance</p>
+                    <p style="font-size:13px;color:#4b5563;margin:0;">
+                      Reply <strong>Y</strong> to confirm &nbsp;·&nbsp; Reply <strong>N</strong> if you cannot attend
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Contact block -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;font-size:13px;color:#374151;line-height:1.8;">
+                    <strong style="color:#111827;display:block;margin-bottom:4px;">{{ clinic_name }}</strong>
+                    {% if clinic_phone %}📞 {{ clinic_phone }}<br />{% endif %}
+                    {% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;text-align:center;font-size:12px;color:#9ca3af;">
+              This is an automated notification from {{ clinic_name }}. Please do not reply directly to this email.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

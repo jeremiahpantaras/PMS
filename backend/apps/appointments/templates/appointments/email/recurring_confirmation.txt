@@ -1,0 +1,19 @@
+RECURRING APPOINTMENTS CONFIRMED — {{ clinic_name }}
+
+Hi {{ patient_first_name }},
+
+Your recurring appointment series of {{ total_appointments }} sessions has been confirmed.
+
+SERIES DETAILS
+---------------
+Service:      {{ service_name }}
+{% if practitioner_name %}Practitioner: {{ practitioner_name }}
+{% endif %}Location:     {{ location_name }}
+
+YOUR SCHEDULE
+--------------
+{{ schedule_list_text }}
+
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}

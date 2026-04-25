@@ -8,7 +8,7 @@ from django.http import JsonResponse
 
 from apps.accounts.views import AuthViewSet, UserViewSet, RoleViewSet, PermissionViewSet
 from apps.clinics.views import ClinicViewSet, PractitionerViewSet, LocationViewSet
-from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet
+from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, PublicRebookingLinkView
 from apps.records.views import ClinicalNoteViewSet, NoteTemplateViewSet, OutcomeMeasureViewSet, AttachmentViewSet
 from apps.billing.views import (
     InvoiceViewSet, InvoiceItemViewSet, PaymentViewSet,
@@ -92,6 +92,9 @@ urlpatterns = [
 
     # SMS webhook (Twilio inbound)
     path('api/sms/reply-webhook/', SMSReplyWebhookView.as_view(), name='sms-reply-webhook'),
+
+    # Public rebooking (no auth required)
+    path('api/appointments/rebook/<uuid:token>/', PublicRebookingLinkView.as_view(), name='public-rebooking'),
 ]
 
 if settings.DEBUG:

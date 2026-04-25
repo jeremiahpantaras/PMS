@@ -1,0 +1,20 @@
+RESCHEDULE YOUR APPOINTMENT — {{ clinic_name }}
+
+Hi {{ patient_first_name }},
+
+Thanks for letting us know. We understand plans change.
+
+Your appointment that was booked for {{ appointment_date }} at {{ appointment_time }}
+has been marked as missed. We'd love to help you reschedule.
+
+REBOOK YOUR APPOINTMENT
+------------------------
+Click the link below to choose a new date and time:
+
+{{ booking_url }}
+
+This link expires in 72 hours and can only be used once.
+
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}

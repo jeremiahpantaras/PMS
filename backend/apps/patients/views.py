@@ -68,7 +68,7 @@ def _confirm_portal_booking(booking, confirmed_by_user):
             clinic=clinic,
             first_name=booking.patient_first_name,
             last_name=booking.patient_last_name,
-            date_of_birth='2000-01-01',
+            date_of_birth=booking.patient_date_of_birth or '2000-01-01',
             gender='O',
             email=booking.patient_email or '',
             phone=booking.patient_phone,

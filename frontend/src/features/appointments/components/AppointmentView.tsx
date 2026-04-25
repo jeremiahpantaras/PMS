@@ -1411,7 +1411,6 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
         appointment={appointment}
         onClose={() => setShowRecurringModal(false)}
         onSave={async (data) => {
-          console.log('Saving recurring appointments:', data);
           try {
             const result = await createRecurringAppointments({
               service_id: data.service_id,
@@ -1425,7 +1424,6 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
               patient_id: appointment!.patient,
               clinic_id: appointment!.clinic,
             });
-            console.log('Recurring appointments created:', result);
             toast.success(`${result.created} recurring appointment(s) created!`);
             onRecurringCreated?.();
             setShowRecurringModal(false);

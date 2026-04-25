@@ -19,6 +19,7 @@ import { ForgotPassword }         from '@/features/auth/ForgotPassword';
 import { PortalHome }             from '@/features/patient-portal/pages/PortalHome';
 import { BookAppointmentSuccess } from '@/features/patient-portal/pages/BookAppointmentSuccess';
 import { ClientFormPublicPage }   from '@/features/patients/pages/ClientFormPublicPage';
+import { RebookPage }             from '@/features/appointments/RebookPage';
 
 // Footer Pages - Product
 import { Features }  from '@/features/landing/components/footer-pages/Product/Features';
@@ -170,6 +171,8 @@ function App() {
           <Route path="/portal/:token/success" element={<BookAppointmentSuccess />} />
           {/* ── Public Client Form ──────────────────────────────────── */}
           <Route path="/client-form/:token" element={<ClientFormPublicPage />} />
+          {/* ── Rebooking (DNA follow-up secure link) ───────────────── */}
+          <Route path="/rebook/:token" element={<RebookPage />} />
           {/* ── Clinic Setup (first-login admin only) ───────────────── */}
           <Route
             path="/clinic-setup"

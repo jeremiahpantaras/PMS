@@ -36,17 +36,12 @@ export const ArrivalsList: React.FC<ArrivalsListProps> = ({ calendarReadyDate })
       const today = new Date();
       const todayStr = format(today, 'yyyy-MM-dd');
       
-      console.log('[ArrivalsList] Fetched arrivals:', allArrivals.length);
-      console.log('[ArrivalsList] Today (PH):', todayStr);
-      
       // Filter arrivals based on both appointment date and arrival_time
       // Only show appointments where:
       // 1. arrival_status = 'ARRIVED'
       // 2. appointment date is today
       // 3. arrival_time is today (after midnight)
       const filteredArrivals = allArrivals.filter((apt: Appointment) => {
-        console.log('[ArrivalsList] Appointment date:', apt.date, 'arrival_status:', apt.arrival_status, 'arrival_time:', apt.arrival_time);
-        
         // Only show if arrival_status is 'ARRIVED'
         if (apt.arrival_status !== 'ARRIVED') {
           return false;
@@ -71,7 +66,6 @@ export const ArrivalsList: React.FC<ArrivalsListProps> = ({ calendarReadyDate })
         return apt.date === todayStr;
       });
       
-      console.log('[ArrivalsList] Filtered arrivals:', filteredArrivals.length);
       return filteredArrivals;
     },
     enabled: isCalendarReady, // Only fetch when calendar is ready

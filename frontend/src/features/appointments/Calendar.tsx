@@ -355,21 +355,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     hideBlockHover,
   } = useBlockHover();
 
-  const getDateRange = () => {
-    if (view === 'day') {
-      return { startDate: currentDate, endDate: currentDate };
-    } else if (view === 'week') {
-      const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-      return { startDate: weekStart, endDate: addDays(weekStart, 6) };
-    } else {
-      const monthStart = startOfMonth(currentDate);
-      const monthEnd   = endOfMonth(currentDate);
-      return {
-        startDate: startOfWeek(monthStart, { weekStartsOn: 1 }),
-        endDate:   endOfWeek(monthEnd,     { weekStartsOn: 1 }),
-      };
-    }
-  };
+
 
   const getBlockColors = (apt: Appointment): BlockColors => {
     // Check if appointment has an invoice - use orange color
@@ -429,7 +415,23 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     };
   };
 
-  const { startDate, endDate } = getDateRange();
+  // Memoized date range — avoids creating new Date objects on every render,
+  // keeping useCalendarData's string-based deps stable.
+  const { startDate, endDate } = useMemo(() => {
+    if (view === 'day') {
+      return { startDate: currentDate, endDate: currentDate };
+    } else if (view === 'week') {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+      return { startDate: weekStart, endDate: addDays(weekStart, 6) };
+    } else {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd   = endOfMonth(currentDate);
+      return {
+        startDate: startOfWeek(monthStart, { weekStartsOn: 1 }),
+        endDate:   endOfWeek(monthEnd,     { weekStartsOn: 1 }),
+      };
+    }
+  }, [view, currentDate]);
 
   const {
     appointments,

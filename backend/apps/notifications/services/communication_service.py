@@ -447,7 +447,8 @@ def send_appointment_reminder_with_reply(appointment) -> dict:
 def send_dna_followup(appointment) -> dict:
     """
     Send follow-up message after patient replies N or is marked DNA.
-    Includes branch-specific rebooking link.
+    Generates a patient-specific secure rebooking token link (72-hour expiry,
+    one-time use) and includes it in the email/SMS.
     """
     patient = appointment.patient
     clinic  = appointment.clinic
@@ -463,7 +464,14 @@ def send_dna_followup(appointment) -> dict:
     if not _should_send(clinic, patient, channel):
         return {'skipped': True, 'reason': 'Notifications disabled'}
 
-    booking_url = _get_portal_booking_url(clinic)
+    # ── Generate secure rebooking token ────────────────────────────────────
+    from apps.appointments.models import RebookingLink
+    rebooking_link_obj = RebookingLink.objects.create(
+        patient=patient,
+        appointment=appointment,
+    )
+    frontend_base = getattr(settings, 'FRONTEND_URL', 'https://app.mespms.com')
+    booking_url = f"{frontend_base.rstrip('/')}/rebook/{rebooking_link_obj.token}"
 
     context = {
         'patient_first_name': patient.first_name,
@@ -481,6 +489,7 @@ def send_dna_followup(appointment) -> dict:
         f"Thanks for letting us know. We understand plans change.\n\n"
         f"To reschedule your appointment, please click:\n"
         f"{booking_url}\n\n"
+        f"(Link expires in 72 hours)\n"
         f"– {clinic.name}"
     )
 
