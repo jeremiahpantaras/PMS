@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Mail, Loader2, FileText, CheckCircle } from 'lucide-react';
 import { getPrintNote, sendClinicalNoteEmail } from '../clinical-templates.api';
 import { getPractitioners } from '@/features/clinics/clinic.api';
+import { getContacts } from '@/features/contacts/contact.api';
 import axiosInstance from '@/lib/axios';
 import { ClinicalNoteTemplate } from './ClinicalNoteTemplate';
 
@@ -82,8 +83,18 @@ export const SendClinicalNoteModal: React.FC<SendClinicalNoteModalProps> = ({
             role: u.role,
           }));
 
+        // Fetch active contacts with emails
+        const contactsData = await getContacts({ is_active: true, page_size: 100 });
+        const contactSuggestions = contactsData.results
+          .filter((c) => c.email)
+          .map((c) => ({
+            name: c.full_name,
+            email: c.email!,
+            role: c.contact_type_display,
+          }));
+
         // Combine and deduplicate
-        const combined = [...practitionerSuggestions, ...userSuggestions];
+        const combined = [...practitionerSuggestions, ...userSuggestions, ...contactSuggestions];
         const uniqueSuggestions = Array.from(
           new Map(combined.map(s => [s.email, s])).values()
         );

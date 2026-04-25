@@ -158,6 +158,8 @@ CRONJOBS = [
     ('0 9 * * 1', 'config.cron.send_inactive_checkins_cron'),
     # Every hour — expire subscriptions that passed end_date
     ('0 * * * *', 'config.cron.expire_subscriptions'),
+    # Every day at 2:00 AM — rotate passwords for users with a rotation schedule
+    ('0 2 * * *', 'config.cron.rotate_passwords_cron'),
 ]
 
 

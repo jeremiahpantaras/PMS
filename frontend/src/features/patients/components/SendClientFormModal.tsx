@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Loader2, CheckCircle, Mail } from 'lucide-react';
 import { sendClientForm } from '../patient.api';
+import { getContacts } from '@/features/contacts/contact.api';
+
+interface EmailSuggestion {
+  name: string;
+  email: string;
+  role: string;
+}
 
 interface SendClientFormModalProps {
   isOpen: boolean;
@@ -25,6 +32,13 @@ export const SendClientFormModal: React.FC<SendClientFormModalProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Suggestions state
+  const [allSuggestions, setAllSuggestions] = useState<EmailSuggestion[]>([]);
+  const [filteredSuggestions, setFilteredSuggestions] = useState<EmailSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
   const DEFAULT_BODY = `Dear ${patientName},\n\nWe kindly ask you to complete this form prior to your booking so that we can ensure we have all necessary information for your session.\n\nPlease click the button below to begin:\n\n[Click Here To Start Filling Out]\n\nBest regards,\n${clinicName}`;
 
   useEffect(() => {
@@ -33,10 +47,71 @@ export const SendClientFormModal: React.FC<SendClientFormModalProps> = ({
     setBody(DEFAULT_BODY);
     setErrorMessage('');
     setSuccessMessage('');
+    setAllSuggestions([]);
+    setShowSuggestions(false);
+
+    let cancelled = false;
+
+    const fetchSuggestions = async () => {
+      try {
+        const contactsData = await getContacts({ is_active: true, page_size: 100 });
+        const suggestions = contactsData.results
+          .filter((c) => c.email)
+          .map((c) => ({
+            name: c.full_name,
+            email: c.email!,
+            role: c.contact_type_display,
+          }));
+        if (!cancelled) setAllSuggestions(suggestions);
+      } catch {
+        // suggestions are optional — silent fail
+      }
+    };
+
+    fetchSuggestions();
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, patientEmail, patientName, clinicName]);
 
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+        emailInputRef.current && !emailInputRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+  const handleEmailInput = (value: string) => {
+    setToEmail(value);
+    if (value.length > 0) {
+      const filtered = allSuggestions.filter(
+        (s) =>
+          s.email.toLowerCase().includes(value.toLowerCase()) ||
+          s.name.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setFilteredSuggestions(allSuggestions);
+      setShowSuggestions(allSuggestions.length > 0);
+    }
+  };
+
+  const handleSuggestionSelect = (suggestion: EmailSuggestion) => {
+    setToEmail(suggestion.email);
+    setShowSuggestions(false);
+    setFilteredSuggestions([]);
+    emailInputRef.current?.focus();
+  };
 
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
@@ -128,14 +203,42 @@ export const SendClientFormModal: React.FC<SendClientFormModalProps> = ({
               <label className="block text-xs font-semibold text-gray-600 mb-1">
                 To <span className="text-red-500">*</span>
               </label>
-              <input
-                type="email"
-                value={toEmail}
-                onChange={(e) => setToEmail(e.target.value)}
-                disabled={isSending}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50"
-                placeholder="patient@example.com"
-              />
+              <p className="text-xs text-gray-400 mb-1">Select from Contacts or enter email manually</p>
+              <div className="relative">
+                <input
+                  ref={emailInputRef}
+                  type="email"
+                  value={toEmail}
+                  onChange={(e) => handleEmailInput(e.target.value)}
+                  onFocus={() => {
+                    if (toEmail.length === 0 && allSuggestions.length > 0) {
+                      setFilteredSuggestions(allSuggestions);
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  disabled={isSending}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50"
+                  placeholder="patient@example.com"
+                />
+                {showSuggestions && filteredSuggestions.length > 0 && (
+                  <div
+                    ref={suggestionsRef}
+                    className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto"
+                  >
+                    {filteredSuggestions.map((s) => (
+                      <button
+                        key={s.email}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); handleSuggestionSelect(s); }}
+                        className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors"
+                      >
+                        <div className="text-sm font-medium text-gray-800">{s.name}</div>
+                        <div className="text-xs text-gray-500">{s.email} · {s.role}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {!patientEmail && (
                 <p className="text-xs text-amber-600 mt-1">
                   This patient has no email on file. Please enter one above.

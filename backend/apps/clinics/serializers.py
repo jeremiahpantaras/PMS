@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import Clinic, Practitioner, Location
+from apps.common.validators import normalize_ph_phone, validate_ph_phone
+from django.core.exceptions import ValidationError as DjangoValidationError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,7 @@ class ClinicProfileSetupSerializer(serializers.ModelSerializer):
     """
 
     email       = serializers.EmailField(required=True)
+    phone       = serializers.CharField(max_length=20)
     remove_logo = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
@@ -81,7 +84,11 @@ class ClinicProfileSetupSerializer(serializers.ModelSerializer):
     def validate_phone(self, value):
         if not value or not value.strip():
             raise serializers.ValidationError("Clinic phone number is required.")
-        return value.strip()
+        try:
+            validate_ph_phone(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message)
+        return normalize_ph_phone(value)
 
     def validate(self, attrs):
         has_standard  = attrs.get('address', '').strip() and attrs.get('city', '').strip() and attrs.get('province', '').strip()

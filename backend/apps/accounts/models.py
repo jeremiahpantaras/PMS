@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from apps.common.models import TimeStampedModel, SoftDeleteModel
+from apps.common.validators import validate_ph_phone
 
 
 class UserManager(BaseUserManager):
@@ -35,13 +36,29 @@ class User(AbstractUser, TimeStampedModel, SoftDeleteModel):
     username = None  # Remove username field
     email = models.EmailField(unique=True, db_index=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='STAFF')
-    phone = models.CharField(max_length=15, blank=True)
+    phone = models.CharField(max_length=15, blank=True, validators=[validate_ph_phone])
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     
     # Password change tracking
     password_changed = models.BooleanField(default=False)
-    
+
+    # Password rotation schedule
+    ROTATION_CHOICES = [
+        ('none',    'None'),
+        ('weekly',  'Weekly'),
+        ('monthly', 'Monthly'),
+        ('yearly',  'Yearly'),
+    ]
+    password_rotation    = models.CharField(
+        max_length=10, choices=ROTATION_CHOICES, default='none',
+        help_text='Automatic password rotation schedule'
+    )
+    last_password_change = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Timestamp of the last password change'
+    )
+
     # Staff position/title (e.g., "Clinic Desk", "Office Manager")
     position = models.CharField(max_length=200, blank=True)
     

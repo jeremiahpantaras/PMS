@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { invalidateClinicSettingsCache } from '@/hooks/useClinicSettings';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 interface FormState {
   name:            string;
@@ -91,7 +92,7 @@ export const ClinicSetupPage: React.FC = () => {
         setForm({
           name:            clinic.name            || '',
           email:           clinic.email           || '',
-          phone:           clinic.phone           || '',
+          phone:           clinic.phone ? formatPHPhone(clinic.phone) : '',
           address:         clinic.address         || '',
           city:            clinic.city            || '',
           province:        clinic.province        || '',
@@ -116,7 +117,8 @@ export const ClinicSetupPage: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    const formatted = name === 'phone' ? formatPHPhone(value) : value;
+    setForm(prev => ({ ...prev, [name]: formatted }));
     setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
@@ -151,6 +153,7 @@ export const ClinicSetupPage: React.FC = () => {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
                             newErrors.email = 'Invalid email format.';
     if (!form.phone.trim()) newErrors.phone = 'Phone number is required.';
+    else if (!isValidPHPhone(form.phone)) newErrors.phone = 'Enter a valid Philippine mobile number.';
 
     const hasStandard = form.address.trim() && form.city.trim() && form.province.trim();
     const hasCustom   = form.custom_location.trim();
@@ -313,7 +316,7 @@ export const ClinicSetupPage: React.FC = () => {
                   name="phone"
                   value={form.phone}
                   onChange={handleChange}
-                  placeholder="09XXXXXXXXX"
+                  placeholder="(+63) 9XX XXX XXXX"
                   className={`w-full px-4 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-sky-400
                     ${errors.phone ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-sky-400'}`}
                 />

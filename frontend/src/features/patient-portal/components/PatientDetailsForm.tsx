@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Mail, Phone, FileText, Calendar } from 'lucide-react';
+import { formatPHPhone } from '@/utils/phoneFormatter';
 
 export interface PatientFormData {
   first_name:    string;
@@ -34,8 +35,10 @@ export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
   onOpenConsent,
 }) => {
   const set = (field: keyof PatientFormData) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      onChange({ ...formData, [field]: e.target.value });
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const value = field === 'phone' ? formatPHPhone(e.target.value) : e.target.value;
+      onChange({ ...formData, [field]: value });
+    };
 
   return (
     <div className="space-y-4 w-full">
@@ -101,7 +104,7 @@ export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
                 value={formData.phone}
                 onChange={set('phone')}
                 className="w-full pl-9 pr-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-gray-50"
-                placeholder="Enter Mobile Number"
+                placeholder="(+63) 9XX XXX XXXX"
               />
             </div>
           </div>

@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Q
 from apps.common.models import TimeStampedModel, SoftDeleteModel
+from apps.common.validators import validate_ph_phone
 import re
 
 
@@ -29,7 +30,7 @@ class Clinic(TimeStampedModel, SoftDeleteModel):
         blank=True, null=True
     )
     email        = models.EmailField(blank=True)
-    phone        = models.CharField(max_length=15, blank=True)
+    phone        = models.CharField(max_length=15, blank=True, validators=[validate_ph_phone])
     address      = models.TextField(blank=True)
     city         = models.CharField(max_length=200, blank=True)
     province     = models.CharField(max_length=200, blank=True)
@@ -244,7 +245,7 @@ class Location(TimeStampedModel, SoftDeleteModel):
     city        = models.CharField(max_length=100)
     province    = models.CharField(max_length=100)
     postal_code = models.CharField(max_length=10)
-    phone       = models.CharField(max_length=15)
+    phone       = models.CharField(max_length=15, validators=[validate_ph_phone])
 
     is_primary = models.BooleanField(default=False)
     is_active  = models.BooleanField(default=True)

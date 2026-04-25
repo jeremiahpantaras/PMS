@@ -75,6 +75,18 @@ p, span, li, div,
 .animate-float-medium { animation: float-medium 10s ease-in-out infinite; }
 .animate-float-fast   { animation: float-fast    7s ease-in-out infinite; }
 
+/* Notification Toast Animations */
+@keyframes notif-enter {
+  from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+@keyframes notif-exit {
+  from { opacity: 1; transform: translateY(0)    scale(1);    }
+  to   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+}
+.animate-notif-enter { animation: notif-enter 0.25s ease-out forwards; }
+.animate-notif-exit  { animation: notif-exit  0.25s ease-in  forwards; }
+
 /* Component Primitives */
 @layer components {  .card-base {
     @apply rounded-3xl bg-white shadow-sm border border-gray-100;

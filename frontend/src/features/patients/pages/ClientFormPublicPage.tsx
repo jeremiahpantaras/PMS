@@ -4,6 +4,7 @@ import axios from 'axios';
 import {
   AlertTriangle, CheckCircle, ChevronRight, Loader2, ShieldCheck,
 } from 'lucide-react';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api';
 const api = axios.create({ baseURL: BASE });
@@ -344,7 +345,7 @@ const ClientFormStep: React.FC<{
     city:          prefill.city,
     postal_code:   prefill.postal_code,
     emergency_contact_name:         prefill.emergency_contact_name,
-    emergency_contact_phone:        prefill.emergency_contact_phone,
+    emergency_contact_phone:        prefill.emergency_contact_phone ? formatPHPhone(prefill.emergency_contact_phone) : '',
     emergency_contact_relationship: prefill.emergency_contact_relationship,
     philhealth_number:     prefill.philhealth_number,
     has_medical_conditions: prefill.medical_conditions ? true  : null,
@@ -377,6 +378,7 @@ const ClientFormStep: React.FC<{
     // Emergency contact
     if (!form.emergency_contact_name.trim())         e.emergency_contact_name         = 'Required';
     if (!form.emergency_contact_phone.trim())        e.emergency_contact_phone        = 'Required';
+    else if (!isValidPHPhone(form.emergency_contact_phone)) e.emergency_contact_phone = 'Enter a valid Philippine mobile number';
     if (!form.emergency_contact_relationship.trim()) e.emergency_contact_relationship = 'Required';
 
     // Medical
@@ -517,8 +519,8 @@ const ClientFormStep: React.FC<{
                 <input
                   type="tel"
                   value={form.emergency_contact_phone}
-                  onChange={(e) => set('emergency_contact_phone', e.target.value)}
-                  placeholder="+63 9XX XXX XXXX"
+                  onChange={(e) => set('emergency_contact_phone', formatPHPhone(e.target.value))}
+                  placeholder="(+63) 9XX XXX XXXX"
                   className={inputCls(errors.emergency_contact_phone)}
                 />
               </Field>

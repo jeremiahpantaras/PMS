@@ -97,3 +97,17 @@ def expire_subscriptions():
     except Exception as e:
         logger.error("Cron: expire_subscriptions failed — %s", str(e))
         raise
+
+
+def rotate_passwords_cron():
+    """
+    Called daily at 2:00 AM by django-crontab.
+    Rotates passwords for users with weekly / monthly / yearly schedules that are due.
+    """
+    logger.info("Cron: rotate_passwords_cron started")
+    try:
+        call_command('rotate_passwords')
+        logger.info("Cron: rotate_passwords_cron completed")
+    except Exception as e:
+        logger.error("Cron: rotate_passwords_cron failed — %s", str(e))
+        raise

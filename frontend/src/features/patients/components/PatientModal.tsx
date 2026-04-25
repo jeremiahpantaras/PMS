@@ -3,6 +3,7 @@ import { X, User, MapPin, Phone, Heart } from 'lucide-react';
 import type { Patient, CreatePatientData } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
 import { PhLocationSelect } from '@/components/location/PhLocationSelect';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 interface PatientModalProps {
   isOpen:   boolean;
@@ -45,13 +46,13 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     date_of_birth: currentPatient.date_of_birth || '',
     gender:        currentPatient.gender || 'M',
     email:         currentPatient.email || '',
-    phone:         currentPatient.phone || '',
+    phone:         currentPatient.phone ? formatPHPhone(currentPatient.phone) : '',
     address:       currentPatient.address || '',
     city:          currentPatient.city || '',
     province:      currentPatient.province || '',
     postal_code:   currentPatient.postal_code || '',
     emergency_contact_name:         currentPatient.emergency_contact_name || '',
-    emergency_contact_phone:        currentPatient.emergency_contact_phone || '',
+    emergency_contact_phone:        currentPatient.emergency_contact_phone ? formatPHPhone(currentPatient.emergency_contact_phone) : '',
     emergency_contact_relationship: currentPatient.emergency_contact_relationship || '',
     philhealth_number: currentPatient.philhealth_number || '',
     hmo_provider:      currentPatient.hmo_provider      || '',
@@ -104,6 +105,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     if (!formData.last_name.trim())    newErrors.last_name    = 'Last name is required';
     if (!formData.date_of_birth)       newErrors.date_of_birth = 'Date of birth is required';
     if (!formData.phone.trim())        newErrors.phone        = 'Phone number is required';
+    else if (!isValidPHPhone(formData.phone)) newErrors.phone = 'Enter a valid Philippine mobile number';
     if (!formData.address.trim())      newErrors.address      = 'Address is required';
     if (!formData.city.trim())         newErrors.city         = 'City is required';
     if (!formData.province.trim())     newErrors.province     = 'Province is required';
@@ -111,6 +113,8 @@ export const PatientModal: React.FC<PatientModalProps> = ({
       newErrors.emergency_contact_name  = 'Emergency contact name is required';
     if (!formData.emergency_contact_phone.trim())
       newErrors.emergency_contact_phone = 'Emergency contact phone is required';
+    else if (!isValidPHPhone(formData.emergency_contact_phone))
+      newErrors.emergency_contact_phone = 'Enter a valid Philippine mobile number';
     if (!formData.emergency_contact_relationship.trim())
       newErrors.emergency_contact_relationship = 'Relationship is required';
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
@@ -293,7 +297,12 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                       <label className={labelBase}>Phone <span className="text-red-500">*</span></label>
                       <input
                         type="tel" name="phone" value={formData.phone}
-                        onChange={handleChange} placeholder="+63 912 345 6789"
+                        onChange={(e) => {
+                          const formatted = formatPHPhone(e.target.value);
+                          setFormData((prev) => ({ ...prev, phone: formatted }));
+                          if (errors.phone) setErrors((prev) => ({ ...prev, phone: '' }));
+                        }}
+                        placeholder="(+63) 9XX XXX XXXX"
                         className={`${inputBase} ${errors.phone ? inputError : ''}`}
                       />
                       {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
@@ -354,8 +363,13 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                       <label className={labelBase}>Emergency Contact Phone <span className="text-red-500">*</span></label>
                       <input
                         type="tel" name="emergency_contact_phone"
-                        value={formData.emergency_contact_phone} onChange={handleChange}
-                        placeholder="+63 912 345 6789"
+                        value={formData.emergency_contact_phone}
+                        onChange={(e) => {
+                          const formatted = formatPHPhone(e.target.value);
+                          setFormData((prev) => ({ ...prev, emergency_contact_phone: formatted }));
+                          if (errors.emergency_contact_phone) setErrors((prev) => ({ ...prev, emergency_contact_phone: '' }));
+                        }}
+                        placeholder="(+63) 9XX XXX XXXX"
                         className={`${inputBase} ${errors.emergency_contact_phone ? inputError : ''}`}
                       />
                       {errors.emergency_contact_phone && (

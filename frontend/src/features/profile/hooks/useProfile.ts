@@ -3,7 +3,9 @@ import {
   getMyProfile,
   updateMyProfile,
   resetPassword,
+  updatePassword,
   type UpdateProfileData,
+  type PasswordRotation,
 } from '../services/profile.api';
 import type { User } from '@/types/auth';
 import { useAuthStore } from '@/store/auth.store';
@@ -13,6 +15,7 @@ export const useProfile = (initialUser: User | null) => {
   const [user,              setUser]              = useState<User | null>(initialUser);
   const [isSaving,          setIsSaving]          = useState(false);
   const [isResettingPw,     setIsResettingPw]     = useState(false);
+  const [isUpdatingPw,      setIsUpdatingPw]      = useState(false);
   const [pendingAvatar,     setPendingAvatar]    = useState<File | null>(null);  // Avatar to be saved with profile
   const [avatarToRemove,    setAvatarToRemove]   = useState(false);  // Flag to remove avatar
 
@@ -133,15 +136,53 @@ export const useProfile = (initialUser: User | null) => {
     }
   }, []);
 
+  /* ── Account-settings password update (auto or manual + rotation) ── */
+  const doUpdatePassword = useCallback(async (
+    type: 'auto' | 'manual',
+    password: string | undefined,
+    rotation: PasswordRotation,
+  ): Promise<boolean> => {
+    setIsUpdatingPw(true);
+    try {
+      await updatePassword({ type, password, rotation });
+      if (type === 'auto') {
+        toast.success('New password sent to your email. You will be logged out.', { duration: 4000 });
+        // Auto logout after 5 seconds — user must re-login with new temp password
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('auth-storage');
+          window.location.href = '/login';
+        }, 5000);
+      } else {
+        toast.success('Password updated successfully.');
+        await refresh();
+      }
+      return true;
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: unknown } };
+      const msg = error?.response?.data instanceof Object
+        ? (error?.response?.data as { detail?: string })?.detail
+        : 'Password update failed';
+      toast.error(msg || 'Password update failed');
+      return false;
+    } finally {
+      setIsUpdatingPw(false);
+    }
+  }, [refresh]);
+
   return {
     user,
     isSaving,
     isResettingPw,
+    isUpdatingPw,
     refresh,
     saveProfile,
     saveAvatar,
     deleteAvatar,
     clearPendingAvatar,  // Expose for cancel button
     doResetPassword,
+    doUpdatePassword,
   };
 };

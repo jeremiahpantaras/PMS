@@ -4,18 +4,17 @@ export const validateEmail = (email: string): boolean => {
 };
 
 /**
- * Validate Philippine phone number
- * Accepts: 09xxxxxxxxx or +639xxxxxxxxx
+ * Validate Philippine phone number.
+ * Delegates to isValidPHPhone from phoneFormatter utility.
  */
 export const validatePhone = (phone: string): boolean => {
   if (!phone) return true; // Phone is optional
-  
-  // Remove spaces and dashes
-  const cleaned = phone.replace(/[\s-]/g, '');
-  
-  // Check formats: 09xxxxxxxxx or +639xxxxxxxxx
-  const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
-  return phoneRegex.test(cleaned);
+
+  const digits = phone.replace(/\D/g, '');
+  let cleaned = digits;
+  if (cleaned.startsWith('0'))  cleaned = cleaned.slice(1);
+  if (cleaned.startsWith('63')) cleaned = cleaned.slice(2);
+  return /^9\d{9}$/.test(cleaned);
 };
 
 export const validatePassword = (password: string): { valid: boolean; message: string } => {
@@ -55,18 +54,20 @@ export const sanitizeInput = (input: string): string => {
 };
 
 export const formatPhoneNumber = (phone: string): string => {
-  // Remove all non-digits
-  const cleaned = phone.replace(/\D/g, '');
-  
-  // Format as 09XX-XXX-XXXX
-  if (cleaned.startsWith('09') && cleaned.length === 11) {
-    return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
-  }
-  
-  // Format as +639XX-XXX-XXXX
-  if (cleaned.startsWith('639') && cleaned.length === 12) {
-    return `+${cleaned.slice(0, 2)} ${cleaned.slice(2, 5)}-${cleaned.slice(5, 8)}-${cleaned.slice(8)}`;
-  }
-  
-  return phone;
+  // Delegate to formatPHPhone standard
+  const digits = phone.replace(/\D/g, '');
+  let cleaned = digits;
+  if (cleaned.startsWith('0'))  cleaned = cleaned.slice(1);
+  if (cleaned.startsWith('63')) cleaned = cleaned.slice(2);
+  cleaned = cleaned.slice(0, 10);
+
+  const p1 = cleaned.slice(0, 3);
+  const p2 = cleaned.slice(3, 6);
+  const p3 = cleaned.slice(6, 10);
+
+  let formatted = '(+63)';
+  if (p1) formatted += ` ${p1}`;
+  if (p2) formatted += ` ${p2}`;
+  if (p3) formatted += ` ${p3}`;
+  return formatted;
 };

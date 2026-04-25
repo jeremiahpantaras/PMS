@@ -337,3 +337,195 @@ class EmailService:
         except Exception as e:
             logger.error(f"❌ Verification code email error: {str(e)}")
             return False
+
+    @staticmethod
+    def send_password_update_confirmation_email(user_email: str, user_name: str) -> bool:
+        """
+        Send a security notification when a user manually updates their own password
+        via Account Settings.  The new password is intentionally NOT included.
+        """
+        try:
+            subject = 'Malasakit EMR Solutions — Your Password Has Been Changed'
+
+            html_message = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                               color: white; padding: 30px; text-align: center;
+                               border-radius: 10px 10px 0 0; }}
+                    .content {{ background: #f8f9fa; padding: 30px;
+                                border-radius: 0 0 10px 10px; }}
+                    .alert {{ background: #fff3cd; border-left: 4px solid #ffc107;
+                              padding: 15px; margin: 20px 0; border-radius: 4px; }}
+                    .footer {{ text-align: center; color: #6c757d; font-size: 12px;
+                               margin-top: 30px; padding-top: 20px;
+                               border-top: 1px solid #dee2e6; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>✅ Password Changed</h1>
+                        <p>Malasakit EMR Solutions</p>
+                    </div>
+                    <div class="content">
+                        <h2>Hello {user_name},</h2>
+                        <p>Your account password was successfully changed via Account Settings.</p>
+
+                        <div class="alert">
+                            <strong>⚠️ Did not make this change?</strong><br>
+                            If you did not update your password, contact your administrator
+                            immediately and change your password right away.
+                        </div>
+
+                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            plain_message = f"""
+            Malasakit EMR Solutions — Password Changed
+
+            Hello {user_name},
+
+            Your account password was successfully changed via Account Settings.
+
+            If you did not make this change, contact your administrator immediately.
+
+            Best regards,
+            Malasakit EMR Solutions Team
+            """
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user_email],
+            )
+            email.attach_alternative(html_message, 'text/html')
+            email.send(fail_silently=False)
+
+            logger.info(f"✅ Password update confirmation email sent to {user_email}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Password update confirmation email error: {str(e)}")
+            return False
+
+    @staticmethod
+    def send_password_rotation_email(user_email: str, user_name: str, new_password: str) -> bool:
+        """
+        Send an auto-rotated password to the user via the scheduled rotation cron job.
+        Structurally identical to send_password_reset_email but with distinct copy.
+        """
+        try:
+            subject = 'Malasakit EMR Solutions — Scheduled Password Rotation'
+
+            html_message = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+                               color: white; padding: 30px; text-align: center;
+                               border-radius: 10px 10px 0 0; }}
+                    .content {{ background: #f8f9fa; padding: 30px;
+                                border-radius: 0 0 10px 10px; }}
+                    .credentials {{ background: white; padding: 20px; border-radius: 8px;
+                                    margin: 20px 0; border-left: 4px solid #7c3aed; }}
+                    .password {{ font-size: 26px; font-weight: bold; color: #7c3aed;
+                                 letter-spacing: 3px; margin: 10px 0; }}
+                    .warning {{ background: #fff3cd; border-left: 4px solid #ffc107;
+                                padding: 15px; margin: 20px 0; border-radius: 4px; }}
+                    .button {{ display: inline-block; padding: 12px 30px;
+                               background: #7c3aed; color: white; text-decoration: none;
+                               border-radius: 6px; margin: 20px 0; font-weight: bold; }}
+                    .footer {{ text-align: center; color: #6c757d; font-size: 12px;
+                               margin-top: 30px; padding-top: 20px;
+                               border-top: 1px solid #dee2e6; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🔄 Scheduled Password Rotation</h1>
+                        <p>Malasakit EMR Solutions</p>
+                    </div>
+                    <div class="content">
+                        <h2>Hello {user_name},</h2>
+                        <p>Your password has been automatically rotated as per your security settings.</p>
+
+                        <div class="credentials">
+                            <h3>Your New Temporary Password:</h3>
+                            <p><strong>Email:</strong> {user_email}</p>
+                            <p><strong>New Password:</strong></p>
+                            <div class="password">{new_password}</div>
+                        </div>
+
+                        <div class="warning">
+                            <strong>⚠️ Action Required:</strong>
+                            <ul>
+                                <li>Log in with this temporary password.</li>
+                                <li>You will be prompted to set a new password on next login.</li>
+                                <li>Never share your password with anyone.</li>
+                            </ul>
+                        </div>
+
+                        <div style="text-align:center;">
+                            <a href="{settings.FRONTEND_URL}/login" class="button">Login Now</a>
+                        </div>
+
+                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            plain_message = f"""
+            Malasakit EMR Solutions — Scheduled Password Rotation
+
+            Hello {user_name},
+
+            Your password has been automatically rotated.
+
+            Email:        {user_email}
+            New Password: {new_password}
+
+            Login: {settings.FRONTEND_URL}/login
+
+            You will be prompted to change this password after login.
+
+            Best regards,
+            Malasakit EMR Solutions Team
+            """
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user_email],
+            )
+            email.attach_alternative(html_message, 'text/html')
+            email.send(fail_silently=False)
+
+            logger.info(f"✅ Password rotation email sent to {user_email}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Password rotation email error: {str(e)}")
+            return False

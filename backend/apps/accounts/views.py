@@ -416,6 +416,135 @@ class AuthViewSet(viewsets.GenericViewSet):
             status=status.HTTP_200_OK
         )
 
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='update-password',
+        permission_classes=[IsAuthenticated],
+    )
+    def update_password(self, request):
+        """
+        Account-settings password update (authenticated users only).
+
+        Request body:
+            type     : 'auto' | 'manual'
+            password : str   (required when type == 'manual')
+            rotation : 'none' | 'weekly' | 'monthly' | 'yearly'  (optional, default 'none')
+
+        Behaviour:
+            - 'auto'  → generates a secure password, emails it, keeps session active.
+            - 'manual' → validates & sets the provided password, sends a confirmation
+                         email (password is NOT included in the email).
+        Security:
+            - Rate-limited to 5 attempts per user per hour.
+            - Manual passwords are validated for strength (min 10 chars, upper, lower,
+              digit, special character).
+            - Reuse of the current password is rejected.
+            - Passwords are NEVER logged.
+        """
+        import re
+        user = request.user
+
+        # ── Rate limiting ────────────────────────────────────────────────────
+        rate_key = f'update_password_{user.id}'
+        attempts = cache.get(rate_key, 0)
+        if attempts >= 5:
+            logger.warning(f"Rate limit hit for update_password: {user.email}")
+            return Response(
+                {'detail': 'Too many password change attempts. Please try again in an hour.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # ── Validate inputs ──────────────────────────────────────────────────
+        password_type = request.data.get('type', 'auto')
+        custom_password = request.data.get('password', '').strip()
+        rotation = request.data.get('rotation', 'none')
+
+        valid_rotations = {'none', 'weekly', 'monthly', 'yearly'}
+        if rotation not in valid_rotations:
+            return Response(
+                {'detail': 'Invalid rotation value. Use none, weekly, monthly, or yearly.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if password_type not in ('auto', 'manual'):
+            return Response(
+                {'detail': 'Invalid type. Use "auto" or "manual".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if password_type == 'manual':
+            if not custom_password:
+                return Response(
+                    {'detail': 'Password is required when type is "manual".'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            strong_pw = re.compile(
+                r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{10,}$'
+            )
+            if not strong_pw.match(custom_password):
+                return Response(
+                    {
+                        'detail': (
+                            'Password must be at least 10 characters and contain an '
+                            'uppercase letter, a lowercase letter, a number, and a '
+                            'special character (@$!%*?&).'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if user.check_password(custom_password):
+                return Response(
+                    {'detail': 'New password cannot be the same as your current password.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # ── Apply the change ─────────────────────────────────────────────────
+        try:
+            with transaction.atomic():
+                cache.set(rate_key, attempts + 1, timeout=3600)
+
+                if password_type == 'auto':
+                    new_password = PasswordService.reset_password(user, rotation=rotation)
+                    email_sent = EmailService.send_password_reset_email(
+                        user_email=user.email,
+                        user_name=user.get_full_name(),
+                        new_password=new_password,
+                    )
+                    detail_msg = (
+                        'New password sent to your email.'
+                        if email_sent
+                        else 'Password changed but email delivery failed. Contact your administrator.'
+                    )
+                else:
+                    PasswordService.reset_password(
+                        user, new_password=custom_password, rotation=rotation
+                    )
+                    email_sent = EmailService.send_password_update_confirmation_email(
+                        user_email=user.email,
+                        user_name=user.get_full_name(),
+                    )
+                    detail_msg = 'Password updated successfully.'
+
+                logger.info(
+                    f"Password updated for {user.email} "
+                    f"(type={password_type}, rotation={rotation})"
+                )
+                return Response(
+                    {
+                        'detail': detail_msg,
+                        'email_sent': email_sent,
+                        'rotation': rotation,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+        except Exception as e:
+            logger.error(f"update_password failed for {user.email}: {str(e)}")
+            return Response(
+                {'detail': 'Password update failed. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserViewSet(viewsets.ModelViewSet):

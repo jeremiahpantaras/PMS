@@ -4,6 +4,7 @@ import type { CreateStaffData, StaffFormErrors, StaffMember } from '../../types/
 import type { DutySchedule, DutyDay } from '@/features/clinics/clinic.api';
 import { TITLE_OPTIONS, DISCIPLINE_OPTIONS, GENDER_OPTIONS } from '../../types/staff.types';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 const DUTY_DAY_OPTIONS: { value: DutyDay; label: string }[] = [
   { value: 'Mon', label: 'Mon' },
@@ -115,7 +116,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
         position:      editingStaff.position       ?? '',
         discipline:    editingStaff.discipline     ?? 'OCCUPATIONAL_THERAPY',
         email:         editingStaff.email,
-        phone:         editingStaff.phone,
+        phone:         editingStaff.phone ? formatPHPhone(editingStaff.phone) : '',
         address:       editingStaff.address        ?? '',
         date_of_birth: editingStaff.date_of_birth  ?? '',
         gender:        editingStaff.gender         ?? 'Male',
@@ -149,10 +150,8 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
     }
     if (!formData.phone.trim()) {
       e.phone = 'Phone number is required';
-    } else {
-      const c = formData.phone.replace(/[\s-]/g, '');
-      if (!(c.startsWith('09') && c.length === 11) && !(c.startsWith('+639') && c.length === 13))
-        e.phone = 'Use 09XXXXXXXXX or +639XXXXXXXXX';
+    } else if (!isValidPHPhone(formData.phone)) {
+      e.phone = 'Enter a valid Philippine mobile number';
     }
     if (formData.date_of_birth && new Date(formData.date_of_birth) > new Date())
       e.date_of_birth = 'Date of birth cannot be in the future';
@@ -680,8 +679,8 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                     <input
                       type="tel"
                       value={formData.phone}
-                      onChange={e => set('phone', e.target.value)}
-                      placeholder="09XXXXXXXXX"
+                      onChange={e => set('phone', formatPHPhone(e.target.value))}
+                      placeholder="(+63) 9XX XXX XXXX"
                       className={inputCls(!!errors.phone)}
                     />
                     <FieldError msg={errors.phone} />

@@ -1,5 +1,15 @@
 export type NotificationType = 'NEW_BOOKING' | 'DAILY_SUMMARY';
 
+export type NotificationCategory = 'booking' | 'appointment' | 'system' | 'reminder' | 'alert';
+
+export function getCategory(type: NotificationType): NotificationCategory {
+  switch (type) {
+    case 'NEW_BOOKING':   return 'booking';
+    case 'DAILY_SUMMARY': return 'reminder';
+    default:              return 'system';
+  }
+}
+
 export interface Notification {
   id: number;
   notification_type: NotificationType;

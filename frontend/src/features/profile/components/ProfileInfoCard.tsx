@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { User as UserType } from '@/types/auth';
 import type { UpdateProfileData } from '../services/profile.api';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 interface ProfileInfoCardProps {
   user:           UserType;
@@ -77,7 +78,7 @@ export const ProfileInfoCard: React.FC<ProfileInfoCardProps> = ({
   const [form,    setForm]    = useState<FormState>({
     first_name: user.first_name ?? '',
     last_name:  user.last_name  ?? '',
-    phone:      user.phone      ?? '',
+    phone:      user.phone ? formatPHPhone(user.phone) : '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -86,13 +87,14 @@ export const ProfileInfoCard: React.FC<ProfileInfoCardProps> = ({
       setForm({
         first_name: user.first_name ?? '',
         last_name:  user.last_name  ?? '',
-        phone:      user.phone      ?? '',
+        phone:      user.phone ? formatPHPhone(user.phone) : '',
       });
     }
   }, [user, editing]);
 
   const set = (k: keyof FormState, v: string) => {
-    setForm(prev => ({ ...prev, [k]: v }));
+    const formatted = k === 'phone' ? formatPHPhone(v) : v;
+    setForm(prev => ({ ...prev, [k]: formatted }));
     setErrors(prev => ({ ...prev, [k]: undefined }));
   };
 
@@ -100,13 +102,7 @@ export const ProfileInfoCard: React.FC<ProfileInfoCardProps> = ({
     const e: FormErrors = {};
     if (!form.first_name.trim()) e.first_name = 'First name is required';
     if (!form.last_name.trim())  e.last_name  = 'Last name is required';
-    if (form.phone) {
-      const c = form.phone.replace(/[\s\-]/g, '');
-      if (
-        !(c.startsWith('09') && c.length === 11) &&
-        !(c.startsWith('+639') && c.length === 13)
-      ) e.phone = 'Use 09XXXXXXXXX or +639XXXXXXXXX';
-    }
+    if (form.phone && !isValidPHPhone(form.phone)) e.phone = 'Enter a valid Philippine mobile number';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -210,7 +206,7 @@ export const ProfileInfoCard: React.FC<ProfileInfoCardProps> = ({
           label="Phone Number" name="phone"
           icon={<Phone className="w-3.5 h-3.5" />}
           value={form.phone}     editing={editing}
-          placeholder="09XXXXXXXXX" type="tel"
+          placeholder="(+63) 9XX XXX XXXX" type="tel"
           error={errors.phone}
           onChange={set}
         />

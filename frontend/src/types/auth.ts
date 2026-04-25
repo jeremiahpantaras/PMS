@@ -10,8 +10,10 @@ export interface User {
   is_active:             boolean;
   clinic:                number | null;
   created_at:            string;
-  password_changed:      boolean;
-  needs_password_change: boolean;
+  password_changed:       boolean;
+  needs_password_change:  boolean;
+  password_rotation:      'none' | 'weekly' | 'monthly' | 'yearly';
+  last_password_change:   string | null;
   clinic_setup_complete: boolean;   // ← NEW
   practitioner_id?:      number;    // ← For PRACTITIONER role: the linked Practitioner record ID
 }

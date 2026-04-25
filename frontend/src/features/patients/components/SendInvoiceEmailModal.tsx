@@ -8,6 +8,7 @@ import type { InvoiceClinicInfo, NextAppointmentInfo } from '@/components/invoic
 import type { Invoice } from '@/types/billing';
 import { useClinicSettings } from '@/hooks/useClinicSettings';
 import { getPractitioners } from '@/features/clinics/clinic.api';
+import { getContacts } from '@/features/contacts/contact.api';
 import axiosInstance from '@/lib/axios';
 
 interface EmailSuggestion {
@@ -197,8 +198,18 @@ export const SendInvoiceEmailModal: React.FC<SendInvoiceEmailModalProps> = ({
             role: u.role,
           }));
 
+        // Fetch active contacts with emails
+        const contactsData = await getContacts({ is_active: true, page_size: 100 });
+        const contactSuggestions = contactsData.results
+          .filter((c) => c.email)
+          .map((c) => ({
+            name: c.full_name,
+            email: c.email!,
+            role: c.contact_type_display,
+          }));
+
         // Combine and deduplicate
-        const combined = [...practitionerSuggestions, ...userSuggestions];
+        const combined = [...practitionerSuggestions, ...userSuggestions, ...contactSuggestions];
         const uniqueSuggestions = Array.from(
           new Map(combined.map(s => [s.email, s])).values()
         );

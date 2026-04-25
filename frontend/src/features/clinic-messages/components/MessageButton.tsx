@@ -11,9 +11,9 @@ export const MessageButton = ({ unreadCount, onClick }: Props) => (
     className="
       fixed bottom-6 right-6 z-40
       flex items-center gap-2 px-5 py-3
-      bg-sky-500 text-white font-medium
-      rounded-2xl shadow-xl border border-sky-500
-      hover:shadow-2xl hover:bg-sky-600
+      bg-primary-gradient text-white font-medium
+      rounded-2xl shadow-xl border border-cyan-600 border-2
+      hover:shadow-2xl hover:bg-primary-gradient/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500
       transition-all duration-200 cursor-pointer
     "
   >

@@ -19,7 +19,7 @@ interface UseNotificationsReturn {
   markAllRead:      () => Promise<void>;
 }
 
-export function useNotifications(isOpen: boolean): UseNotificationsReturn {
+export function useNotifications(isOpen: boolean, onIncoming?: (n: Notification) => void): UseNotificationsReturn {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount,   setUnreadCount]   = useState(0);
   const [isLoading,     setIsLoading]     = useState(false);
@@ -32,6 +32,10 @@ export function useNotifications(isOpen: boolean): UseNotificationsReturn {
   const retryCountRef  = useRef(0);
   const retryTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef   = useRef(true);
+  const onIncomingRef  = useRef(onIncoming);
+
+  // Keep ref fresh without re-triggering connectWebSocket
+  useEffect(() => { onIncomingRef.current = onIncoming; }, [onIncoming]);
 
   // ── Fetch unread count ─────────────────────────────────────────────────────
   const fetchUnreadCount = useCallback(async () => {
@@ -141,6 +145,8 @@ export function useNotifications(isOpen: boolean): UseNotificationsReturn {
           if (!incoming.is_read) {
             setUnreadCount(prev => prev + 1);
           }
+          // Dispatch to toast layer (no re-render side effect)
+          onIncomingRef.current?.(incoming);
         }
 
         if (data.type === 'pong') return;

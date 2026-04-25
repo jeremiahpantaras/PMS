@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.crypto import get_random_string
 from apps.common.models import TimeStampedModel, SoftDeleteModel
+from apps.common.validators import validate_ph_phone
 
 
 class Patient(TimeStampedModel, SoftDeleteModel):
@@ -25,14 +26,14 @@ class Patient(TimeStampedModel, SoftDeleteModel):
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
 
     email       = models.EmailField(blank=True)
-    phone       = models.CharField(max_length=15)
+    phone       = models.CharField(max_length=15, validators=[validate_ph_phone])
     address     = models.TextField()
     city        = models.CharField(max_length=100)
     province    = models.CharField(max_length=100)
     postal_code = models.CharField(max_length=10, blank=True)
 
     emergency_contact_name         = models.CharField(max_length=200)
-    emergency_contact_phone        = models.CharField(max_length=15)
+    emergency_contact_phone        = models.CharField(max_length=15, validators=[validate_ph_phone])
     emergency_contact_relationship = models.CharField(max_length=100)
 
     philhealth_number = models.CharField(max_length=50, blank=True)

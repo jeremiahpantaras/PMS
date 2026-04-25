@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from apps.accounts.utils.generators import generate_secure_password
 
 
@@ -47,15 +48,33 @@ class PasswordService:
 
     
     @staticmethod
-    def reset_password(user) -> str:
+    def reset_password(user, new_password: str | None = None, rotation: str | None = None) -> str:
         """
-        Generate a new temporary password, set it on the user,
-        mark password_changed=False so they are prompted to change it,
-        and blacklist all existing refresh tokens.
-        Returns the new plain-text password.
+        Reset a user's password.
+
+        - If ``new_password`` is None a secure temporary password is generated,
+          ``password_changed`` is set to False (forces change on next login).
+        - If ``new_password`` is provided it is used directly and
+          ``password_changed`` is set to True (user chose their own password).
+        - ``rotation`` updates the ``password_rotation`` schedule when supplied.
+        - ``last_password_change`` is always updated to now().
+
+        Returns the plain-text password (only used once, to send via email for
+        auto-generated passwords; never logged or stored in plaintext).
         """
-        new_password = PasswordService.generate_temporary_password()
+        is_auto = new_password is None
+        if is_auto:
+            new_password = PasswordService.generate_temporary_password()
+
         user.set_password(new_password)
-        user.password_changed = False
-        user.save(update_fields=['password', 'password_changed'])
+        # Auto-generated → force change on next login; user-chosen → no forced change
+        user.password_changed = not is_auto
+        user.last_password_change = timezone.now()
+
+        update_fields = ['password', 'password_changed', 'last_password_change']
+        if rotation is not None:
+            user.password_rotation = rotation
+            update_fields.append('password_rotation')
+
+        user.save(update_fields=update_fields)
         return new_password

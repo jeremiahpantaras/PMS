@@ -1,6 +1,18 @@
 import axiosInstance from '@/lib/axios';
 import type { Contact, CreateContactData, ContactStats, PaginatedResponse } from '@/types';
 
+/**
+ * Normalize a Philippine phone number to +639XXXXXXXXX format for the API.
+ * Accepts: 09XXXXXXXXX, +639XXXXXXXXX, (63)XXXXXXXXX, (02)XXXXXXXX, etc.
+ */
+const normalizePhoneForAPI = (value: string): string => {
+  const digits = value.replace(/\D/g, '');
+  let cleaned = digits;
+  if (cleaned.startsWith('63')) cleaned = cleaned.slice(2);
+  else if (cleaned.startsWith('0')) cleaned = cleaned.slice(1);
+  return `+63${cleaned}`;
+};
+
 export interface ContactFilters {
   search?: string;
   contact_type?: string;
@@ -41,7 +53,12 @@ export const getContact = async (id: number): Promise<Contact> => {
  * Create new contact
  */
 export const createContact = async (data: CreateContactData): Promise<Contact> => {
-  const response = await axiosInstance.post<Contact>('/contacts/', data);
+  const payload: CreateContactData = {
+    ...data,
+    phone: normalizePhoneForAPI(data.phone),
+    ...(data.alternative_phone ? { alternative_phone: normalizePhoneForAPI(data.alternative_phone) } : {}),
+  };
+  const response = await axiosInstance.post<Contact>('/contacts/', payload);
   return response.data;
 };
 
@@ -49,7 +66,12 @@ export const createContact = async (data: CreateContactData): Promise<Contact> =
  * Update contact
  */
 export const updateContact = async (id: number, data: Partial<CreateContactData>): Promise<Contact> => {
-  const response = await axiosInstance.patch<Contact>(`/contacts/${id}/`, data);
+  const payload: Partial<CreateContactData> = {
+    ...data,
+    ...(data.phone ? { phone: normalizePhoneForAPI(data.phone) } : {}),
+    ...(data.alternative_phone ? { alternative_phone: normalizePhoneForAPI(data.alternative_phone) } : {}),
+  };
+  const response = await axiosInstance.patch<Contact>(`/contacts/${id}/`, payload);
   return response.data;
 };
 

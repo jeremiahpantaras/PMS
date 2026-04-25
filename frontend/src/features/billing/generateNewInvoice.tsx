@@ -21,7 +21,8 @@ import {
 import { billingApi, type ClinicService } from './billing.api';
 import { getMyClinic, type ClinicProfile } from '@/features/clinics/clinic.api';
 import { productApi } from '@/features/setup/pages/items/services/inventory.api';
-import type { ProductListItem, StockAdjustmentPayload } from '@/types/inventory';
+import type { ProductListItem, StockAdjustmentPayload, CreateProductPayload } from '@/types/inventory';
+import { ProductFormModal } from '@/features/setup/pages/items/components/ProductFormModal';
 import { Package } from 'lucide-react';
 import type { 
   Invoice, 
@@ -67,6 +68,8 @@ export default function GenerateNewInvoice() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [inventoryDropdownIndex, setInventoryDropdownIndex] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const [showCreateItemModal, setShowCreateItemModal] = useState(false);
+  const [createItemTargetIndex, setCreateItemTargetIndex] = useState<number | null>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -114,6 +117,38 @@ export default function GenerateNewInvoice() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  const createProductMutation = useMutation({
+    mutationFn: (payload: CreateProductPayload) => productApi.create(payload),
+    onSuccess: (newProduct) => {
+      qc.invalidateQueries({ queryKey: ['inventory-products-active'] });
+      if (createItemTargetIndex !== null) {
+        setItems(prev => {
+          const updated = [...prev];
+          updated[createItemTargetIndex] = {
+            ...updated[createItemTargetIndex],
+            description: newProduct.name,
+            unit_price: Number(newProduct.selling_price) || 0,
+            inventoryProductId: newProduct.id,
+          };
+          return updated;
+        });
+        setInventoryDropdownIndex(null);
+      }
+      setShowCreateItemModal(false);
+      setCreateItemTargetIndex(null);
+      toast.success(`"${newProduct.name}" created and added to invoice`);
+    },
+  });
+
+  const createProductError = (() => {
+    const err = createProductMutation.error as any;
+    if (!err) return null;
+    const data = err?.response?.data;
+    if (!data) return null;
+    if (typeof data === 'string') return data;
+    return (Object.values(data) as any[]).flat().join(' ');
+  })();
 
   const { data: nextAppointment } = useQuery({
     queryKey: ['patient-next-appointment', appointment?.patient, appointmentId],
@@ -696,33 +731,49 @@ export default function GenerateNewInvoice() {
                                 )}
                               </div>
                             )}
-                            {isDropdownOpen && filteredProducts.length > 0 && (
-                              <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
-                                <div className="px-2 py-1 text-[10px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-gray-50 rounded-t-lg">
+                            {isDropdownOpen && (
+                              <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                                <div className="px-2 py-1 text-[10px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-gray-50">
                                   Inventory Items
                                 </div>
-                                {filteredProducts.map((p) => (
+                                <div className="max-h-40 overflow-y-auto">
+                                  {filteredProducts.length > 0 ? filteredProducts.map((p) => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-sky-50 flex items-center justify-between gap-2 transition-colors"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelectInventoryItem(index, p);
+                                      }}
+                                    >
+                                      <span className="truncate text-gray-700">{p.name}</span>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className="text-[10px] text-gray-400">{Number(p.quantity_in_stock).toLocaleString()} {p.unit.toLowerCase()}</span>
+                                        <span className="text-[11px] text-gray-400 whitespace-nowrap">₱{Number(p.selling_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                    </button>
+                                  )) : (
+                                    <div className="px-2 py-2 text-xs text-gray-400">
+                                      {query.length > 0 ? 'No matching inventory items' : 'Start typing to search…'}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="border-t border-gray-100">
                                   <button
-                                    key={p.id}
                                     type="button"
-                                    className="w-full text-left px-2 py-1.5 text-xs hover:bg-sky-50 flex items-center justify-between gap-2 transition-colors"
+                                    className="w-full text-left px-2 py-1.5 text-xs text-teal-600 hover:bg-teal-50 flex items-center gap-1.5 font-medium transition-colors"
                                     onMouseDown={(e) => {
                                       e.preventDefault();
-                                      handleSelectInventoryItem(index, p);
+                                      setCreateItemTargetIndex(index);
+                                      setShowCreateItemModal(true);
+                                      setInventoryDropdownIndex(null);
                                     }}
                                   >
-                                    <span className="truncate text-gray-700">{p.name}</span>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <span className="text-[10px] text-gray-400">{Number(p.quantity_in_stock).toLocaleString()} {p.unit.toLowerCase()}</span>
-                                      <span className="text-[11px] text-gray-400 whitespace-nowrap">₱{Number(p.selling_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                    </div>
+                                    <Plus className="w-3 h-3" />
+                                    Add New Item
                                   </button>
-                                ))}
-                              </div>
-                            )}
-                            {isDropdownOpen && filteredProducts.length === 0 && query.length > 0 && (
-                              <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-2 text-xs text-gray-400">
-                                No matching inventory items
+                                </div>
                               </div>
                             )}
                           </div>
@@ -921,6 +972,19 @@ export default function GenerateNewInvoice() {
           </div>
         </div>
       </div>
+
+      {/* ── Create Inventory Item Modal ── */}
+      <ProductFormModal
+        isOpen={showCreateItemModal}
+        onClose={() => {
+          setShowCreateItemModal(false);
+          setCreateItemTargetIndex(null);
+          createProductMutation.reset();
+        }}
+        onSubmit={(data) => createProductMutation.mutate(data)}
+        isLoading={createProductMutation.isPending}
+        error={createProductError}
+      />
     </div>
   );
 }

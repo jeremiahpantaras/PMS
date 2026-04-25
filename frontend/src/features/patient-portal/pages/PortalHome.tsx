@@ -22,6 +22,7 @@ import type {
   BookingPayload,
 } from '../types/portal';
 import type { PatientFormData } from '../components/PatientDetailsForm';
+import { isValidPHPhone } from '@/utils/phoneFormatter';
 
 // ── After branch is picked, 4-step inner flow ─────────────────────────────────
 type InnerStep = 'practitioner' | 'services' | 'datetime' | 'details';
@@ -143,6 +144,9 @@ export const PortalHome: React.FC = () => {
     }
     if (!formData.phone.trim()) {
       setFormError('Phone number is required.'); return;
+    }
+    if (!isValidPHPhone(formData.phone)) {
+      setFormError('Enter a valid Philippine mobile number (e.g. (+63) 9XX XXX XXXX).'); return;
     }
     if (!formData.date_of_birth) {
       setFormError('Date of birth is required.'); return;

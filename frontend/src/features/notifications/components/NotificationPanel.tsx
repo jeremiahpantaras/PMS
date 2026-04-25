@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { X, Bell, CheckCheck, Loader2, InboxIcon } from 'lucide-react';
 import { NotificationItem } from './NotificationItem';
 import type { Notification } from '../types/notifications.types';
@@ -16,6 +16,20 @@ interface Props {
   onLoadMore: () => void;
 }
 
+// ── Group helpers ─────────────────────────────────────────────────────────────
+
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth()    === now.getMonth()    &&
+    d.getDate()     === now.getDate()
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export const NotificationPanel: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -30,6 +44,14 @@ export const NotificationPanel: React.FC<Props> = ({
 }) => {
   const panelRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ── Group by Today / Earlier ───────────────────────────────────────────────
+  const { today, earlier } = useMemo(() => {
+    const t: Notification[] = [];
+    const e: Notification[] = [];
+    notifications.forEach(n => (isToday(n.created_at) ? t : e).push(n));
+    return { today: t, earlier: e };
+  }, [notifications]);
 
   // ── Close on outside click ────────────────────────────────────────────────
   useEffect(() => {
@@ -72,20 +94,23 @@ export const NotificationPanel: React.FC<Props> = ({
     <div
       ref={panelRef}
       className="
-        fixed bottom-20 right-[8rem] z-50
-        w-[360px]
+        fixed bottom-20 right-32 z-50
+        w-95
         bg-white rounded-2xl shadow-2xl border border-gray-200
         flex flex-col overflow-hidden
         animate-in fade-in slide-in-from-bottom-2 duration-200
       "
     >
+      {/* ── Gradient accent bar ─────────────────────────────────────────────── */}
+      <div className="h-0.5 w-full bg-linear-to-r from-[#0575E6] to-[#5CDB95]" />
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-sky-600" />
           <span className="font-semibold text-gray-900 text-sm">Notifications</span>
           {unreadCount > 0 && (
-            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-700 min-w-[20px]">
+            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-700 min-w-5">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -111,11 +136,11 @@ export const NotificationPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* ── Body — max 4 items visible, scrollable beyond that ─────────────── */}
+      {/* ── Body — max 5 items visible, scrollable beyond that ─────────────── */}
       <div
         ref={scrollRef}
-        className="overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
-        style={{ maxHeight: '304px' }} // 4 items × ~76px each
+        className="overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent py-1"
+        style={{ maxHeight: '380px' }}
       >
 
         {/* Loading state */}
@@ -138,14 +163,37 @@ export const NotificationPanel: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Notification list */}
-        {!isLoading && notifications.map(notification => (
-          <NotificationItem
-            key={notification.id}
-            notification={notification}
-            onMarkRead={onMarkRead}
-          />
-        ))}
+        {/* ── Today group ────────────────────────────────────────────────── */}
+        {!isLoading && today.length > 0 && (
+          <>
+            <div className="px-4 pt-3 pb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Today</span>
+            </div>
+            {today.map(notification => (
+              <NotificationItem
+                key={notification.id}
+                notification={notification}
+                onMarkRead={onMarkRead}
+              />
+            ))}
+          </>
+        )}
+
+        {/* ── Earlier group ───────────────────────────────────────────────── */}
+        {!isLoading && earlier.length > 0 && (
+          <>
+            <div className="px-4 pt-3 pb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Earlier</span>
+            </div>
+            {earlier.map(notification => (
+              <NotificationItem
+                key={notification.id}
+                notification={notification}
+                onMarkRead={onMarkRead}
+              />
+            ))}
+          </>
+        )}
 
         {/* Load more spinner */}
         {isLoadingMore && (

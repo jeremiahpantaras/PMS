@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { Contact, CreateContactData } from '@/types';
 import { PhLocationSelect } from '@/components/location/PhLocationSelect';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 interface EditContactModalProps {
   isOpen:   boolean;
@@ -96,8 +97,8 @@ const buildForm = (c: Contact): FormData => ({
   specialty:         c.specialty         ?? '',
   license_number:    c.license_number    ?? '',
   email:             c.email             ?? '',
-  phone:             c.phone             ?? '',
-  alternative_phone: c.alternative_phone ?? '',
+  phone:             c.phone ? formatPHPhone(c.phone) : '',
+  alternative_phone: c.alternative_phone ? formatPHPhone(c.alternative_phone) : '',
   address:           c.address           ?? '',
   city:              c.city              ?? '',
   province:          c.province          ?? '',
@@ -137,13 +138,8 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
     if (!formData.first_name.trim()) e.first_name = 'First name is required';
     if (!formData.last_name.trim())  e.last_name  = 'Last name is required';
 
-    if (formData.phone.trim()) {
-      const c = formData.phone.replace(/[\s\-]/g, '');
-      if (
-        !(c.startsWith('09')   && c.length === 11) &&
-        !(c.startsWith('+639') && c.length === 13)
-      ) e.phone = 'Use 09XXXXXXXXX or +639XXXXXXXXX';
-    }
+    if (formData.phone.trim() && !isValidPHPhone(formData.phone))
+      e.phone = 'Enter a valid Philippine mobile number';
 
     const emailValue = formData.email ?? '';
     if (!emailValue.trim()) {
@@ -429,8 +425,8 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
                     <input
                       type="tel"
                       value={formData.phone}
-                      onChange={e => set('phone', e.target.value)}
-                      placeholder="09XXXXXXXXX"
+                      onChange={e => set('phone', formatPHPhone(e.target.value))}
+                      placeholder="(+63) 9XX XXX XXXX"
                       className={inputCls(!!errors.phone)}
                     />
                     <FieldError msg={errors.phone} />
@@ -442,8 +438,8 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
                     <input
                       type="tel"
                       value={formData.alternative_phone}
-                      onChange={e => set('alternative_phone', e.target.value)}
-                      placeholder="Optional"
+                      onChange={e => set('alternative_phone', formatPHPhone(e.target.value))}
+                      placeholder="(+63) 9XX XXX XXXX"
                       className={inputCls()}
                     />
                   </div>

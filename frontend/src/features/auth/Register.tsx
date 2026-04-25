@@ -4,9 +4,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { 
   validateEmail, 
   validatePassword, 
-  validatePhone,
   sanitizeInput 
 } from '@/utils/validation';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 import { Eye, EyeOff, Lock, Mail, User, Phone } from 'lucide-react';
 
 /**
@@ -42,9 +42,11 @@ export const Register: React.FC = () => {
     const { name, value } = e.target;
     
     // Sanitize input
-    const sanitized = name === 'password' || name === 'password_confirm' 
+    const sanitized = name === 'password' || name === 'password_confirm'
       ? value // Don't sanitize passwords
-      : sanitizeInput(value);
+      : name === 'phone'
+        ? formatPHPhone(value)
+        : sanitizeInput(value);
     
     setFormData(prev => ({
       ...prev,
@@ -81,8 +83,8 @@ export const Register: React.FC = () => {
     }
 
     // Phone validation (optional)
-    if (formData.phone && !validatePhone(formData.phone)) {
-      errors.phone = 'Invalid phone number format';
+    if (formData.phone && !isValidPHPhone(formData.phone)) {
+      errors.phone = 'Enter a valid Philippine mobile number';
     }
 
     // Password validation
@@ -245,7 +247,7 @@ export const Register: React.FC = () => {
                   className={`appearance-none block w-full pl-10 pr-3 py-2 border ${
                     validationErrors.phone ? 'border-red-300' : 'border-gray-200'
                   } rounded-2xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-care-blue focus:border-care-blue sm:text-sm`}
-                  placeholder="09xxxxxxxxx"
+                  placeholder="(+63) 9XX XXX XXXX"
                   disabled={isLoading}
                 />
               </div>

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.clinics.services.models import Service as ClinicService
+from apps.common.validators import normalize_ph_phone
 from .models import (
     Patient, IntakeForm,
     ServiceCategory, PortalService,
@@ -12,6 +13,8 @@ class PatientSerializer(serializers.ModelSerializer):
     full_name       = serializers.CharField(source='get_full_name', read_only=True)
     age             = serializers.SerializerMethodField()
     archived_by_name = serializers.SerializerMethodField()
+    phone                   = serializers.CharField(max_length=20)
+    emergency_contact_phone = serializers.CharField(max_length=20)
 
     class Meta:
         model  = Patient
@@ -33,6 +36,12 @@ class PatientSerializer(serializers.ModelSerializer):
         if obj.archived_by:
             return obj.archived_by.get_full_name()
         return None
+
+    def validate_phone(self, value):
+        return normalize_ph_phone(value) if value else value
+
+    def validate_emergency_contact_phone(self, value):
+        return normalize_ph_phone(value) if value else value
 
 
 class IntakeFormSerializer(serializers.ModelSerializer):

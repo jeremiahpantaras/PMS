@@ -3,7 +3,7 @@ import { DashboardLayout }      from '@/features/dashboard/components/DashboardL
 import { ProfileHeader }        from './components/ProfileHeader';
 import { ProfileAvatarUpload }  from './components/ProfileAvatarUpload';
 import { ProfileInfoCard }      from './components/ProfileInfoCard';
-import { ResetPasswordCard }    from './components/ResetPasswordCard';
+import { AccountSettingsCard }  from './components/AccountSettingsCard';
 import { useProfile }           from './hooks/useProfile';
 import { useAuth }              from '@/hooks/useAuth';
 import { Loader2 }              from 'lucide-react';
@@ -15,12 +15,14 @@ export const Profile: React.FC = () => {
   const {
     user,
     isSaving,
-    isResettingPw,
+    isResettingPw: _isResettingPw,
+    isUpdatingPw,
     saveProfile,
     saveAvatar,
     deleteAvatar,
     clearPendingAvatar,
-    doResetPassword,
+    doResetPassword: _doResetPassword,
+    doUpdatePassword,
   } = useProfile(authUser ?? null);
 
   // Debug: Log edit mode changes
@@ -121,10 +123,10 @@ export const Profile: React.FC = () => {
                   onSave={saveProfile}
                   onEditingChange={handleEditingChange}
                 />
-                <ResetPasswordCard
-                  userEmail={user.email}
-                  isResetting={isResettingPw}
-                  onReset={doResetPassword}
+                <AccountSettingsCard
+                  currentRotation={user.password_rotation ?? 'none'}
+                  isUpdating={isUpdatingPw}
+                  onUpdate={doUpdatePassword}
                 />
               </div>
 

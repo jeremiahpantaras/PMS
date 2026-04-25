@@ -3,11 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services/authService';
 import { 
   validateEmail, 
-  validatePhone,
   validateName,
   validateCompanyName,
   sanitizeInput,
 } from '@/utils/validation';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 import { Mail, User, Building2, Phone, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
 import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
@@ -31,7 +31,7 @@ export const AdminRegister: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const sanitized = sanitizeInput(value);
+    const sanitized = name === 'phone' ? formatPHPhone(value) : sanitizeInput(value);
     
     setFormData(prev => ({
       ...prev,
@@ -73,8 +73,8 @@ export const AdminRegister: React.FC = () => {
       errors.email = 'Invalid email format';
     }
 
-    if (formData.phone && !validatePhone(formData.phone)) {
-      errors.phone = 'Invalid phone format. Use 09XXXXXXXXX or +639XXXXXXXXX';
+    if (formData.phone && !isValidPHPhone(formData.phone)) {
+      errors.phone = 'Enter a valid Philippine mobile number (e.g. 09XX XXX XXXX)';
     }
 
     setValidationErrors(errors);
@@ -378,7 +378,7 @@ export const AdminRegister: React.FC = () => {
                   className={`block w-full pl-10 pr-3 py-2.5 border rounded-2xl bg-white shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-care-blue focus:border-transparent text-sm ${
                     validationErrors.phone ? 'border-red-300' : 'border-gray-200'
                   }`}
-                  placeholder="09XXXXXXXXX"
+                  placeholder="(+63) 9XX XXX XXXX"
                   disabled={isLoading}
                 />
               </div>

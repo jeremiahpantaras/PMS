@@ -60,6 +60,7 @@ import { ClinicMessages } from '@/features/clinic-messages/ClinicMessages';
 import { NoteEditor }     from '@/features/clinical-template/pages/NoteEditor';
 import { GenerateNewInvoice } from '@/features/billing/generateNewInvoice';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
+import { FloatingNotificationsContainer } from '@/features/notifications/components/FloatingNotificationsContainer';
 
 // ── NEW: Clinic Setup ─────────────────────────────────────────────────────────
 import { ClinicSetupPage } from '@/features/clinic-setup/ClinicSetupPage';
@@ -224,6 +225,7 @@ function App() {
 
         <ClinicMessagesGuard />
         <NotificationBellGuard />
+        <FloatingNotificationsContainer />
         <GlobalLogoutModal />
         <Analytics />
       </BrowserRouter>

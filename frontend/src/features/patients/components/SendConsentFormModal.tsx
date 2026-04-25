@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Mail, Loader2, FileText, CheckCircle } from 'lucide-react';
 import { getPractitioners } from '@/features/clinics/clinic.api';
+import { getContacts } from '@/features/contacts/contact.api';
 import axiosInstance from '@/lib/axios';
 import { ConsentFormTemplate } from './ConsentFormTemplate';
 import type { PatientConsentRecord } from '../patient.api';
@@ -79,8 +80,18 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
             role: u.role,
           }));
 
+        // Fetch active contacts with emails
+        const contactsData = await getContacts({ is_active: true, page_size: 100 });
+        const contactSugg = contactsData.results
+          .filter((c) => c.email)
+          .map((c) => ({
+            name: c.full_name,
+            email: c.email!,
+            role: c.contact_type_display,
+          }));
+
         const combined = Array.from(
-          new Map([...practitionerSugg, ...userSugg].map((s) => [s.email, s])).values()
+          new Map([...practitionerSugg, ...userSugg, ...contactSugg].map((s) => [s.email, s])).values()
         );
         if (!cancelled) setAllSuggestions(combined);
       } catch {

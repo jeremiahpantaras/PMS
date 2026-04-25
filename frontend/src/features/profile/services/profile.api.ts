@@ -9,8 +9,22 @@ export interface UpdateProfileData {
   remove_avatar?: boolean;  // Flag to remove avatar
 }
 
+export type PasswordRotation = 'none' | 'weekly' | 'monthly' | 'yearly';
+
 export interface ResetPasswordData {
   refresh_token?: string;
+}
+
+export interface UpdatePasswordData {
+  type:      'auto' | 'manual';
+  password?: string;           // required when type === 'manual'
+  rotation:  PasswordRotation;
+}
+
+export interface UpdatePasswordResponse {
+  detail:     string;
+  email_sent: boolean;
+  rotation:   PasswordRotation;
 }
 
 export interface ResetPasswordResponse {
@@ -71,6 +85,17 @@ export const resetPassword = async (
 ): Promise<ResetPasswordResponse> => {
   const response = await axiosInstance.post<ResetPasswordResponse>(
     '/auth/reset-password/',
+    data
+  );
+  return response.data;
+};
+
+/** Account-settings password update — auto-generate or manual, with rotation */
+export const updatePassword = async (
+  data: UpdatePasswordData
+): Promise<UpdatePasswordResponse> => {
+  const response = await axiosInstance.post<UpdatePasswordResponse>(
+    '/auth/update-password/',
     data
   );
   return response.data;

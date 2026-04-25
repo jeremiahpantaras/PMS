@@ -5,6 +5,7 @@ import { ClinicLocationPicker } from '@/components/maps/ClinicLocationPicker';
 import type { ReverseGeocodeResult } from '@/components/maps/ClinicLocationPicker';
 import { forwardGeocode } from '@/utils/geocode';
 import type { ClinicBranch, CreateBranchData } from '@/types/clinic';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 const EMPTY_FORM = {
   location: '',
@@ -88,7 +89,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
         setForm({
           location,
           email:           branch.email           || '',
-          phone:           branch.phone           || '',
+          phone:           branch.phone ? formatPHPhone(branch.phone) : '',
           address:         branch.address         || '',
           city:            branch.city            || '',
           province:        branch.province        || '',
@@ -116,7 +117,8 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const formatted = name === 'phone' ? formatPHPhone(value) : value;
+    setForm((prev) => ({ ...prev, [name]: formatted }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
@@ -131,6 +133,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
     if (!form.location.trim()) errs.location = 'Location / barangay name is required';
     if (!form.email.trim())    errs.email    = 'Email is required';
     if (!form.phone.trim())    errs.phone    = 'Phone is required';
+    else if (!isValidPHPhone(form.phone)) errs.phone = 'Enter a valid Philippine mobile number';
     if (!form.address.trim())  errs.address  = 'Address is required';
     if (!form.city.trim())     errs.city     = 'City is required';
     if (!form.province.trim()) errs.province = 'Province is required';
@@ -299,7 +302,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                   </label>
                   <input
                     type="tel" name="phone" value={form.phone} onChange={handleChange}
-                    placeholder="+63 2 8123 4567"
+                    placeholder="(+63) 9XX XXX XXXX"
                     className={`${inputBase} ${errors.phone ? inputErr : ''}`}
                   />
                   {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}

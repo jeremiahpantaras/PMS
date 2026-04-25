@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import User, Role, Permission
 from apps.clinics.models import Practitioner
+from apps.common.validators import normalize_ph_phone, validate_ph_phone
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -9,6 +11,7 @@ class UserSerializer(serializers.ModelSerializer):
     needs_password_change  = serializers.BooleanField(read_only=True)
     clinic_branch_name     = serializers.SerializerMethodField()
     avatar_url             = serializers.SerializerMethodField()
+    phone                  = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     # ── NEW: expose whether the admin has completed clinic setup ──────────────
     clinic_setup_complete  = serializers.SerializerMethodField()
@@ -33,6 +36,7 @@ class UserSerializer(serializers.ModelSerializer):
             'avatar', 'avatar_url', 'is_active', 'clinic', 'clinic_branch', 'clinic_branch_name',
             'created_at', 'password', 'password_changed', 'needs_password_change',
             'clinic_setup_complete',   # ← NEW
+            'password_rotation', 'last_password_change',  # ← password management
             # Position (for all staff)
             'position',
             # Availability fields (legacy single block)
@@ -275,12 +279,11 @@ class AdminRegistrationSerializer(serializers.Serializer):
 
     def validate_phone(self, value):
         if value:
-            cleaned = value.replace(' ', '').replace('-', '')
-            if not (cleaned.startswith('09') and len(cleaned) == 11) and \
-               not (cleaned.startswith('+639') and len(cleaned) == 13):
-                raise serializers.ValidationError(
-                    "Invalid phone number format. Use 09XXXXXXXXX or +639XXXXXXXXX"
-                )
+            try:
+                validate_ph_phone(value)
+            except DjangoValidationError as e:
+                raise serializers.ValidationError(e.message)
+            return normalize_ph_phone(value)
         return value
 
 

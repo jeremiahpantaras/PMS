@@ -12,6 +12,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { invalidateClinicSettingsCache } from '@/hooks/useClinicSettings';
+import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
 // ── Fix default Leaflet marker icon ───────────────────────────────────────────
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -204,7 +205,7 @@ export const ClinicProfile: React.FC = () => {
     setForm({
       name:        data.name        || '',
       email:       data.email       || '',
-      phone:       data.phone       || '',
+      phone:       data.phone ? formatPHPhone(data.phone) : '',
       address:     data.address     || '',
       city:        data.city        || '',
       province:    data.province    || '',
@@ -221,7 +222,8 @@ export const ClinicProfile: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    const formatted = name === 'phone' ? formatPHPhone(value) : value;
+    setForm(prev => ({ ...prev, [name]: formatted }));
     setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
@@ -261,6 +263,7 @@ export const ClinicProfile: React.FC = () => {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
                                errs.email    = 'Invalid email format.';
     if (!form.phone.trim())    errs.phone    = 'Phone number is required.';
+    else if (!isValidPHPhone(form.phone)) errs.phone = 'Enter a valid Philippine mobile number.';
     if (!form.address.trim())  errs.address  = 'Address is required.';
     if (!form.city.trim())     errs.city     = 'City is required.';
     if (!form.province.trim()) errs.province = 'Province is required.';
@@ -578,7 +581,7 @@ export const ClinicProfile: React.FC = () => {
                 <EditField
                   label="Phone" name="phone" value={form.phone}
                   onChange={handleChange} error={errors.phone}
-                  placeholder="09XXXXXXXXX" required
+                  placeholder="(+63) 9XX XXX XXXX" required
                 />
               </div>
             ) : (
