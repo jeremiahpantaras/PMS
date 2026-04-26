@@ -367,7 +367,7 @@ class PortalBookingCreateSerializer(serializers.ModelSerializer):
         model  = PortalBooking
         fields = [
             'consent_id',
-            'service', 'practitioner',
+            'service', 'practitioner', 'branch',
             'patient_first_name', 'patient_last_name',
             'patient_email', 'patient_phone', 'patient_date_of_birth',
             'notes', 'appointment_date', 'appointment_time',
@@ -388,6 +388,14 @@ class PortalBookingCreateSerializer(serializers.ModelSerializer):
             if attrs['service'].clinic_id != portal_link.clinic_id:
                 raise serializers.ValidationError(
                     {'service': 'Service does not belong to this clinic.'}
+                )
+        if portal_link and attrs.get('branch'):
+            branch = attrs['branch']
+            main_clinic = portal_link.clinic
+            # branch must be the main clinic itself or a direct child
+            if branch.id != main_clinic.id and branch.parent_clinic_id != main_clinic.id:
+                raise serializers.ValidationError(
+                    {'branch': 'Selected branch does not belong to this clinic.'}
                 )
         return attrs
 
@@ -426,8 +434,7 @@ class PortalBookingResponseSerializer(serializers.ModelSerializer):
         return obj.practitioner.specialization if obj.practitioner else None
 
     def get_branch_name(self, obj) -> str | None:
-        branch = getattr(obj.portal_link, 'branch', None)
-        return branch.name if branch else None
+        return obj.branch.name if obj.branch else None
 
     def get_patient_id(self, obj):
         if obj.appointment and obj.appointment.patient_id:

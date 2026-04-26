@@ -42,7 +42,8 @@ def _confirm_portal_booking(booking, confirmed_by_user):
     from datetime import datetime, timedelta
     from apps.appointments.models import Appointment
 
-    clinic = booking.portal_link.clinic
+    # Use the specific branch the patient selected; fall back to the portal's main clinic.
+    clinic = booking.branch or booking.portal_link.clinic
 
     # ── 1. Find or create Patient ─────────────────────────────────────────
     patient = None
@@ -106,6 +107,7 @@ def _confirm_portal_booking(booking, confirmed_by_user):
             clinic=clinic,
             patient=patient,
             practitioner=booking.practitioner,
+            service=booking.service,
             appointment_type='INITIAL',
             status='CONFIRMED',
             date=booking.appointment_date,

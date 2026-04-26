@@ -303,6 +303,14 @@ class PortalBooking(TimeStampedModel):
         blank=True,
         related_name='portal_bookings',
     )
+    branch = models.ForeignKey(
+        'clinics.Clinic',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='portal_bookings',
+        help_text='The specific branch the patient selected when booking.',
+    )
     appointment = models.OneToOneField(
         'appointments.Appointment',
         on_delete=models.SET_NULL,
