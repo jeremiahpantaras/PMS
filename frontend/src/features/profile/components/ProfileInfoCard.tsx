@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import type { User as UserType } from '@/types/auth';
 import type { UpdateProfileData } from '../services/profile.api';
-import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 
 interface ProfileInfoCardProps {
   user:           UserType;
@@ -113,7 +113,7 @@ export const ProfileInfoCard: React.FC<ProfileInfoCardProps> = ({
     const ok = await onSave({
       first_name: form.first_name.trim(),
       last_name:  form.last_name.trim(),
-      phone:      form.phone.trim(),
+      phone:      form.phone.trim() ? normalizePHPhone(form.phone) : '',
     });
     console.log('[ProfileInfoCard] handleSave result:', ok);
     if (ok) setEditing(false);
