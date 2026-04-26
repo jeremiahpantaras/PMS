@@ -43,8 +43,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group,  self.channel_name)
         await self.channel_layer.group_add(self.user_group,  self.channel_name)
 
-        await self.accept()
-        logger.info(f'WS connect: user={self.user.pk} conversation={self.conversation_id}')
+        subprotocol = 'bearer' if 'bearer' in self.scope.get('subprotocols', []) else None
+        await self.accept(subprotocol=subprotocol)
+        logger.debug('WS connect: user=%s conversation=%s', self.user.pk, self.conversation_id)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group'):
@@ -206,7 +207,8 @@ class PresenceConsumer(AsyncWebsocketConsumer):
 
         self.user_group = f'user_{self.user.pk}'
         await self.channel_layer.group_add(self.user_group, self.channel_name)
-        await self.accept()
+        subprotocol = 'bearer' if 'bearer' in self.scope.get('subprotocols', []) else None
+        await self.accept(subprotocol=subprotocol)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'user_group'):

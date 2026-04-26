@@ -45,6 +45,14 @@ accesslog = "-"   # stdout → visible in Render logs
 errorlog  = "-"   # stderr → visible in Render logs
 loglevel  = "info"
 
+# Use %(U)s (path only, no query string) instead of %(r)s (full request line)
+# to prevent JWT tokens from being written to access logs when the legacy
+# ?token= query-param path is used. All other useful fields are preserved.
+# Format: IP - user [timestamp] "METHOD /path HTTP/ver" status bytes ref agent
+access_log_format = (
+    '%(h)s %(l)s %(u)s %(t)s "%(m)s %(U)s %(H)s" %(s)s %(b)s "%(f)s" "%(a)s"'
+)
+
 # ── Worker recycling ─────────────────────────────────────────────────────────
 # Restart a worker after it has served this many requests.
 # Prevents slow memory leaks from accumulating over long deployments.

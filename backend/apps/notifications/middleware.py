@@ -1,17 +1,11 @@
 """
 JWT Auth middleware for the notifications WebSocket.
-Reads the token from:
-  1. Query string  ?token=<access_token>
-  2. Sec-WebSocket-Protocol header (fallback for browser clients)
+
+Delegates to apps.common.ws_auth — see that module for the full
+implementation and the security rationale for using the
+Sec-WebSocket-Protocol header instead of URL query params.
 """
-import logging
-from urllib.parse import parse_qs
-
-from channels.db import database_sync_to_async
-from channels.middleware import BaseMiddleware
-from django.contrib.auth.models import AnonymousUser
-
-logger = logging.getLogger(__name__)
+from apps.common.ws_auth import JWTAuthMiddleware, JWTAuthMiddlewareStack  # noqa: F401
 
 
 @database_sync_to_async

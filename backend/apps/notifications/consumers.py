@@ -30,7 +30,12 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             self.group_name,
             self.channel_name,
         )
-        await self.accept()
+        # Echo the agreed subprotocol so the browser handshake completes cleanly.
+        # When the client uses the subprotocol transport (production), 'bearer'
+        # is in scope['subprotocols']. When using the legacy query-string path
+        # (DEBUG / dev tooling) there is no proposed subprotocol.
+        subprotocol = 'bearer' if 'bearer' in self.scope.get('subprotocols', []) else None
+        await self.accept(subprotocol=subprotocol)
 
         logger.debug(
             '[WS:notifications] user %s connected to group %s',

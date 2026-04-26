@@ -82,8 +82,12 @@ export const useWebSocket = ({
       return;
     }
 
-    const url = `${WS_BASE}/ws/messages/${conversationId}/?token=${token}`;
-    const ws  = new WebSocket(url);
+    // Pass token as a WebSocket subprotocol so it never appears in the URL
+    // (and therefore never in server access logs, browser history, or Referrer
+    // headers). The browser sends:  Sec-WebSocket-Protocol: bearer, <token>
+    // The server reads the token from that header and echoes back 'bearer'.
+    const url = `${WS_BASE}/ws/messages/${conversationId}/`;
+    const ws  = new WebSocket(url, ['bearer', token]);
     wsRef.current = ws;
 
     ws.onopen = () => {

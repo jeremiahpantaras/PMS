@@ -121,8 +121,12 @@ export function useNotifications(isOpen: boolean, onIncoming?: (n: Notification)
       wsRef.current.close();
     }
 
-    const url = `${WS_BASE}/ws/notifications/?token=${token}`;
-    const ws  = new WebSocket(url);
+    // Pass token as a WebSocket subprotocol so it never appears in the URL
+    // (and therefore never in server access logs, browser history, or Referrer
+    // headers). The browser sends:  Sec-WebSocket-Protocol: bearer, <token>
+    // The server reads the token from that header and echoes back 'bearer'.
+    const url = `${WS_BASE}/ws/notifications/`;
+    const ws  = new WebSocket(url, ['bearer', token]);
     wsRef.current = ws;
 
     ws.onopen = () => {
