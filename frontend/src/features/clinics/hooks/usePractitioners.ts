@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPractitioners } from '../clinic.api';
 import type { Practitioner } from '../clinic.api';
-import toast from 'react-hot-toast';
 import { useCallback } from 'react';
 
 interface UsePractitionersParams {
@@ -36,11 +35,6 @@ export const usePractitioners = (params?: UsePractitionersParams): UsePractition
     retry: 1,
     throwOnError: false,
   });
-
-  if (error) {
-    const msg = (error as any)?.response?.data?.detail || 'Failed to load practitioners';
-    toast.error(msg);
-  }
 
   const refetch = useCallback(async () => {
     await qc.invalidateQueries({ queryKey });
