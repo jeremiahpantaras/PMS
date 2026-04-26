@@ -26,6 +26,8 @@ from .serializers import (
     PublicClientFormVerifySerializer, PublicClientFormSubmitSerializer,
 )
 import logging
+import traceback
+from apps.common.validators import normalize_ph_phone
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,13 @@ def _confirm_portal_booking(booking, confirmed_by_user):
     from apps.appointments.models import Appointment
 
     # Use the specific branch the patient selected; fall back to the portal's main clinic.
-    clinic = booking.branch or booking.portal_link.clinic
+    try:
+        clinic = booking.branch or booking.portal_link.clinic
+    except Exception:
+        clinic = booking.portal_link.clinic
+
+    # Normalize phone to +63XXXXXXXXXX (13 chars) so it fits Patient.phone max_length=15
+    normalized_phone = normalize_ph_phone(booking.patient_phone) if booking.patient_phone else ''
 
     # ── 1. Find or create Patient ─────────────────────────────────────────
     patient = None
@@ -60,7 +68,6 @@ def _confirm_portal_booking(booking, confirmed_by_user):
             clinic=clinic,
             first_name__iexact=booking.patient_first_name,
             last_name__iexact=booking.patient_last_name,
-            phone=booking.patient_phone,
             is_deleted=False,
         ).first()
 
@@ -72,7 +79,7 @@ def _confirm_portal_booking(booking, confirmed_by_user):
             date_of_birth=booking.patient_date_of_birth or '2000-01-01',
             gender='O',
             email=booking.patient_email or '',
-            phone=booking.patient_phone,
+            phone=normalized_phone,
             address='',
             city=clinic.city or '',
             province=clinic.province or '',
@@ -730,8 +737,10 @@ class PublicPortalBookView(APIView):
                     f"Booking confirmation email failed for #{booking.reference_number}: {email_err}"
                 )
         except Exception as e:
-            logger.error(f"Auto-confirm failed for portal booking #{booking.reference_number}: {e}")
-            # Still return success to the patient — staff can confirm manually if needed
+            logger.error(
+                f"Auto-confirm failed for portal booking #{booking.reference_number}: {e}\n"
+                f"{traceback.format_exc()}"
+            )
 
         response_serializer = PortalBookingResponseSerializer(
             booking, context={'request': request}
