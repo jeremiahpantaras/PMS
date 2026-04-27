@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { X, Printer, Mail } from 'lucide-react';
 import { ConsentFormTemplate } from './ConsentFormTemplate';
 import type { PatientConsentRecord } from '../patient.api';
 import { formatDate } from '../patientProfile.utils.tsx';
+import { getMyClinic } from '@/features/clinics/clinic.api';
 
 interface ViewConsentFormModalProps {
   isOpen: boolean;
@@ -18,6 +19,12 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
   onSendEmail,
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
+  const [clinicLogo, setClinicLogo] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    getMyClinic().then((p) => setClinicLogo(p.logo_url ?? undefined)).catch(() => {});
+  }, [isOpen]);
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -106,6 +113,7 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
             <div className="shadow-2xl rounded-sm" ref={printRef}>
               <ConsentFormTemplate
                 clinicName={clinicName}
+                clinicLogo={clinicLogo}
                 patientName={consent.full_name}
                 patientEmail={consent.email}
                 dateSigned={dateSigned}

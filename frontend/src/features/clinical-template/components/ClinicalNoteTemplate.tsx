@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import type { PrintNoteResponse } from '../clinical-templates.api';
+import { DocumentFooter as DocumentBrandingFooter } from '@/components/DocumentFooter';
 
 export interface ClinicalNoteTemplateProps {
   data: PrintNoteResponse;
@@ -349,6 +350,11 @@ export const ClinicalNoteTemplate = forwardRef<HTMLDivElement, ClinicalNoteTempl
               Generated: {generatedOn}
             </p>
           </div>
+        </div>
+
+        {/* ── Malasakit Branding ─────────────────────────────────────────── */}
+        <div style={{ marginTop: '20px', paddingTop: '12px', borderTop: '1px solid #e5e7eb', textAlign: 'center' }}>
+          <DocumentBrandingFooter />
         </div>
       </div>
     );

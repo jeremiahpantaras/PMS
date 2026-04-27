@@ -7,7 +7,7 @@ import {
   validateCompanyName,
   sanitizeInput,
 } from '@/utils/validation';
-import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 import { Mail, User, Building2, Phone, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
 import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
@@ -94,7 +94,11 @@ export const AdminRegister: React.FC = () => {
     setIsLoading(true);
 
     try {
-        const response = await authService.registerAdmin(formData);
+        const payload = {
+          ...formData,
+          phone: formData.phone ? normalizePHPhone(formData.phone) : '',
+        };
+        const response = await authService.registerAdmin(payload);
         
         if (response.email_sent) {
         toast.success('Account created! Check your email for login credentials.', {
@@ -242,7 +246,7 @@ export const AdminRegister: React.FC = () => {
             {serverError && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-4">
                 <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                   <div className="ml-3">
                     <p className="text-sm text-red-800">{serverError}</p>
                   </div>

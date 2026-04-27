@@ -1,6 +1,6 @@
 import type { SubscriptionState, SubscriptionStatusResponse } from '../../services/subscription.api';
 
-export const MONTHLY_PLAN_PRICE = 299;
+export const MONTHLY_PLAN_PRICE = 399;
 const TRIAL_DURATION_DAYS = 14;
 
 export const formatPlanLabel = (plan: SubscriptionStatusResponse['plan']): string => {

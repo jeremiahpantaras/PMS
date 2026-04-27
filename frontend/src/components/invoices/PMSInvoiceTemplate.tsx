@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import type { Invoice, InvoiceItem, Payment } from '@/types/billing';
 import { getBankByCode } from '@/data/philippineBanks';
+import { DocumentFooter } from '@/components/DocumentFooter';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -450,6 +451,11 @@ export const PMSInvoiceTemplate = forwardRef<HTMLDivElement, PMSInvoiceTemplateP
             </div>
           )}
         </div>
+
+        {/* ═══════════ MALASAKIT BRANDING ═══════════ */}
+          <div className="px-8 pb-4">
+            <DocumentFooter />
+          </div>
 
         {/* ═══════════ CURVED FOOTER ═══════════ */}
         <div className="relative overflow-hidden rounded-b-2xl print:rounded-none mt-auto">

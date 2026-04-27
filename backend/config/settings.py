@@ -102,13 +102,37 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Cache Settings (for password reset verification codes)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+# Cache Settings
+# Use Redis in production (REDIS_URL set by Render), LocMem in local dev.
+_redis_url = os.getenv('REDIS_URL')
+if _redis_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_url,
+            'OPTIONS': {
+                'socket_connect_timeout': 5,
+                'socket_timeout': 5,
+            },
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
+
+# ── PayMongo ──────────────────────────────────────────────────────────────────
+# SECRET_KEY is backend-only. PUBLIC_KEY is safe to use in the backend too.
+# NEVER expose PAYMONGO_SECRET_KEY or PAYMONGO_WEBHOOK_SECRET to the frontend.
+PAYMONGO_PUBLIC_KEY = os.getenv('PAYMONGO_PUBLIC_KEY', '')
+PAYMONGO_SECRET_KEY = os.getenv('PAYMONGO_SECRET_KEY', '')
+PAYMONGO_WEBHOOK_SECRET = os.getenv('PAYMONGO_WEBHOOK_SECRET', '')
+SUBSCRIPTION_PRICE = int(os.getenv('SUBSCRIPTION_PRICE', 39900))   # centavos ₱399
+SUBSCRIPTION_DAYS = int(os.getenv('SUBSCRIPTION_DAYS', 30))
+TRIAL_DAYS = int(os.getenv('TRIAL_DAYS', 14))
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = [

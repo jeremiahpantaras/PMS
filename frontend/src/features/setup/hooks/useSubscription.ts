@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 
 import {
   subscriptionApi,
-  type ActivateMonthlyResponse,
+  type CheckoutSessionResponse,
   type SubscriptionStatusResponse,
 } from '../services/subscription.api';
 
@@ -11,8 +11,14 @@ export const SUBSCRIPTION_QUERY_KEYS = {
   status: ['subscription', 'status'] as const,
 };
 
-const getErrorMessage = (error: any, fallback: string): string => {
-  return error?.response?.data?.message || error?.response?.data?.detail || fallback;
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  const e = error as { response?: { data?: { message?: string; detail?: string; error?: string } } };
+  return (
+    e?.response?.data?.message ||
+    e?.response?.data?.detail ||
+    e?.response?.data?.error ||
+    fallback
+  );
 };
 
 export const useSubscriptionStatus = (enabled = true) => {
@@ -25,24 +31,26 @@ export const useSubscriptionStatus = (enabled = true) => {
   });
 };
 
-export const useActivateMonthlyPlan = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation<ActivateMonthlyResponse, unknown, void>({
-    mutationFn: subscriptionApi.activateMonthly,
+/**
+ * Creates a PayMongo Checkout Session and redirects the browser to the
+ * PayMongo hosted checkout page. Subscription activation happens via webhook.
+ */
+export const useCreateCheckout = () => {
+  return useMutation<CheckoutSessionResponse, unknown, void>({
+    mutationFn: subscriptionApi.createCheckout,
     onSuccess: (data) => {
-      toast.success(data?.message || 'Subscription activated successfully.');
-      queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_QUERY_KEYS.status });
+      // Full page redirect to PayMongo checkout (GCash / Card)
+      window.location.href = data.checkout_url;
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error, 'Failed to activate monthly plan.'));
+      toast.error(getErrorMessage(error, 'Unable to start payment. Please try again.'));
     },
   });
 };
 
 export const useSubscription = () => {
   const statusQuery = useSubscriptionStatus(true);
-  const activateMutation = useActivateMonthlyPlan();
+  const checkoutMutation = useCreateCheckout();
 
   return {
     subscription: statusQuery.data,
@@ -51,7 +59,8 @@ export const useSubscription = () => {
     isError: statusQuery.isError,
     error: statusQuery.error,
     refresh: statusQuery.refetch,
-    activateMonthly: activateMutation.mutateAsync,
-    isActivatingMonthly: activateMutation.isPending,
+    startCheckout: checkoutMutation.mutateAsync,
+    isStartingCheckout: checkoutMutation.isPending,
   };
 };
+

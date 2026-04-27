@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Mail, Loader2, FileText, CheckCircle } from 'lucide-react';
-import { getPractitioners } from '@/features/clinics/clinic.api';
+import { getPractitioners, getMyClinic } from '@/features/clinics/clinic.api';
 import { getContacts } from '@/features/contacts/contact.api';
 import axiosInstance from '@/lib/axios';
 import { ConsentFormTemplate } from './ConsentFormTemplate';
@@ -34,6 +34,7 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [clinicLogo, setClinicLogo] = useState<string | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -56,6 +57,8 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
       `Dear ${consent.full_name},\n\nPlease find attached your signed Data Privacy Consent Form.\n\nBest regards,\nClinic Team`
     );
     setIsGeneratingPdf(true);
+
+    getMyClinic().then((p) => setClinicLogo(p.logo_url ?? undefined)).catch(() => {});
 
     let cancelled = false;
 
@@ -125,6 +128,7 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
           root.render(
             <ConsentFormTemplate
               clinicName={consent.clinic_name ?? 'Clinic'}
+              clinicLogo={clinicLogo}
               patientName={consent.full_name}
               patientEmail={consent.email}
               dateSigned={dateSigned}

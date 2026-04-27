@@ -23,6 +23,9 @@ export const useAuthStore = create<AuthStore>()(
         localStorage.setItem('access_token', tokens.access);
         localStorage.setItem('refresh_token', tokens.refresh);
         localStorage.setItem('user', JSON.stringify(user));
+        // Mark the session as active. sessionStorage is cleared automatically
+        // when the browser is closed, ensuring users must log in again.
+        sessionStorage.setItem('session_active', '1');
         set({
           user,
           tokens,
@@ -36,6 +39,7 @@ export const useAuthStore = create<AuthStore>()(
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         localStorage.removeItem('auth-storage');
+        sessionStorage.removeItem('session_active');
         set({
           user: null,
           tokens: null,
@@ -71,6 +75,17 @@ export const useAuthStore = create<AuthStore>()(
 
       verifyAuth: async () => {
         console.log('🔐 Verifying authentication...');
+
+        // If the browser was closed, sessionStorage is wiped automatically.
+        // Absence of the marker means a new browser session — force re-login.
+        if (!sessionStorage.getItem('session_active')) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('auth-storage');
+          set({ isAuthenticated: false, isLoading: false, user: null, tokens: null });
+          return false;
+        }
 
         const token       = localStorage.getItem('access_token');
         const refreshToken = localStorage.getItem('refresh_token');

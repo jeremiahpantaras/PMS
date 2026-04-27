@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   AlertTriangle,
   Calendar,
@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { useSubscription } from '@/features/setup/hooks/useSubscription';
 import { getSafeDaysRemaining, isSubscriptionActive } from '@/features/setup/services/subscription.api';
@@ -30,16 +31,40 @@ export const Subscription: React.FC = () => {
     isError,
     error,
     refresh,
-    activateMonthly,
-    isActivatingMonthly,
+    startCheckout,
+    isStartingCheckout,
   } = useSubscription();
 
   const daysRemaining = getSafeDaysRemaining(subscription);
   const isActive = isSubscriptionActive(subscription);
   const trialProgress = getTrialProgressPercent(subscription);
 
-  const handleActivateMonthly = async () => {
-    await activateMonthly();
+  // Handle redirect back from PayMongo checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+
+    if (payment === 'success') {
+      toast.success(
+        'Payment received! Your subscription is being activated. Please refresh in a moment.',
+        { duration: 6000 },
+      );
+      // Remove query param without reloading
+      window.history.replaceState({}, '', window.location.pathname);
+      // Refresh subscription status to reflect webhook activation
+      setTimeout(() => refresh(), 3000);
+    } else if (payment === 'cancelled') {
+      toast('Payment cancelled. You can try again whenever you\'re ready.', {
+        icon: '↩',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleStartCheckout = async () => {
+    await startCheckout();
+    // On success, useCreateCheckout redirects window.location — no further action needed
   };
 
   const errorMessage =
@@ -113,7 +138,7 @@ export const Subscription: React.FC = () => {
             <div>
               <p className="text-sm font-semibold text-red-700">Subscription access restricted</p>
               <p className="text-xs text-red-600 mt-0.5">
-                Your subscription is not active. Activate the monthly plan to restore full system access.
+                Your trial has expired. Subscribe now to restore full access to Malasakit.
               </p>
             </div>
           </div>
@@ -197,29 +222,30 @@ export const Subscription: React.FC = () => {
           </div>
         )}
 
+        {/* PayMongo Checkout CTA */}
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-gray-900">Activate Monthly Plan</p>
+            <p className="text-sm font-semibold text-gray-900">Subscribe via PayMongo</p>
             <p className="text-xs text-gray-600 mt-0.5">
-              Payment integration is currently simulated. Activating instantly starts a 30-day monthly cycle.
+              Pay securely with GCash or Credit/Debit Card. Subscription activates instantly after payment.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={handleActivateMonthly}
-            disabled={isActivatingMonthly}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={handleStartCheckout}
+            disabled={isStartingCheckout || (isActive && subscription.plan === 'MONTHLY')}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
           >
-            {isActivatingMonthly ? (
+            {isStartingCheckout ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Activating...
+                Redirecting to PayMongo...
               </>
             ) : (
               <>
                 <CreditCard className="w-4 h-4" />
-                Activate Monthly (PHP {MONTHLY_PLAN_PRICE})
+                Pay PHP {MONTHLY_PLAN_PRICE} / month
               </>
             )}
           </button>

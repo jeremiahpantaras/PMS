@@ -12,8 +12,9 @@ export interface SubscriptionStatusResponse {
   days_remaining: number;
 }
 
-export interface ActivateMonthlyResponse {
-  message: string;
+export interface CheckoutSessionResponse {
+  checkout_url: string;
+  checkout_id: string;
 }
 
 export const subscriptionApi = {
@@ -22,8 +23,13 @@ export const subscriptionApi = {
     return data;
   },
 
-  activateMonthly: async (): Promise<ActivateMonthlyResponse> => {
-    const { data } = await axiosInstance.post('/subscription/activate/');
+  /**
+   * Creates a PayMongo Checkout Session.
+   * Returns the checkout_url to redirect the user to for payment.
+   * Secret keys never leave the backend.
+   */
+  createCheckout: async (): Promise<CheckoutSessionResponse> => {
+    const { data } = await axiosInstance.post('/subscription/checkout/create/');
     return data;
   },
 };
@@ -48,3 +54,4 @@ export const getSafeDaysRemaining = (subscription?: SubscriptionStatusResponse |
 
   return Math.max(subscription.days_remaining ?? 0, 0);
 };
+

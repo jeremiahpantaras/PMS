@@ -6,7 +6,7 @@ interface DraggableEventButtonProps {
   onClick?: () => void;
 }
 
-const HOLD_DURATION = 2000; // 2 seconds to initiate drag
+const HOLD_DURATION = 1000; // 2 seconds to initiate drag
 
 export const DraggableEventButton: React.FC<DraggableEventButtonProps> = ({ onDragEnd, onClick }) => {
   const [isHolding, setIsHolding] = useState(false);

@@ -44,8 +44,13 @@ export const Login: React.FC = () => {
       setAuth(response.user, response.tokens);
       
       toast.success(`Welcome back, ${response.user.first_name}!`);
-      
-      navigate('/dashboard', { replace: true });
+
+      // Redirect based on clinic setup status
+      if (response.user.role === 'ADMIN' && !response.user.clinic_setup_complete) {
+        navigate('/clinic-setup', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
       
     } catch (error: any) {
       console.error('Login error:', error);
@@ -150,7 +155,7 @@ export const Login: React.FC = () => {
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-4">
                 <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                   <div className="ml-3">
                     <p className="text-sm text-red-800">{error}</p>
                   </div>
