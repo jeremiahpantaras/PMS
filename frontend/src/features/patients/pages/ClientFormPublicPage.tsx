@@ -4,7 +4,7 @@ import axios from 'axios';
 import {
   AlertTriangle, CheckCircle, ChevronRight, Loader2, ShieldCheck,
 } from 'lucide-react';
-import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api';
 const api = axios.create({ baseURL: BASE });
@@ -415,7 +415,7 @@ const ClientFormStep: React.FC<{
         city:          form.city,
         postal_code:   form.postal_code,
         emergency_contact_name:         form.emergency_contact_name,
-        emergency_contact_phone:        form.emergency_contact_phone,
+        emergency_contact_phone:        normalizePHPhone(form.emergency_contact_phone),
         emergency_contact_relationship: form.emergency_contact_relationship,
         philhealth_number:  form.philhealth_number,
         medical_conditions: form.has_medical_conditions ? form.medical_conditions : '',
