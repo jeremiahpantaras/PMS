@@ -24,7 +24,9 @@ export const PatientModal: React.FC<PatientModalProps> = ({
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [errors,    setErrors]    = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'personal' | 'contact' | 'emergency' | 'medical'>('personal');
+  const [hasMedicalConditions, setHasMedicalConditions] = useState(false);
+  const [hasAllergies,         setHasAllergies]         = useState(false);
+  const [hasMedications,       setHasMedications]       = useState(false);
 
   const emptyForm = useMemo<CreatePatientData>(() => ({
     clinic:      user?.clinic || 0,
@@ -71,13 +73,18 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     if (!isOpen) {
       setFormData(emptyForm);
       setErrors({});
-      setActiveTab('personal');
+      setHasMedicalConditions(false);
+      setHasAllergies(false);
+      setHasMedications(false);
       return;
     }
 
     if (mode === 'edit' && patient) {
       setFormData(buildFormFromPatient(patient));
       setErrors({});
+      setHasMedicalConditions(!!patient.medical_conditions);
+      setHasAllergies(!!patient.allergies);
+      setHasMedications(!!patient.medications);
     }
   }, [isOpen, mode, patient, emptyForm, buildFormFromPatient]);
 
@@ -130,16 +137,6 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     e.preventDefault();
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
-      // Auto-navigate to the tab containing the first error
-      const firstKey = Object.keys(validationErrors)[0] || '';
-      if (['first_name', 'middle_name', 'last_name', 'date_of_birth', 'gender'].includes(firstKey))
-        setActiveTab('personal');
-      else if (['email', 'phone', 'address', 'city', 'province', 'postal_code'].includes(firstKey))
-        setActiveTab('contact');
-      else if (firstKey.startsWith('emergency_'))
-        setActiveTab('emergency');
-      else
-        setActiveTab('medical');
       toast.error('Please fix the highlighted errors before submitting.', { id: 'patient-validation' });
       return;
     }
@@ -172,13 +169,6 @@ export const PatientModal: React.FC<PatientModalProps> = ({
   };
 
   if (!isOpen) return null;
-
-  const tabs = [
-    { id: 'personal'  as const, label: 'Personal',  icon: User   },
-    { id: 'contact'   as const, label: 'Contact',   icon: MapPin },
-    { id: 'emergency' as const, label: 'Emergency', icon: Phone  },
-    { id: 'medical'   as const, label: 'Medical',   icon: Heart  },
-  ];
 
   const inputBase  = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent';
   const inputError = 'border-red-300 bg-red-50';
@@ -219,33 +209,16 @@ export const PatientModal: React.FC<PatientModalProps> = ({
             </button>
           </div>
 
-          {/* ── Tabs ── */}
-          <div className="flex border-b border-gray-200 bg-gray-50 px-4 shrink-0 overflow-x-auto">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-sky-600 text-sky-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-800'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
           {/* ── Form ── */}
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col">
-            <div className="flex-1 px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
 
-              {/* ── Personal Info ── */}
-              {activeTab === 'personal' && (
+              {/* ── Personal Information ── */}
+              <div>
+                <div className="flex items-center gap-2 pb-2 mb-4 border-b border-gray-200">
+                  <User className="w-4 h-4 text-sky-600" />
+                  <h3 className="text-sm font-bold text-gray-700">Personal Information</h3>
+                </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -296,10 +269,14 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* ── Contact Info ── */}
-              {activeTab === 'contact' && (
+              {/* ── Contact Information ── */}
+              <div>
+                <div className="flex items-center gap-2 pb-2 mb-4 border-b border-gray-200">
+                  <MapPin className="w-4 h-4 text-sky-600" />
+                  <h3 className="text-sm font-bold text-gray-700">Contact Information</h3>
+                </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -337,7 +314,6 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                     {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address}</p>}
                   </div>
 
-                  {/* ── Province + City via PhLocationSelect ── */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <PhLocationSelect
                       province={formData.province}
@@ -359,10 +335,14 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                     />
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* ── Emergency Contact ── */}
-              {activeTab === 'emergency' && (
+              <div>
+                <div className="flex items-center gap-2 pb-2 mb-4 border-b border-gray-200">
+                  <Phone className="w-4 h-4 text-sky-600" />
+                  <h3 className="text-sm font-bold text-gray-700">Emergency Contact</h3>
+                </div>
                 <div className="space-y-4">
                   <div>
                     <label className={labelBase}>Emergency Contact Name <span className="text-red-500">*</span></label>
@@ -408,10 +388,14 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* ── Medical Info ── */}
-              {activeTab === 'medical' && (
+              {/* ── Medical Information ── */}
+              <div>
+                <div className="flex items-center gap-2 pb-2 mb-4 border-b border-gray-200">
+                  <Heart className="w-4 h-4 text-sky-600" />
+                  <h3 className="text-sm font-bold text-gray-700">Medical Information</h3>
+                </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -439,32 +423,80 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  {/* Medical Conditions Yes/No */}
                   <div>
                     <label className={labelBase}>Medical Conditions</label>
-                    <textarea
-                      name="medical_conditions" value={formData.medical_conditions}
-                      onChange={handleChange} rows={3}
-                      placeholder="Current medical conditions…"
-                      className={`${inputBase} resize-none`}
-                    />
+                    <div className="flex gap-2 mt-1 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setHasMedicalConditions(true)}
+                        className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${hasMedicalConditions ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      >Yes</button>
+                      <button
+                        type="button"
+                        onClick={() => { setHasMedicalConditions(false); setFormData(prev => ({ ...prev, medical_conditions: '' })); }}
+                        className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${!hasMedicalConditions ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      >No</button>
+                    </div>
+                    {hasMedicalConditions && (
+                      <textarea
+                        name="medical_conditions" value={formData.medical_conditions}
+                        onChange={handleChange} rows={3}
+                        placeholder="Current medical conditions…"
+                        className={`${inputBase} resize-none`}
+                      />
+                    )}
                   </div>
+
+                  {/* Allergies Yes/No */}
                   <div>
                     <label className={labelBase}>Allergies</label>
-                    <textarea
-                      name="allergies" value={formData.allergies}
-                      onChange={handleChange} rows={2}
-                      placeholder="Known allergies…"
-                      className={`${inputBase} resize-none`}
-                    />
+                    <div className="flex gap-2 mt-1 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setHasAllergies(true)}
+                        className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${hasAllergies ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      >Yes</button>
+                      <button
+                        type="button"
+                        onClick={() => { setHasAllergies(false); setFormData(prev => ({ ...prev, allergies: '' })); }}
+                        className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${!hasAllergies ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      >No</button>
+                    </div>
+                    {hasAllergies && (
+                      <textarea
+                        name="allergies" value={formData.allergies}
+                        onChange={handleChange} rows={2}
+                        placeholder="Known allergies…"
+                        className={`${inputBase} resize-none`}
+                      />
+                    )}
                   </div>
+
+                  {/* Current Medications Yes/No */}
                   <div>
                     <label className={labelBase}>Current Medications</label>
-                    <textarea
-                      name="medications" value={formData.medications}
-                      onChange={handleChange} rows={3}
-                      placeholder="Current medications and dosages…"
-                      className={`${inputBase} resize-none`}
-                    />
+                    <div className="flex gap-2 mt-1 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setHasMedications(true)}
+                        className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${hasMedications ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      >Yes</button>
+                      <button
+                        type="button"
+                        onClick={() => { setHasMedications(false); setFormData(prev => ({ ...prev, medications: '' })); }}
+                        className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${!hasMedications ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                      >No</button>
+                    </div>
+                    {hasMedications && (
+                      <textarea
+                        name="medications" value={formData.medications}
+                        onChange={handleChange} rows={3}
+                        placeholder="Current medications and dosages…"
+                        className={`${inputBase} resize-none`}
+                      />
+                    )}
                   </div>
 
                   {/* ── Notification Preferences ── */}
@@ -498,7 +530,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
             </div>
 

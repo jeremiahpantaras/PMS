@@ -4,14 +4,14 @@ import {
   AlertCircle, UserPlus, Stethoscope, Layers, Building2, Lock,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
-import { getPatients } from '@/features/patients/patient.api';
+import { getPatients, createPatient } from '@/features/patients/patient.api';
+import { PatientModal } from '@/features/patients/components/PatientModal';
 import { createAppointment } from '../appointment.api';
 import { usePractitioners } from '@/features/clinics/hooks/usePractitioners';
 import { useAppointmentServices } from '../hooks/useAppointmentServices';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';   // ← ADD
 import { useAuthStore } from '@/store/auth.store';
-import type { Patient, CreateAppointmentData, Appointment } from '@/types';
+import type { Patient, CreateAppointmentData, CreatePatientData, Appointment } from '@/types';
 import toast from 'react-hot-toast';
 
 interface AppointmentModalProps {
@@ -44,13 +44,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   selectedClinicBranchId,
   defaultPractitionerId,
 }) => {
-  const navigate = useNavigate();
   const { user } = useAuthStore();
 
   const [patients,        setPatients]        = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [saving,          setSaving]          = useState(false);
   const [errors,          setErrors]          = useState<Record<string, string>>({});
+  const [showPatientModal, setShowPatientModal] = useState(false);
   const [chiefComplaint,  setChiefComplaint]  = useState('');
   const [notes,           setNotes]           = useState('');
   const [patientNotes,    setPatientNotes]    = useState('');
@@ -191,9 +191,14 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     onClose();
   };
 
+  const handlePatientSave = async (data: CreatePatientData) => {
+    const newPatient = await createPatient(data);
+    setPatients(prev => [...prev, newPatient]);
+    setFormData(prev => ({ ...prev, patient: newPatient.id }));
+  };
+
   const handleCreatePatient = () => {
-    handleClose();
-    navigate('/clients', { state: { openCreateModal: true } });
+    setShowPatientModal(true);
   };
 
   if (!isOpen || !selectedSlot) return null;
@@ -472,6 +477,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ── Inline Create Patient ── */}
+      {showPatientModal && (
+        <PatientModal
+          isOpen={showPatientModal}
+          onClose={() => setShowPatientModal(false)}
+          onSave={handlePatientSave}
+          mode="create"
+        />
+      )}
     </>
   );
 };
