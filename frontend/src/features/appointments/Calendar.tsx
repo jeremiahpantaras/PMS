@@ -18,6 +18,7 @@ import { useAppointmentHover }   from './hooks/useAppointmentHover';
 import { useBlockConflictDetection } from './hooks/useBlockConflictDetection';
 import { AppointmentModal }      from './components/AppointmentModal';
 import { AppointmentView }       from './components/AppointmentView';
+import { DayStatsBlock }         from './components/DayStatsBlock';
 import { AppointmentHoverCard }  from './components/AppointmentHoverCard';
 import { BlockHoverCard }        from './components/BlockHoverCard';
 import { NoteHoverCard }         from './components/NoteHoverCard';
@@ -2199,6 +2200,12 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               );
             })()}
           </div>
+          {/* ── Day statistics footer ── */}
+          <DayStatsBlock
+            date={currentDate}
+            appointments={getAppointmentsForDate(currentDate)}
+            availability={practitionerAvailability}
+          />
         </div>
         {sharedModals}
         {dragOverlays}
@@ -2368,6 +2375,19 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                 </div>
               );
             })()}
+          </div>
+          {/* ── Weekly statistics footer row ── */}
+          <div className="shrink-0 border-t border-gray-200 grid grid-cols-[80px_repeat(7,1fr)] pb-18">
+            <div className="bg-gray-50 border-r border-gray-200" />
+            {weekDays.map(day => (
+              <DayStatsBlock
+                key={day.toISOString()}
+                date={day}
+                appointments={getAppointmentsForDate(day)}
+                availability={practitionerAvailability}
+                compact
+              />
+            ))}
           </div>
         </div>
         {sharedModals}
