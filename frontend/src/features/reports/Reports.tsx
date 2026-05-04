@@ -5,6 +5,7 @@ import { UninvoicedBookings } from './pages/administration/UninvoicedBookings';
 import { Cancellations }      from './pages/administration/Cancellations';
 import { ClientCases }        from './pages/clinic/ClientCases';
 import { ClinicalNotes }      from './pages/clinic/ClinicalNotes';
+import { ProvidersPractice }  from './pages/clinic/ProvidersPractice';
 import { InventoryItems }       from './pages/financials/InventoryItems';
 import { AppointmentCosts }     from './pages/financials/AppointmentCosts';
 import { BankingReport }        from './pages/financials/BankingReport';
@@ -13,6 +14,9 @@ import { RevenueReport }        from './pages/financials/RevenueReport';
 import { CategoriesReport }     from './pages/financials/CategoriesReport';
 import { AccountCreditsReport } from './pages/financials/AccountCreditsReport';
 import { BulkFinancialReport }  from './pages/financials/BulkFinancialReport';
+import { Occupancy }            from './pages/performance/Occupancy';
+import { BusinessPerformance }  from './pages/performance/BusinessPerformance';
+import { Outcome }              from './pages/performance/Outcome';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +25,7 @@ type ReportMenu =
   | 'cancellations'
   | 'clients_cases'
   | 'clinical_notes'
+  | 'providers_practice'
   | 'inventory_items'
   | 'appointment_costs'
   | 'banking'
@@ -28,7 +33,10 @@ type ReportMenu =
   | 'revenue'
   | 'categories'
   | 'account_credits'
-  | 'bulk_financial';
+  | 'bulk_financial'
+  | 'occupancy'
+  | 'business_performance'
+  | 'outcome_measures';
 
 interface MenuItem {
   id:    ReportMenu;
@@ -68,8 +76,9 @@ const CARDS: SectionCard[] = [
     rowEven:    'bg-white',
     rowHover:   'hover:bg-blue-200 hover:text-blue-800',
     items: [
-      { id: 'clients_cases',  label: 'Clients & Cases' },
-      { id: 'clinical_notes', label: 'Clinical Notes'  },
+      { id: 'clients_cases',       label: 'Clients & Cases'       },
+      { id: 'clinical_notes',      label: 'Clinical Notes'        },
+      { id: 'providers_practice',  label: 'Providers & Practice'  },
     ],
   },
   {
@@ -90,6 +99,19 @@ const CARDS: SectionCard[] = [
       { id: 'bulk_financial',     label: '⬇ Export All (PDF)' },
     ],
   },
+  {
+    title:      'Performance',
+    cardBg:     'bg-purple-50 border border-purple-200',
+    titleColor: 'text-purple-700',
+    rowOdd:     'bg-purple-100',
+    rowEven:    'bg-white',
+    rowHover:   'hover:bg-purple-200 hover:text-purple-800',
+    items: [
+      { id: 'occupancy',            label: 'Occupancy'            },
+      { id: 'business_performance', label: 'Business Performance' },
+      { id: 'outcome_measures',     label: 'Outcome Measures'     },
+    ],
+  },
 ];
 
 const REPORT_LABELS: Record<ReportMenu, string> = {
@@ -97,6 +119,7 @@ const REPORT_LABELS: Record<ReportMenu, string> = {
   cancellations:       'Cancellations',
   clients_cases:       'Clients & Cases',
   clinical_notes:      'Clinical Notes',
+  providers_practice:  'Providers & Practice',
   inventory_items:     'Inventory Items',
   appointment_costs:   'Appointment Costs',
   banking:             'Banking',
@@ -105,6 +128,9 @@ const REPORT_LABELS: Record<ReportMenu, string> = {
   categories:          'Categories',
   account_credits:     'Account Credits',
   bulk_financial:      'Bulk Financial Export',
+  occupancy:           'Occupancy',
+  business_performance:'Business Performance',
+  outcome_measures:    'Outcome Measures',
 };
 
 const SECTION_FOR_MENU: Record<ReportMenu, string> = {
@@ -112,6 +138,7 @@ const SECTION_FOR_MENU: Record<ReportMenu, string> = {
   cancellations:       'Administration',
   clients_cases:       'Clinic',
   clinical_notes:      'Clinic',
+  providers_practice:  'Clinic',
   inventory_items:     'Financial',
   appointment_costs:   'Financial',
   banking:             'Financial',
@@ -120,6 +147,9 @@ const SECTION_FOR_MENU: Record<ReportMenu, string> = {
   categories:          'Financial',
   account_credits:     'Financial',
   bulk_financial:      'Financial',
+  occupancy:           'Performance',
+  business_performance:'Performance',
+  outcome_measures:    'Performance',
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -132,8 +162,7 @@ export const Reports: React.FC = () => {
       case 'uninvoiced_bookings': return <UninvoicedBookings />;
       case 'cancellations':       return <Cancellations />;
       case 'clients_cases':       return <ClientCases />;
-      case 'clinical_notes':      return <ClinicalNotes />;
-      case 'inventory_items':     return <InventoryItems />;
+      case 'clinical_notes':      return <ClinicalNotes />;      case 'providers_practice':   return <ProvidersPractice />;      case 'inventory_items':     return <InventoryItems />;
       case 'appointment_costs':   return <AppointmentCosts />;
       case 'banking':             return <BankingReport />;
       case 'ageing_debts':        return <AgeingDebtsReport />;
@@ -141,6 +170,9 @@ export const Reports: React.FC = () => {
       case 'categories':          return <CategoriesReport />;
       case 'account_credits':     return <AccountCreditsReport />;
       case 'bulk_financial':       return <BulkFinancialReport />;
+      case 'occupancy':            return <Occupancy />;
+      case 'business_performance': return <BusinessPerformance />;
+      case 'outcome_measures':     return <Outcome />;
       default:                    return null;
     }
   };

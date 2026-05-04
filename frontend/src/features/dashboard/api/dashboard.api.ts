@@ -1,4 +1,5 @@
 import axiosInstance from '@/lib/axios';
+import type { ClinicianPerformanceData, OccupancyEntry } from '../types/dashboard.types';
 
 export interface DashboardMetricsResponse {
   today_appointments: number;
@@ -24,6 +25,18 @@ export interface DashboardAnalyticsResponse {
   weekly_bookings:   Array<{ day: string; date: string; count: number }>;
 }
 
+export interface LiveOccupancyResponse {
+  snapshot:     OccupancyEntry[];
+  generated_at: string;
+  date:         string;
+}
+
+export interface ClinicianPerformanceParams {
+  start_date?:      string;
+  end_date?:        string;
+  practitioner_id?: number;
+}
+
 /** Get dashboard metrics for today */
 export const getDashboardMetrics = async (): Promise<DashboardMetricsResponse> => {
   const response = await axiosInstance.get<DashboardMetricsResponse>(
@@ -44,6 +57,25 @@ export const getPatientStatistics = async (): Promise<PatientStatisticsResponse>
 export const getDashboardAnalytics = async (): Promise<DashboardAnalyticsResponse> => {
   const response = await axiosInstance.get<DashboardAnalyticsResponse>(
     '/reports/dashboard_analytics/'
+  );
+  return response.data;
+};
+
+/** Get per-provider time-series performance data */
+export const getClinicianPerformance = async (
+  params?: ClinicianPerformanceParams,
+): Promise<ClinicianPerformanceData> => {
+  const response = await axiosInstance.get<ClinicianPerformanceData>(
+    '/reports/clinician_performance/',
+    { params },
+  );
+  return response.data;
+};
+
+/** Get today's live occupancy snapshot (seeds the WebSocket widget) */
+export const getLiveOccupancy = async (): Promise<LiveOccupancyResponse> => {
+  const response = await axiosInstance.get<LiveOccupancyResponse>(
+    '/reports/live_occupancy/',
   );
   return response.data;
 };

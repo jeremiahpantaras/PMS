@@ -12,12 +12,14 @@ from apps.common.ws_auth import JWTAuthMiddleware
 from apps.notifications.consumers import NotificationConsumer
 from apps.messages.consumers import ChatConsumer, PresenceConsumer
 from apps.appointments.consumers import CalendarConsumer
+from apps.appointments.occupancy_consumer import OccupancyConsumer
 
 websocket_urlpatterns = [
     path('ws/notifications/', NotificationConsumer.as_asgi()),
     re_path(r'^ws/messages/(?P<conversation_id>\d+)/$', ChatConsumer.as_asgi()),
     re_path(r'^ws/presence/$', PresenceConsumer.as_asgi()),
     path('ws/calendar/', CalendarConsumer.as_asgi()),
+    path('ws/occupancy/', OccupancyConsumer.as_asgi()),
 ]
 
 application = ProtocolTypeRouter({

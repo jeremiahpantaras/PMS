@@ -1764,3 +1764,1040 @@ class ReportViewSet(viewsets.ModelViewSet):
             'categories':      categories_data,
             'account_credits': credits_data,
         })
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  CLINIC TAB — PROVIDERS & PRACTICE
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @action(detail=False, methods=['get'], url_path='providers_practice')
+    def providers_practice(self, request):
+        """
+        GET /api/reports/providers_practice/
+
+        Provider-level operational + financial performance report.
+        Combines appointment metrics, revenue, and forward-booking rates.
+
+        Role-based:
+            Admin / Staff → all providers
+            Practitioner  → own data only
+
+        Query params:
+            start_date      (YYYY-MM-DD)
+            end_date        (YYYY-MM-DD)
+            practitioner_id (int)   optional – Admin/Staff filter
+            branch_id       (int)   optional
+        """
+        from apps.clinics.models import Practitioner
+
+        user             = request.user
+        is_practitioner  = getattr(user, 'role', '') == 'PRACTITIONER'
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+        today = timezone.now().date()
+
+        # ── Practitioner scope ────────────────────────────────────────────────
+        forced_prac_id: int | None = None
+        if is_practitioner:
+            try:
+                forced_prac_id = user.practitioner_profile.id
+            except Exception:
+                return Response(
+                    {'detail': 'No practitioner profile found for this user.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            raw = request.query_params.get('practitioner_id')
+            if raw:
+                try:
+                    forced_prac_id = int(raw)
+                except (ValueError, TypeError):
+                    pass
+
+        branch_id_raw = request.query_params.get('branch_id')
+
+        # ── Appointment queryset ──────────────────────────────────────────────
+        # "GROUP_SESSION" and "CLASS" appointment types count as classes;
+        # everything else counts as a consultation.
+        CLASS_TYPES = {'GROUP_SESSION', 'CLASS'}
+
+        appt_qs = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                date__range=[start, end],
+            )
+            .select_related('practitioner__user', 'patient', 'service')
+        )
+        if forced_prac_id is not None:
+            appt_qs = appt_qs.filter(practitioner_id=forced_prac_id)
+        if branch_id_raw:
+            try:
+                appt_qs = appt_qs.filter(clinic_id=int(branch_id_raw))
+            except (ValueError, TypeError):
+                pass
+
+        # ── Invoice queryset ──────────────────────────────────────────────────
+        inv_qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .select_related('appointment__practitioner__user')
+        )
+        if forced_prac_id is not None:
+            inv_qs = inv_qs.filter(appointment__practitioner_id=forced_prac_id)
+        if branch_id_raw:
+            try:
+                inv_qs = inv_qs.filter(clinic_id=int(branch_id_raw))
+            except (ValueError, TypeError):
+                pass
+
+        # ── Forward-booking: patients in range who have a future appointment ─
+        range_patient_ids: set[int] = set()
+        prac_map: dict[int, dict]   = {}
+
+        for appt in appt_qs.order_by('practitioner_id', 'date'):
+            prac      = appt.practitioner
+            prac_id   = prac.id   if prac else 0
+            prac_name = prac.user.get_full_name() if prac and prac.user else 'Unassigned'
+
+            if prac_id not in prac_map:
+                prac_map[prac_id] = {
+                    'practitioner_id':        prac_id,
+                    'practitioner_name':      prac_name,
+                    'total_appointments':     0,
+                    'completed_appointments': 0,
+                    'cancelled_appointments': 0,
+                    'no_show_appointments':   0,
+                    'consultations':          0,
+                    'classes':                0,
+                    'revenue':                0.0,
+                    'duration_sum':           0,
+                    'duration_cnt':           0,
+                    'patient_ids':            set(),
+                }
+
+            row = prac_map[prac_id]
+            row['total_appointments'] += 1
+
+            if appt.status == 'COMPLETED':
+                row['completed_appointments'] += 1
+            elif appt.status == 'CANCELLED':
+                row['cancelled_appointments'] += 1
+            elif appt.status in ('NO_SHOW', 'DNA'):
+                row['no_show_appointments'] += 1
+
+            appt_type = (appt.appointment_type or '').upper()
+            if appt_type in CLASS_TYPES:
+                row['classes'] += 1
+            else:
+                row['consultations'] += 1
+
+            dur = appt.duration_minutes or 0
+            if dur > 0:
+                row['duration_sum'] += dur
+                row['duration_cnt'] += 1
+
+            if appt.patient_id:
+                row['patient_ids'].add(appt.patient_id)
+                range_patient_ids.add(appt.patient_id)
+
+        # Revenue aggregation
+        for inv in inv_qs:
+            prac    = inv.appointment.practitioner if inv.appointment else None
+            prac_id = prac.id if prac else 0
+            if prac_id in prac_map:
+                prac_map[prac_id]['revenue'] += float(inv.total_amount or 0)
+
+        # Forward booking: unique patients in range who have ≥1 future appointment
+        patients_with_future = set(
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                patient_id__in=range_patient_ids,
+                date__gt=today,
+            )
+            .values_list('patient_id', flat=True)
+            .distinct()
+        )
+
+        # ── Build per-provider rows ───────────────────────────────────────────
+        providers = []
+        for row in prac_map.values():
+            total   = row['total_appointments']
+            revenue = round(row['revenue'], 2)
+            pat_ids = row['patient_ids']
+
+            forward_count = len(pat_ids & patients_with_future)
+            fwd_rate      = round(forward_count / len(pat_ids) * 100, 2) if pat_ids else 0.0
+            avg_dur       = (
+                round(row['duration_sum'] / row['duration_cnt'])
+                if row['duration_cnt'] else 0
+            )
+
+            providers.append({
+                'practitioner_id':             row['practitioner_id'],
+                'practitioner_name':           row['practitioner_name'],
+                'total_appointments':          total,
+                'completed_appointments':      row['completed_appointments'],
+                'cancelled_appointments':      row['cancelled_appointments'],
+                'no_show_appointments':        row['no_show_appointments'],
+                'consultations':               row['consultations'],
+                'classes':                     row['classes'],
+                'revenue':                     revenue,
+                'avg_revenue_per_appointment': round(revenue / total, 2) if total else 0.0,
+                'forward_booking_rate':        fwd_rate,
+                'avg_session_duration_min':    avg_dur,
+            })
+
+        providers.sort(key=lambda r: -r['revenue'])
+
+        # ── Summary ───────────────────────────────────────────────────────────
+        total_revenue        = round(sum(p['revenue']            for p in providers), 2)
+        total_appointments   = sum(p['total_appointments']        for p in providers)
+        total_completed      = sum(p['completed_appointments']    for p in providers)
+        total_cancelled      = sum(p['cancelled_appointments']    for p in providers)
+        total_no_show        = sum(p['no_show_appointments']      for p in providers)
+        total_consultations  = sum(p['consultations']             for p in providers)
+        n_providers          = len(providers)
+        avg_rev_per_provider = round(total_revenue / n_providers, 2) if n_providers else 0.0
+        avg_fwd_booking      = (
+            round(sum(p['forward_booking_rate'] for p in providers) / n_providers, 2)
+            if n_providers else 0.0
+        )
+
+        return Response({
+            'report_type':  'PROVIDERS_PRACTICE',
+            'tab':          'CLINIC',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters': {
+                'practitioner_id': forced_prac_id,
+                'branch_id':       branch_id_raw,
+            },
+            'summary': {
+                'total_revenue':            total_revenue,
+                'avg_revenue_per_provider': avg_rev_per_provider,
+                'total_appointments':       total_appointments,
+                'total_completed':          total_completed,
+                'total_cancelled':          total_cancelled,
+                'total_no_show':            total_no_show,
+                'total_consultations':      total_consultations,
+                'avg_forward_booking_pct':  avg_fwd_booking,
+            },
+            'providers': providers,
+        })
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  PERFORMANCE TAB
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # ── 1. Occupancy Report ───────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='occupancy')
+    def occupancy(self, request):
+        """
+        GET /api/reports/occupancy/
+
+        Measures provider utilisation: scheduled minutes vs occupied minutes.
+
+        Query params:
+            start_date      (YYYY-MM-DD)
+            end_date        (YYYY-MM-DD)
+            practitioner_id (int)   optional
+            branch_id       (int)   optional
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        qs = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                date__range=[start, end],
+                status__in=['COMPLETED', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS', 'SCHEDULED', 'ARRIVED'],
+            )
+            .select_related('practitioner__user', 'service')
+            .order_by('practitioner_id', 'date', 'start_time')
+        )
+
+        practitioner_id = request.query_params.get('practitioner_id')
+        branch_id       = request.query_params.get('branch_id')
+        if practitioner_id:
+            try:
+                qs = qs.filter(practitioner_id=int(practitioner_id))
+            except (ValueError, TypeError):
+                pass
+        if branch_id:
+            try:
+                qs = qs.filter(clinic_id=int(branch_id))
+            except (ValueError, TypeError):
+                pass
+
+        # ── Aggregate per practitioner ──────────────────────────────────────
+        prac_data: dict[int, dict] = {}
+        daily_data: dict[date, dict] = {}
+
+        for appt in qs:
+            prac = appt.practitioner
+            prac_id   = prac.id   if prac else 0
+            prac_name = prac.user.get_full_name() if prac and prac.user else 'Unassigned'
+
+            occupied_mins = appt.duration_minutes or 0
+            # Scheduled = the appointment slot duration (same as occupied for booked slots)
+            scheduled_mins = occupied_mins
+
+            # Per-practitioner
+            if prac_id not in prac_data:
+                prac_data[prac_id] = {
+                    'practitioner_id':   prac_id,
+                    'practitioner_name': prac_name,
+                    'scheduled_minutes': 0,
+                    'occupied_minutes':  0,
+                    'appointment_count': 0,
+                    'service_ids':       set(),
+                }
+            prac_data[prac_id]['scheduled_minutes'] += scheduled_mins
+            prac_data[prac_id]['occupied_minutes']  += occupied_mins
+            prac_data[prac_id]['appointment_count'] += 1
+            if appt.service_id:
+                prac_data[prac_id]['service_ids'].add(appt.service_id)
+
+            # Per-day (global)
+            d = appt.date
+            if d not in daily_data:
+                daily_data[d] = {'scheduled_minutes': 0, 'occupied_minutes': 0}
+            daily_data[d]['scheduled_minutes'] += scheduled_mins
+            daily_data[d]['occupied_minutes']  += occupied_mins
+
+        practitioners = []
+        for row in prac_data.values():
+            sched = row['scheduled_minutes']
+            occ   = row['occupied_minutes']
+            pct   = round((occ / sched * 100) if sched > 0 else 0.0, 2)
+            practitioners.append({
+                'practitioner_id':   row['practitioner_id'],
+                'practitioner_name': row['practitioner_name'],
+                'scheduled_minutes': sched,
+                'occupied_minutes':  occ,
+                'occupancy_pct':     pct,
+                'appointment_count': row['appointment_count'],
+                'service_count':     len(row['service_ids']),
+            })
+        practitioners.sort(key=lambda r: -r['occupancy_pct'])
+
+        daily_trend = []
+        for d in sorted(daily_data.keys()):
+            row    = daily_data[d]
+            sched  = row['scheduled_minutes']
+            occ    = row['occupied_minutes']
+            pct    = round((occ / sched * 100) if sched > 0 else 0.0, 2)
+            daily_trend.append({
+                'date':              str(d),
+                'scheduled_minutes': sched,
+                'occupied_minutes':  occ,
+                'occupancy_pct':     pct,
+            })
+
+        total_sched = sum(r['scheduled_minutes'] for r in practitioners)
+        total_occ   = sum(r['occupied_minutes']  for r in practitioners)
+        total_appts = sum(r['appointment_count'] for r in practitioners)
+        overall_pct = round((total_occ / total_sched * 100) if total_sched > 0 else 0.0, 2)
+
+        return Response({
+            'report_type':  'OCCUPANCY',
+            'tab':          'PERFORMANCE',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters': {
+                'practitioner_id': practitioner_id,
+                'branch_id':       branch_id,
+            },
+            'summary': {
+                'overall_occupancy_pct':   overall_pct,
+                'total_scheduled_minutes': total_sched,
+                'total_occupied_minutes':  total_occ,
+                'total_appointments':      total_appts,
+            },
+            'practitioners': practitioners,
+            'daily_trend':   daily_trend,
+        })
+
+    # ── 2. Business Performance ───────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='business_performance')
+    def business_performance(self, request):
+        """
+        GET /api/reports/business_performance/
+
+        KPIs: revenue, appointment counts, cancellations, DNA, new vs returning clients.
+
+        Query params:
+            start_date      (YYYY-MM-DD)
+            end_date        (YYYY-MM-DD)
+            practitioner_id (int)   optional
+            branch_id       (int)   optional
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        practitioner_id_raw = request.query_params.get('practitioner_id')
+        branch_id_raw       = request.query_params.get('branch_id')
+
+        appt_qs = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                date__range=[start, end],
+            )
+            .select_related('practitioner__user', 'patient')
+        )
+        if practitioner_id_raw:
+            try:
+                appt_qs = appt_qs.filter(practitioner_id=int(practitioner_id_raw))
+            except (ValueError, TypeError):
+                pass
+        if branch_id_raw:
+            try:
+                appt_qs = appt_qs.filter(clinic_id=int(branch_id_raw))
+            except (ValueError, TypeError):
+                pass
+
+        invoice_qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .select_related('appointment__practitioner__user')
+        )
+        if practitioner_id_raw:
+            try:
+                invoice_qs = invoice_qs.filter(
+                    appointment__practitioner_id=int(practitioner_id_raw)
+                )
+            except (ValueError, TypeError):
+                pass
+        if branch_id_raw:
+            try:
+                invoice_qs = invoice_qs.filter(clinic_id=int(branch_id_raw))
+            except (ValueError, TypeError):
+                pass
+
+        # ── Per-practitioner aggregation ────────────────────────────────────
+        prac_map: dict[int, dict] = {}
+
+        for appt in appt_qs.order_by('practitioner_id', 'date'):
+            prac      = appt.practitioner
+            prac_id   = prac.id   if prac else 0
+            prac_name = prac.user.get_full_name() if prac and prac.user else 'Unassigned'
+
+            if prac_id not in prac_map:
+                prac_map[prac_id] = {
+                    'practitioner_id':        prac_id,
+                    'practitioner_name':      prac_name,
+                    'total_appointments':     0,
+                    'completed_appointments': 0,
+                    'cancelled_appointments': 0,
+                    'no_show_appointments':   0,
+                    'revenue':                0.0,
+                    'patient_ids':            set(),
+                }
+            row = prac_map[prac_id]
+            row['total_appointments'] += 1
+            if appt.status == 'COMPLETED':
+                row['completed_appointments'] += 1
+            elif appt.status in ('CANCELLED',):
+                row['cancelled_appointments'] += 1
+            elif appt.status in ('NO_SHOW', 'DNA'):
+                row['no_show_appointments'] += 1
+            if appt.patient_id:
+                row['patient_ids'].add(appt.patient_id)
+
+        # Revenue per practitioner from invoices
+        for inv in invoice_qs:
+            prac      = inv.appointment.practitioner if inv.appointment else None
+            prac_id   = prac.id   if prac else 0
+            prac_name = prac.user.get_full_name() if prac and prac.user else 'Unassigned'
+            if prac_id not in prac_map:
+                prac_map[prac_id] = {
+                    'practitioner_id':        prac_id,
+                    'practitioner_name':      prac_name,
+                    'total_appointments':     0,
+                    'completed_appointments': 0,
+                    'cancelled_appointments': 0,
+                    'no_show_appointments':   0,
+                    'revenue':                0.0,
+                    'patient_ids':            set(),
+                }
+            prac_map[prac_id]['revenue'] += float(inv.total_amount or 0)
+
+        # Identify new clients: first appointment within the range
+        range_patient_ids = set()
+        for row in prac_map.values():
+            range_patient_ids.update(row['patient_ids'])
+
+        new_patient_ids = set(
+            Patient.objects
+            .filter(
+                id__in=range_patient_ids,
+                created_at__date__range=[start, end],
+            )
+            .values_list('id', flat=True)
+        )
+
+        practitioners = []
+        for row in prac_map.values():
+            total     = row['total_appointments']
+            cancelled = row['cancelled_appointments']
+            no_show   = row['no_show_appointments']
+            revenue   = round(row['revenue'], 2)
+            prac_new  = len(row['patient_ids'] & new_patient_ids)
+            prac_ret  = len(row['patient_ids']) - prac_new
+            practitioners.append({
+                'practitioner_id':         row['practitioner_id'],
+                'practitioner_name':       row['practitioner_name'],
+                'total_appointments':      total,
+                'completed_appointments':  row['completed_appointments'],
+                'cancelled_appointments':  cancelled,
+                'no_show_appointments':    no_show,
+                'cancellation_rate':       round(cancelled / total * 100, 2) if total else 0.0,
+                'no_show_rate':            round(no_show   / total * 100, 2) if total else 0.0,
+                'revenue':                 revenue,
+                'revenue_per_appointment': round(revenue / total, 2) if total else 0.0,
+                'new_clients':             prac_new,
+                'returning_clients':       max(prac_ret, 0),
+            })
+        practitioners.sort(key=lambda r: -r['revenue'])
+
+        # ── Global summary ──────────────────────────────────────────────────
+        total_appts     = sum(r['total_appointments']     for r in practitioners)
+        total_completed = sum(r['completed_appointments'] for r in practitioners)
+        total_cancelled = sum(r['cancelled_appointments'] for r in practitioners)
+        total_no_show   = sum(r['no_show_appointments']   for r in practitioners)
+        total_revenue   = round(sum(r['revenue']          for r in practitioners), 2)
+        total_new       = len(new_patient_ids)
+        total_returning = len(range_patient_ids) - total_new
+
+        # ── Daily revenue trend ─────────────────────────────────────────────
+        rev_by_date = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .values('invoice_date')
+            .annotate(revenue=Sum('total_amount'))
+            .order_by('invoice_date')
+        )
+        revenue_trend = [
+            {'date': str(r['invoice_date']), 'revenue': float(r['revenue'] or 0)}
+            for r in rev_by_date
+        ]
+
+        # ── Daily appointment trend ─────────────────────────────────────────
+        appt_by_date = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                date__range=[start, end],
+            )
+            .values('date')
+            .annotate(count=Count('id'))
+            .order_by('date')
+        )
+        appointment_trend = [
+            {'date': str(r['date']), 'count': r['count']}
+            for r in appt_by_date
+        ]
+
+        return Response({
+            'report_type':  'BUSINESS_PERFORMANCE',
+            'tab':          'PERFORMANCE',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters': {
+                'practitioner_id': practitioner_id_raw,
+                'branch_id':       branch_id_raw,
+            },
+            'summary': {
+                'total_revenue':               total_revenue,
+                'total_appointments':          total_appts,
+                'completed_appointments':      total_completed,
+                'cancelled_appointments':      total_cancelled,
+                'no_show_appointments':        total_no_show,
+                'cancellation_rate':           round(total_cancelled / total_appts * 100, 2) if total_appts else 0.0,
+                'no_show_rate':                round(total_no_show   / total_appts * 100, 2) if total_appts else 0.0,
+                'avg_revenue_per_appointment': round(total_revenue / total_appts, 2) if total_appts else 0.0,
+                'new_clients':                 total_new,
+                'returning_clients':           max(total_returning, 0),
+            },
+            'practitioners':       practitioners,
+            'revenue_trend':       revenue_trend,
+            'appointment_trend':   appointment_trend,
+        })
+
+    # ── 3. Outcome Measures ───────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='outcome_measures')
+    def outcome_measures(self, request):
+        """
+        GET /api/reports/outcome_measures/
+
+        Clinical note completion rates by practitioner and patient.
+
+        Query params:
+            start_date      (YYYY-MM-DD)
+            end_date        (YYYY-MM-DD)
+            practitioner_id (int)   optional
+            branch_id       (int)   optional
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        practitioner_id_raw = request.query_params.get('practitioner_id')
+        branch_id_raw       = request.query_params.get('branch_id')
+
+        # Completed appointments in range
+        appt_qs = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                date__range=[start, end],
+                status='COMPLETED',
+            )
+            .select_related('practitioner__user', 'patient')
+            .prefetch_related(
+                Prefetch(
+                    'clinical_notes',
+                    queryset=ClinicalNote.objects.filter(is_deleted=False),
+                    to_attr='_notes',
+                )
+            )
+        )
+        if practitioner_id_raw:
+            try:
+                appt_qs = appt_qs.filter(practitioner_id=int(practitioner_id_raw))
+            except (ValueError, TypeError):
+                pass
+        if branch_id_raw:
+            try:
+                appt_qs = appt_qs.filter(clinic_id=int(branch_id_raw))
+            except (ValueError, TypeError):
+                pass
+
+        prac_map:    dict[int, dict] = {}
+        patient_map: dict[int, dict] = {}
+
+        for appt in appt_qs.order_by('practitioner_id', 'date'):
+            has_note = bool(appt._notes)
+
+            # Per-practitioner
+            prac      = appt.practitioner
+            prac_id   = prac.id   if prac else 0
+            prac_name = prac.user.get_full_name() if prac and prac.user else 'Unassigned'
+            if prac_id not in prac_map:
+                prac_map[prac_id] = {
+                    'practitioner_id':   prac_id,
+                    'practitioner_name': prac_name,
+                    'total_notes':       0,
+                    'completed_notes':   0,
+                    'missing_notes':     0,
+                }
+            prac_map[prac_id]['total_notes'] += 1
+            if has_note:
+                prac_map[prac_id]['completed_notes'] += 1
+            else:
+                prac_map[prac_id]['missing_notes'] += 1
+
+            # Per-patient
+            pat      = appt.patient
+            pat_id   = pat.id if pat else 0
+            if pat_id not in patient_map:
+                patient_map[pat_id] = {
+                    'patient_id':         pat_id,
+                    'patient_name':       pat.get_full_name() if pat else '',
+                    'patient_number':     pat.patient_number  if pat else '',
+                    'total_appointments': 0,
+                    'completed_notes':    0,
+                    'missing_notes':      0,
+                    'last_appointment':   None,
+                }
+            patient_map[pat_id]['total_appointments'] += 1
+            if has_note:
+                patient_map[pat_id]['completed_notes'] += 1
+            else:
+                patient_map[pat_id]['missing_notes'] += 1
+            d_str = str(appt.date)
+            if (patient_map[pat_id]['last_appointment'] is None
+                    or d_str > patient_map[pat_id]['last_appointment']):
+                patient_map[pat_id]['last_appointment'] = d_str
+
+        by_practitioner = []
+        for row in prac_map.values():
+            total = row['total_notes']
+            by_practitioner.append({
+                'practitioner_id':   row['practitioner_id'],
+                'practitioner_name': row['practitioner_name'],
+                'total_notes':       total,
+                'completed_notes':   row['completed_notes'],
+                'missing_notes':     row['missing_notes'],
+                'note_completion_pct': round(row['completed_notes'] / total * 100, 2) if total else 0.0,
+            })
+        by_practitioner.sort(key=lambda r: -r['note_completion_pct'])
+
+        by_patient = []
+        for row in patient_map.values():
+            total = row['total_appointments']
+            by_patient.append({
+                'patient_id':          row['patient_id'],
+                'patient_name':        row['patient_name'],
+                'patient_number':      row['patient_number'],
+                'total_appointments':  total,
+                'completed_notes':     row['completed_notes'],
+                'missing_notes':       row['missing_notes'],
+                'note_completion_pct': round(row['completed_notes'] / total * 100, 2) if total else 0.0,
+                'last_appointment':    row['last_appointment'],
+            })
+        by_patient.sort(key=lambda r: -r['missing_notes'])
+
+        grand_total    = sum(r['total_notes']     for r in by_practitioner)
+        grand_complete = sum(r['completed_notes'] for r in by_practitioner)
+        grand_missing  = sum(r['missing_notes']   for r in by_practitioner)
+
+        return Response({
+            'report_type':  'OUTCOME_MEASURES',
+            'tab':          'PERFORMANCE',
+            'start_date':   str(start),
+            'end_date':     str(end),
+            'generated_at': timezone.now().isoformat(),
+            'filters': {
+                'practitioner_id': practitioner_id_raw,
+                'branch_id':       branch_id_raw,
+            },
+            'summary': {
+                'total_completed_appointments': grand_total,
+                'total_notes':                  grand_complete,
+                'missing_notes':                grand_missing,
+                'overall_completion_pct':       round(grand_complete / grand_total * 100, 2) if grand_total else 0.0,
+                'total_patients':               len(patient_map),
+            },
+            'by_practitioner': by_practitioner,
+            'by_patient':      by_patient,
+        })
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  DASHBOARD — CLINICIAN PERFORMANCE (time-series per provider)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @action(detail=False, methods=['get'], url_path='clinician_performance')
+    def clinician_performance(self, request):
+        """
+        GET /api/reports/clinician_performance/
+
+        Returns per-practitioner time-series data for the dashboard charts.
+        Role-based: a PRACTITIONER user may only see their own data.
+
+        Query params:
+            start_date      (YYYY-MM-DD)  default: 30 days ago
+            end_date        (YYYY-MM-DD)  default: today
+            practitioner_id (int)         Admin/Staff only — filter to one provider
+            granularity     (day|week)    default: day
+        """
+        from apps.clinics.models import Practitioner
+        from collections import defaultdict
+
+        user = request.user
+        is_practitioner = getattr(user, 'role', '') == 'PRACTITIONER'
+
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+
+        # ── Date range ────────────────────────────────────────────────────────
+        today = timezone.now().date()
+        default_start = today - timedelta(days=29)
+        start = _parse_date(request.query_params.get('start_date'), default_start)
+        end   = _parse_date(request.query_params.get('end_date'),   today)
+        if start > end:
+            start, end = end, start
+
+        # ── Practitioner filter ───────────────────────────────────────────────
+        # Practitioners see only their own data regardless of query param.
+        forced_practitioner_id: int | None = None
+        if is_practitioner:
+            try:
+                forced_practitioner_id = user.practitioner_profile.id
+            except Exception:
+                return Response(
+                    {'detail': 'No practitioner profile found for this user.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            raw = request.query_params.get('practitioner_id')
+            if raw:
+                try:
+                    forced_practitioner_id = int(raw)
+                except (ValueError, TypeError):
+                    pass
+
+        # ── Fetch practitioners in scope ──────────────────────────────────────
+        prac_qs = Practitioner.objects.filter(
+            clinic_id__in=all_branch_ids,
+            is_deleted=False,
+        ).select_related('user')
+        if forced_practitioner_id is not None:
+            prac_qs = prac_qs.filter(id=forced_practitioner_id)
+
+        # ── Appointment queryset ──────────────────────────────────────────────
+        appt_qs = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                date__range=[start, end],
+            )
+            .select_related('practitioner__user', 'patient')
+        )
+        if forced_practitioner_id is not None:
+            appt_qs = appt_qs.filter(practitioner_id=forced_practitioner_id)
+
+        # ── Invoice queryset for revenue ──────────────────────────────────────
+        inv_qs = (
+            Invoice.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                is_deleted=False,
+                invoice_date__range=[start, end],
+                status__in=['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE'],
+            )
+            .select_related('appointment__practitioner')
+        )
+        if forced_practitioner_id is not None:
+            inv_qs = inv_qs.filter(appointment__practitioner_id=forced_practitioner_id)
+
+        # ── Build date axis ────────────────────────────────────────────────────
+        days_count = (end - start).days + 1
+        date_labels = [str(start + timedelta(days=i)) for i in range(days_count)]
+
+        # ── Aggregate per practitioner × date ─────────────────────────────────
+        # Structure: { prac_id: { 'date_str': { counts } } }
+        prac_info:         dict[int, dict]       = {}
+        prac_appts:        dict[int, dict]       = defaultdict(lambda: defaultdict(int))
+        prac_completed:    dict[int, dict]       = defaultdict(lambda: defaultdict(int))
+        prac_dna:          dict[int, dict]       = defaultdict(lambda: defaultdict(int))
+        prac_duration_sum: dict[int, dict]       = defaultdict(lambda: defaultdict(int))
+        prac_duration_cnt: dict[int, dict]       = defaultdict(lambda: defaultdict(int))
+
+        for appt in appt_qs:
+            prac    = appt.practitioner
+            if prac is None:
+                continue
+            pid     = prac.id
+            d_str   = str(appt.date)
+
+            if pid not in prac_info:
+                prac_info[pid] = {
+                    'id':   pid,
+                    'name': prac.user.get_full_name() if prac.user else 'Unknown',
+                }
+
+            prac_appts[pid][d_str]     += 1
+            if appt.status == 'COMPLETED':
+                prac_completed[pid][d_str] += 1
+            if appt.status in ('NO_SHOW', 'DNA'):
+                prac_dna[pid][d_str] += 1
+            dur = appt.duration_minutes or 0
+            if dur:
+                prac_duration_sum[pid][d_str] += dur
+                prac_duration_cnt[pid][d_str] += 1
+
+        # Revenue per practitioner × date
+        prac_revenue: dict[int, dict] = defaultdict(lambda: defaultdict(float))
+        for inv in inv_qs:
+            prac = inv.appointment.practitioner if inv.appointment else None
+            if prac is None:
+                continue
+            pid   = prac.id
+            d_str = str(inv.invoice_date)
+            prac_revenue[pid][d_str] = round(
+                prac_revenue[pid][d_str] + float(inv.total_amount or 0), 2
+            )
+
+        # ── Build provider list for admin (all practitioners in scope) ────────
+        provider_list = []
+        all_prac_ids = set(p.id for p in prac_qs)
+        # Ensure practitioners seen in appointments are included
+        all_prac_ids.update(prac_info.keys())
+
+        for prac in prac_qs:
+            pid = prac.id
+            if pid not in prac_info:
+                prac_info[pid] = {
+                    'id':   pid,
+                    'name': prac.user.get_full_name() if prac.user else 'Unknown',
+                }
+
+        for pid in sorted(prac_info.keys()):
+            info = prac_info[pid]
+            appointments   = [prac_appts[pid].get(d, 0)        for d in date_labels]
+            completed      = [prac_completed[pid].get(d, 0)    for d in date_labels]
+            dna_counts     = [prac_dna[pid].get(d, 0)          for d in date_labels]
+            revenue_series = [prac_revenue[pid].get(d, 0.0)    for d in date_labels]
+            avg_duration   = [
+                round(prac_duration_sum[pid].get(d, 0) / prac_duration_cnt[pid][d], 1)
+                if prac_duration_cnt[pid].get(d, 0) > 0 else 0
+                for d in date_labels
+            ]
+            dna_rate = [
+                round(dna_counts[i] / appointments[i] * 100, 1) if appointments[i] > 0 else 0.0
+                for i in range(len(date_labels))
+            ]
+
+            total_appts   = sum(appointments)
+            total_dna     = sum(dna_counts)
+            total_revenue = round(sum(revenue_series), 2)
+
+            provider_list.append({
+                'id':            pid,
+                'name':          info['name'],
+                'appointments':  appointments,
+                'completed':     completed,
+                'dna_counts':    dna_counts,
+                'dna_rate':      dna_rate,
+                'revenue':       revenue_series,
+                'avg_duration':  avg_duration,
+                # Totals for summary cards
+                'total_appointments': total_appts,
+                'total_dna':          total_dna,
+                'overall_dna_rate':   round(total_dna / total_appts * 100, 1) if total_appts else 0.0,
+                'total_revenue':      total_revenue,
+            })
+
+        provider_list.sort(key=lambda r: -r['total_appointments'])
+
+        return Response({
+            'date_labels':   date_labels,
+            'start_date':    str(start),
+            'end_date':      str(end),
+            'generated_at':  timezone.now().isoformat(),
+            'is_own_data':   is_practitioner,
+            'providers':     provider_list,
+        })
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  DASHBOARD — LIVE OCCUPANCY SNAPSHOT (REST, seeded on WS connect)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @action(detail=False, methods=['get'], url_path='live_occupancy')
+    def live_occupancy(self, request):
+        """
+        GET /api/reports/live_occupancy/
+
+        Returns a snapshot of each practitioner's status for today.
+        Used to seed the LiveOccupancyWidget on initial load before the
+        WebSocket stream provides diffs.
+        """
+        from apps.clinics.models import Practitioner
+        from collections import defaultdict
+
+        user = request.user
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        today = timezone.now().date()
+        now   = timezone.now()
+
+        prac_qs = (
+            Practitioner.objects
+            .filter(clinic_id__in=all_branch_ids, is_deleted=False)
+            .select_related('user')
+        )
+        if getattr(user, 'role', '') == 'PRACTITIONER':
+            try:
+                prac_qs = prac_qs.filter(id=user.practitioner_profile.id)
+            except Exception:
+                prac_qs = prac_qs.none()
+
+        # Today's non-cancelled appointments for these practitioners
+        today_appts = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                date=today,
+                is_deleted=False,
+                status__in=[
+                    'SCHEDULED', 'CONFIRMED', 'CHECKED_IN',
+                    'IN_PROGRESS', 'COMPLETED', 'ARRIVED',
+                ],
+            )
+            .select_related('practitioner', 'patient', 'service')
+            .order_by('start_time')
+        )
+
+        # Index appointments by practitioner
+        prac_appts_map: dict[int, list] = defaultdict(list)
+        for appt in today_appts:
+            if appt.practitioner_id:
+                prac_appts_map[appt.practitioner_id].append(appt)
+
+        snapshot = []
+        for prac in prac_qs:
+            appts = prac_appts_map.get(prac.id, [])
+
+            # Find the appointment that is currently "active" (IN_PROGRESS / CHECKED_IN)
+            active_appt = next(
+                (a for a in appts if a.status in ('IN_PROGRESS', 'CHECKED_IN', 'ARRIVED')),
+                None,
+            )
+
+            if active_appt:
+                occupancy_status = 'occupied'
+                current_patient  = (
+                    active_appt.patient.get_full_name() if active_appt.patient else ''
+                )
+                start_time = str(active_appt.start_time)
+                service    = active_appt.service.name if active_appt.service else ''
+            else:
+                # Check if there's a future appointment today
+                future = next(
+                    (
+                        a for a in appts
+                        if a.status in ('SCHEDULED', 'CONFIRMED')
+                        and str(a.date) == str(today)
+                    ),
+                    None,
+                )
+                occupancy_status = 'available'
+                current_patient  = None
+                start_time       = str(future.start_time) if future else None
+                service          = future.service.name if future and future.service else ''
+
+            snapshot.append({
+                'practitioner_id':   prac.id,
+                'name':              prac.user.get_full_name() if prac.user else 'Unknown',
+                'status':            occupancy_status,
+                'current_patient':   current_patient,
+                'start_time':        start_time,
+                'service':           service,
+                'today_total':       len(appts),
+                'today_completed':   sum(1 for a in appts if a.status == 'COMPLETED'),
+            })
+
+        return Response({
+            'snapshot':     snapshot,
+            'generated_at': now.isoformat(),
+            'date':         str(today),
+        })

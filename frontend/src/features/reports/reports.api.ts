@@ -617,3 +617,214 @@ export const getFinancialBulkExport = async (
   const response = await axiosInstance.get('/reports/financial_bulk_export/', { params });
   return response.data;
 };
+
+// ─── Performance: Occupancy ───────────────────────────────────────────────────
+
+export interface OccupancyPractitionerRow {
+  practitioner_id:    number;
+  practitioner_name:  string;
+  scheduled_minutes:  number;
+  occupied_minutes:   number;
+  occupancy_pct:      number;   // 0–100
+  appointment_count:  number;
+  service_count:      number;
+}
+
+export interface OccupancyDailyPoint {
+  date:              string;   // YYYY-MM-DD
+  occupied_minutes:  number;
+  scheduled_minutes: number;
+  occupancy_pct:     number;
+}
+
+export interface OccupancyResponse {
+  report_type:    string;
+  start_date:     string;
+  end_date:       string;
+  generated_at:   string;
+  filters:        Record<string, unknown>;
+  practitioners:  OccupancyPractitionerRow[];
+  daily_trend:    OccupancyDailyPoint[];
+  summary: {
+    overall_occupancy_pct:  number;
+    total_scheduled_minutes: number;
+    total_occupied_minutes:  number;
+    total_appointments:      number;
+  };
+}
+
+export interface OccupancyParams extends ReportDateRange {
+  practitioner_id?: number;
+  branch_id?:       number;
+}
+
+export const getOccupancy = async (
+  params?: OccupancyParams
+): Promise<OccupancyResponse> => {
+  const response = await axiosInstance.get('/reports/occupancy/', { params });
+  return response.data;
+};
+
+// ─── Performance: Business Performance ───────────────────────────────────────
+
+export interface BusinessPractitionerRow {
+  practitioner_id:           number;
+  practitioner_name:         string;
+  total_appointments:        number;
+  completed_appointments:    number;
+  cancelled_appointments:    number;
+  no_show_appointments:      number;
+  cancellation_rate:         number;   // 0–100
+  no_show_rate:              number;   // 0–100
+  revenue:                   number;
+  revenue_per_appointment:   number;
+  new_clients:               number;
+  returning_clients:         number;
+}
+
+export interface BusinessRevenueTrendPoint {
+  date:    string;
+  revenue: number;
+}
+
+export interface BusinessAppointmentTrendPoint {
+  date:  string;
+  count: number;
+}
+
+export interface BusinessPerformanceResponse {
+  report_type:   string;
+  start_date:    string;
+  end_date:      string;
+  generated_at:  string;
+  filters:       Record<string, unknown>;
+  summary: {
+    total_revenue:               number;
+    total_appointments:          number;
+    completed_appointments:      number;
+    cancelled_appointments:      number;
+    no_show_appointments:        number;
+    cancellation_rate:           number;
+    no_show_rate:                number;
+    avg_revenue_per_appointment: number;
+    new_clients:                 number;
+    returning_clients:           number;
+  };
+  practitioners:        BusinessPractitionerRow[];
+  revenue_trend:        BusinessRevenueTrendPoint[];
+  appointment_trend:    BusinessAppointmentTrendPoint[];
+}
+
+export interface BusinessPerformanceParams extends ReportDateRange {
+  practitioner_id?: number;
+  branch_id?:       number;
+}
+
+export const getBusinessPerformance = async (
+  params?: BusinessPerformanceParams
+): Promise<BusinessPerformanceResponse> => {
+  const response = await axiosInstance.get('/reports/business_performance/', { params });
+  return response.data;
+};
+
+// ─── Performance: Outcome Measures ───────────────────────────────────────────
+
+export interface OutcomePractitionerRow {
+  practitioner_id:     number;
+  practitioner_name:   string;
+  total_notes:         number;
+  completed_notes:     number;
+  missing_notes:       number;
+  note_completion_pct: number;  // 0–100
+}
+
+export interface OutcomePatientRow {
+  patient_id:          number;
+  patient_name:        string;
+  patient_number:      string;
+  total_appointments:  number;
+  completed_notes:     number;
+  missing_notes:       number;
+  note_completion_pct: number;
+  last_appointment:    string | null;
+}
+
+export interface OutcomeMeasuresResponse {
+  report_type:   string;
+  start_date:    string;
+  end_date:      string;
+  generated_at:  string;
+  filters:       Record<string, unknown>;
+  summary: {
+    total_completed_appointments: number;
+    total_notes:                  number;
+    missing_notes:                number;
+    overall_completion_pct:       number;
+    total_patients:               number;
+  };
+  by_practitioner: OutcomePractitionerRow[];
+  by_patient:      OutcomePatientRow[];
+}
+
+export interface OutcomeMeasuresParams extends ReportDateRange {
+  practitioner_id?: number;
+  branch_id?:       number;
+}
+
+export const getOutcomeMeasures = async (
+  params?: OutcomeMeasuresParams
+): Promise<OutcomeMeasuresResponse> => {
+  const response = await axiosInstance.get('/reports/outcome_measures/', { params });
+  return response.data;
+};
+
+// ─── Providers & Practice Report ─────────────────────────────────────────────
+
+export interface ProvidersPracticeRow {
+  practitioner_id:             number;
+  practitioner_name:           string;
+  total_appointments:          number;
+  completed_appointments:      number;
+  cancelled_appointments:      number;
+  no_show_appointments:        number;
+  consultations:               number;
+  classes:                     number;
+  revenue:                     number;
+  avg_revenue_per_appointment: number;
+  forward_booking_rate:        number;   // 0–100
+  avg_session_duration_min:    number;
+}
+
+export interface ProvidersPracticeSummary {
+  total_revenue:            number;
+  avg_revenue_per_provider: number;
+  total_appointments:       number;
+  total_completed:          number;
+  total_cancelled:          number;
+  total_no_show:            number;
+  total_consultations:      number;
+  avg_forward_booking_pct:  number;
+}
+
+export interface ProvidersPracticeResponse {
+  report_type:  string;
+  tab:          string;
+  start_date:   string;
+  end_date:     string;
+  generated_at: string;
+  filters:      Record<string, unknown>;
+  summary:      ProvidersPracticeSummary;
+  providers:    ProvidersPracticeRow[];
+}
+
+export interface ProvidersPracticeParams extends ReportDateRange {
+  practitioner_id?: number;
+  branch_id?:       number;
+}
+
+export const getProvidersPractice = async (
+  params?: ProvidersPracticeParams
+): Promise<ProvidersPracticeResponse> => {
+  const response = await axiosInstance.get('/reports/providers_practice/', { params });
+  return response.data;
+};

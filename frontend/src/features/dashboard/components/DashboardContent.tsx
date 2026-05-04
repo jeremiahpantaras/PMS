@@ -4,6 +4,8 @@ import { useDashboardData } from '../hooks/useDashboardData';
 import { DashboardStats } from './DashboardStats';
 import { BookingsPerTypeChart } from './BookingsPerTypeChart';
 import { WeeklyBookingsChart } from './WeeklyBookingsChart';
+import { LiveOccupancyWidget } from './LiveOccupancyWidget';
+import { ClinicianPerformance } from './ClinicianPerformance';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export const DashboardContent: React.FC = () => {
@@ -88,11 +90,13 @@ export const DashboardContent: React.FC = () => {
               }
               isLoading={isLoading}
             />
+            <LiveOccupancyWidget />
             <BookingsPerTypeChart data={data?.bookingsByType || []} isLoading={isLoading} />
             <WeeklyBookingsChart  data={data?.weeklyBookings  || []} isLoading={isLoading} />
+            <ClinicianPerformance />
           </div>
         ) : (
-          // Desktop: Bento Grid (2 columns)
+          // Desktop: Bento Grid (12 columns)
           <div className="grid grid-cols-12 gap-6">
             {/* Left Column: Stats Cards */}
             <div className="col-span-12 lg:col-span-4 xl:col-span-3 flex flex-col gap-6">
@@ -108,12 +112,16 @@ export const DashboardContent: React.FC = () => {
                 isLoading={isLoading}
                 layout="vertical"
               />
+              {/* Live Occupancy — sits below stats in the left column */}
+              <LiveOccupancyWidget />
             </div>
 
-            {/* Right Column: Two charts stacked vertically */}
+            {/* Right Column: Charts */}
             <div className="col-span-12 lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
               <BookingsPerTypeChart data={data?.bookingsByType || []} isLoading={isLoading} />
               <WeeklyBookingsChart  data={data?.weeklyBookings  || []} isLoading={isLoading} />
+              {/* Clinician Performance — full width of right column */}
+              <ClinicianPerformance />
             </div>
           </div>
         )}
