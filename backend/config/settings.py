@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'cloudinary',
     'cloudinary_storage',
     'django_crontab',
+    'django_celery_beat',
     'channels',         # ← already present
 
     # Your apps
@@ -123,6 +124,27 @@ else:
             'LOCATION': 'unique-snowflake',
         }
     }
+
+# ── Celery ───────────────────────────────────────────────────────────────────
+# Use Redis if available (production); fall back to in-memory transport for local dev.
+_celery_broker = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
+CELERY_BROKER_URL        = _celery_broker
+CELERY_RESULT_BACKEND    = _celery_broker
+CELERY_ACCEPT_CONTENT    = ['json']
+CELERY_TASK_SERIALIZER   = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE          = 'Asia/Manila'
+CELERY_ENABLE_UTC        = True
+
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    # 8:00 AM Asia/Manila = 00:00 UTC (UTC+8)
+    'send-appointment-reminders-daily': {
+        'task': 'apps.appointments.tasks.send_appointment_reminders_task',
+        'schedule': crontab(hour=0, minute=0),
+    },
+}
 
 # ── PayMongo ──────────────────────────────────────────────────────────────────
 # SECRET_KEY is backend-only. PUBLIC_KEY is safe to use in the backend too.

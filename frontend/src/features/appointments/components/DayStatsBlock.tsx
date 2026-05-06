@@ -60,9 +60,9 @@ function computeTotalDutyMinutes(
     );
   }
 
-  // Legacy single-block mode: duty range minus lunch
-  const dutyMins  = timeToMinutes(availability.duty_end_time)   - timeToMinutes(availability.duty_start_time);
-  const lunchMins = timeToMinutes(availability.lunch_end_time)  - timeToMinutes(availability.lunch_start_time);
+  //Legacy single block mode: compute duration from duty_start and duty_end
+  const dutyMins = timeToMinutes(availability.duty_end_time) - timeToMinutes(availability.duty_start_time);
+  const lunchMins = timeToMinutes(availability.lunch_end_time) - timeToMinutes(availability.lunch_start_time);
   return Math.max(0, dutyMins - lunchMins);
 }
 
