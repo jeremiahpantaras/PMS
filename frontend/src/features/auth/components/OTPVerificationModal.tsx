@@ -34,7 +34,6 @@ function formatTime(secs: number): string {
 
 export const OTPVerificationModal: React.FC<OTPVerificationModalProps> = ({
   email,
-  firstName,
   expiresAt,
   resendAvailableAt,
   onVerified,

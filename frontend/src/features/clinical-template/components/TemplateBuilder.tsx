@@ -196,11 +196,11 @@ const FieldSettings: React.FC<FieldSettingsProps> = ({ field, onChange, onDelete
     });
   };
 
-  const updateOption = (index: number, key: 'value' | 'label', value: string) => {
-    const options = [...(field.options || [])];
-    options[index] = { ...options[index], [key]: value };
-    onChange({ ...field, options });
-  };
+  // const updateOption = (index: number, key: 'value' | 'label', value: string) => {
+  //   const options = [...(field.options || [])];
+  //   options[index] = { ...options[index], [key]: value };
+  //   onChange({ ...field, options });
+  // };
 
   const removeOption = (index: number) => {
     const options = [...(field.options || [])];

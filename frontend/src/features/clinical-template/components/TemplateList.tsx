@@ -24,7 +24,6 @@ export const TemplateList: React.FC<TemplateListProps> = ({
   loading,
   onEdit,
   onArchive,
-  onCreateVersion,
 }) => {
   const [search, setSearch] = useState('');
   const [disciplineFilter, setDisciplineFilter] = useState('');
