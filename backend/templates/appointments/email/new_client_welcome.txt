@@ -22,4 +22,5 @@ We look forward to caring for you!
 — {{ clinic_name }} Team
 
 ---
-This is an automated message. Please do not reply to this email.
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

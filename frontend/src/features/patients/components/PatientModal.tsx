@@ -6,6 +6,21 @@ import { useAuthStore } from '@/store/auth.store';
 import { PhLocationSelect } from '@/components/location/PhLocationSelect';
 import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
 
+/** Returns the age in whole years for a given ISO date string, or null if the input is blank. */
+function computeAge(dob: string): number | null {
+  if (!dob) return null;
+  const today = new Date();
+  const birth = new Date(dob);
+  let age = today.getFullYear() - birth.getFullYear();
+  if (
+    today.getMonth() < birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
+  ) {
+    age -= 1;
+  }
+  return age;
+}
+
 interface PatientModalProps {
   isOpen:   boolean;
   onClose:  () => void;
@@ -107,6 +122,8 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     setErrors((prev)   => ({ ...prev, city: '' }));
   };
 
+  const isMinor = (computeAge(formData.date_of_birth) ?? 18) < 18;
+
   const validate = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
     if (!formData.first_name.trim())   newErrors.first_name   = 'First name is required';
@@ -117,14 +134,22 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     if (!formData.address.trim())      newErrors.address      = 'Address is required';
     if (!formData.city.trim())         newErrors.city         = 'City is required';
     if (!formData.province.trim())     newErrors.province     = 'Province is required';
-    if (!formData.emergency_contact_name.trim())
-      newErrors.emergency_contact_name  = 'Emergency contact name is required';
-    if (!formData.emergency_contact_phone.trim())
-      newErrors.emergency_contact_phone = 'Emergency contact phone is required';
-    else if (!isValidPHPhone(formData.emergency_contact_phone))
+    // Emergency contact is required only for minors (age < 18).
+    const age = computeAge(formData.date_of_birth);
+    const minor = age !== null && age < 18;
+    if (minor) {
+      if (!formData.emergency_contact_name.trim())
+        newErrors.emergency_contact_name  = 'Emergency contact name is required for minor patients.';
+      if (!formData.emergency_contact_phone.trim())
+        newErrors.emergency_contact_phone = 'Emergency contact phone is required for minor patients.';
+      else if (!isValidPHPhone(formData.emergency_contact_phone))
+        newErrors.emergency_contact_phone = 'Enter a valid Philippine mobile number';
+      if (!formData.emergency_contact_relationship.trim())
+        newErrors.emergency_contact_relationship = 'Relationship is required for minor patients.';
+    } else if (formData.emergency_contact_phone.trim() && !isValidPHPhone(formData.emergency_contact_phone)) {
+      // Still validate format when provided voluntarily by adult patients.
       newErrors.emergency_contact_phone = 'Enter a valid Philippine mobile number';
-    if (!formData.emergency_contact_relationship.trim())
-      newErrors.emergency_contact_relationship = 'Relationship is required';
+    }
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
       newErrors.email = 'Invalid email format';
     if (formData.date_of_birth && new Date(formData.date_of_birth) > new Date())
@@ -343,9 +368,16 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                   <Phone className="w-4 h-4 text-sky-600" />
                   <h3 className="text-sm font-bold text-gray-700">Emergency Contact</h3>
                 </div>
+                {isMinor && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                    Emergency contact details are <strong>required</strong> because this patient is under 18 years old.
+                  </p>
+                )}
                 <div className="space-y-4">
                   <div>
-                    <label className={labelBase}>Emergency Contact Name <span className="text-red-500">*</span></label>
+                    <label className={labelBase}>
+                      Emergency Contact Name{isMinor && <span className="text-red-500"> *</span>}
+                    </label>
                     <input
                       type="text" name="emergency_contact_name"
                       value={formData.emergency_contact_name} onChange={handleChange}
@@ -358,7 +390,9 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelBase}>Emergency Contact Phone <span className="text-red-500">*</span></label>
+                      <label className={labelBase}>
+                        Emergency Contact Phone{isMinor && <span className="text-red-500"> *</span>}
+                      </label>
                       <input
                         type="tel" name="emergency_contact_phone"
                         value={formData.emergency_contact_phone}
@@ -375,7 +409,9 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                       )}
                     </div>
                     <div>
-                      <label className={labelBase}>Relationship <span className="text-red-500">*</span></label>
+                      <label className={labelBase}>
+                        Relationship{isMinor && <span className="text-red-500"> *</span>}
+                      </label>
                       <input
                         type="text" name="emergency_contact_relationship"
                         value={formData.emergency_contact_relationship} onChange={handleChange}

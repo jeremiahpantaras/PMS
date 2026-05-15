@@ -1,16 +1,22 @@
+WE'VE BEEN THINKING OF YOU — {{ clinic_name }}
+
 Hi {{ patient_first_name }},
 
-We hope you've been well! It's been {{ months_away }} months since your last visit, and we wanted to check in.
+We hope you're doing well. It's been a while since your last visit
+and we just wanted to check in.
 
-{% if last_condition and last_condition != 'your previous concern' %}How have things been with {{ last_condition }}? {% endif %}Your health and wellness matter to us.
+If you've been experiencing any ongoing concerns or would simply like
+a wellness check, we're here for you whenever you're ready.
 
-If you'd like to schedule a follow-up or discuss any concerns, we'd love to see you again.
-
-📅 Book a visit: {{ booking_url }}
-
-We're always here for you:
-{% if clinic_phone %}📞 {{ clinic_phone }}{% endif %}
-{% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+BOOK AN APPOINTMENT
+---------------------
+{{ booking_url }}
 
 Warm regards,
 {{ clinic_name }} Team
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

@@ -378,7 +378,7 @@ def send_recurring_booking_confirmation(appointments: list) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def send_appointment_reminder_with_reply(appointment) -> dict:
-    """Send a reminder that asks the patient to reply Y/N."""
+    """Send a reminder that asks the patient to reply Y/N, with clickable email buttons."""
     patient = appointment.patient
     clinic  = appointment.clinic
     settings_obj = ClinicCommunicationSettings.get_for_clinic(clinic)
@@ -400,6 +400,33 @@ def send_appointment_reminder_with_reply(appointment) -> dict:
     )
     location_name = appointment.location.name if appointment.location else clinic.name
 
+    frontend_base = getattr(settings, 'FRONTEND_URL', 'https://app.mespms.com')
+
+    # ── Generate confirm token for email button ───────────────────────────────
+    confirm_url = ''
+    try:
+        from apps.appointments.models import AppointmentConfirmToken
+        # Invalidate old unused confirm tokens for this appointment
+        AppointmentConfirmToken.objects.filter(
+            appointment=appointment, is_used=False,
+        ).update(is_used=True, used_at=timezone.now())
+        confirm_token = AppointmentConfirmToken.objects.create(appointment=appointment)
+        confirm_url = f"{frontend_base.rstrip('/')}/confirm/{confirm_token.token}"
+    except Exception as e:
+        logger.warning("Could not create AppointmentConfirmToken for appt #%s: %s", appointment.id, e)
+
+    # ── Generate rebooking token for "Cannot Attend" button ───────────────────
+    reschedule_url = ''
+    try:
+        from apps.appointments.models import RebookingLink
+        rebooking_link_obj = RebookingLink.objects.create(
+            patient=patient,
+            appointment=appointment,
+        )
+        reschedule_url = f"{frontend_base.rstrip('/')}/rebook/{rebooking_link_obj.token}"
+    except Exception as e:
+        logger.warning("Could not create RebookingLink for appt #%s: %s", appointment.id, e)
+
     context = {
         'patient_first_name':  patient.first_name,
         'patient_full_name':   patient.get_full_name(),
@@ -412,6 +439,8 @@ def send_appointment_reminder_with_reply(appointment) -> dict:
         'clinic_phone':        getattr(clinic, 'phone', ''),
         'clinic_email':        getattr(clinic, 'email', settings.DEFAULT_FROM_EMAIL),
         'clinic_logo_url':     _get_clinic_logo_url(clinic),
+        'confirm_url':         confirm_url,
+        'reschedule_url':      reschedule_url,
     }
 
     sms_body = (
@@ -460,7 +489,7 @@ def send_dna_followup(appointment) -> dict:
     if appointment.dna_followup_sent:
         return {'skipped': True, 'reason': 'DNA follow-up already sent'}
 
-    channel = settings_obj.reminder_method
+    channel = settings_obj.dna_followup_method
     if not _should_send(clinic, patient, channel):
         return {'skipped': True, 'reason': 'Notifications disabled'}
 
@@ -527,7 +556,7 @@ def send_rebook_followup(appointment) -> dict:
     if appointment.rebook_followup_sent:
         return {'skipped': True, 'reason': 'Rebook follow-up already sent'}
 
-    channel = settings_obj.reminder_method
+    channel = settings_obj.rebook_followup_method
     if not _should_send(clinic, patient, channel):
         return {'skipped': True, 'reason': 'Notifications disabled'}
 
@@ -579,7 +608,7 @@ def send_inactive_patient_checkin(patient, clinic) -> dict:
     if not settings_obj.inactive_checkin_enabled:
         return {'skipped': True, 'reason': 'Inactive check-in disabled'}
 
-    channel = settings_obj.reminder_method
+    channel = settings_obj.inactive_checkin_method
     if not _should_send(clinic, patient, channel):
         return {'skipped': True, 'reason': 'Notifications disabled'}
 

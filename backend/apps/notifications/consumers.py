@@ -67,3 +67,17 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             'type': 'notification.new',
             'notification': event['notification'],
         })
+
+    # ── Handler for permissions_updated events ────────────────────────────────
+    async def permissions_updated(self, event):
+        """
+        Called by channel layer group_send when an admin changes the
+        permission group of this user (or updates the group's permissions).
+
+        Sends a lightweight signal to the browser — no permission payload.
+        The frontend reacts by calling /auth/me/ once to refresh its store.
+        """
+        await self.send_json({
+            'type': 'permissions.updated',
+            'user_id': event.get('user_id'),
+        })

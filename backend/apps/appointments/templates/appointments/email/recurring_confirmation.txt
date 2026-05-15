@@ -14,6 +14,13 @@ YOUR SCHEDULE
 --------------
 {{ schedule_list_text }}
 
+We look forward to seeing you. If you need to reschedule any session,
+please contact us as soon as possible.
+
 {{ clinic_name }}
 {% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
 {% if clinic_email %}Email: {{ clinic_email }}{% endif %}
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

@@ -1,6 +1,7 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from datetime import timedelta
 from apps.accounts.utils.generators import generate_secure_password
 
 
@@ -68,10 +69,23 @@ class PasswordService:
 
         user.set_password(new_password)
         # Auto-generated → force change on next login; user-chosen → no forced change
-        user.password_changed = not is_auto
+        user.password_changed     = not is_auto
         user.last_password_change = timezone.now()
 
         update_fields = ['password', 'password_changed', 'last_password_change']
+
+        if is_auto:
+            # Require a mandatory first-login change and set a 48-hour TTL on the
+            # temporary credentials so they cannot be used indefinitely.
+            user.must_change_password    = True
+            user.temp_password_expires_at = timezone.now() + timedelta(hours=48)
+            update_fields += ['must_change_password', 'temp_password_expires_at']
+        else:
+            # User chose their own password — clear any pending forced-change state.
+            user.must_change_password    = False
+            user.temp_password_expires_at = None
+            update_fields += ['must_change_password', 'temp_password_expires_at']
+
         if rotation is not None:
             user.password_rotation = rotation
             update_fields.append('password_rotation')

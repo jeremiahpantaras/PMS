@@ -45,6 +45,12 @@ class ClinicSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.logo.url)
         return None
 
+    def validate_email(self, value):
+        """Normalize clinic email to lowercase for consistent storage."""
+        if value:
+            return value.strip().lower()
+        return value
+
 
 
 class ClinicProfileSetupSerializer(serializers.ModelSerializer):

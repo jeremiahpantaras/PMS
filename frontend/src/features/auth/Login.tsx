@@ -39,14 +39,25 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await authService.login(credentials);
+      // Normalize email to lowercase before sending to prevent case-sensitive login failures.
+      const normalizedCredentials = {
+        ...credentials,
+        email: credentials.email.trim().toLowerCase(),
+      };
+      const response = await authService.login(normalizedCredentials);
       
       setAuth(response.user, response.tokens);
       
       toast.success(`Welcome back, ${response.user.first_name}!`);
 
-      // Redirect based on clinic setup status
-      if (response.user.role === 'ADMIN' && !response.user.clinic_setup_complete) {
+      // 1. Mandatory first-login password change takes highest priority
+      if (response.user.must_change_password) {
+        navigate('/change-password', { replace: true });
+      // 2. Admin must complete clinic setup before anything else
+      } else if (
+        (response.user.roles ?? [response.user.role]).includes('ADMIN') &&
+        !response.user.clinic_setup_complete
+      ) {
         navigate('/clinic-setup', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });

@@ -6,7 +6,9 @@ import type {
   AdminRegisterResponse,
   ForgotPasswordResponse,
   VerifyCodeResponse,
-  ResetPasswordResponse
+  ResetPasswordResponse,
+  User,
+  AuthTokens,
 } from '@/types/auth';
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
@@ -40,7 +42,9 @@ export const authService = {
    */
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
-      const response = await authApi.post<LoginResponse>('/auth/login/', credentials);
+      // Normalize email to lowercase before sending to prevent case-sensitive login failures.
+      const normalizedCredentials = { ...credentials, email: credentials.email.trim().toLowerCase() };
+      const response = await authApi.post<LoginResponse>('/auth/login/', normalizedCredentials);
       
       if (response.data.tokens) {
         localStorage.setItem('access_token', response.data.tokens.access);
@@ -94,6 +98,19 @@ export const authService = {
       console.error('Token verification error:', error);
       return { valid: false, detail: 'Token verification failed' };
     }
+  },
+
+  /**
+   * Fetch the current authenticated user's fresh data from the server.
+   * This is used during session restore (verifyAuth) to ensure the latest
+   * permissions_map is loaded, even if an admin changed the user's
+   * permission group since their last login.
+   */
+  async getMe(token: string): Promise<User> {
+    const response = await authApi.get<User>('/auth/me/', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
   },
 
   /**
@@ -151,11 +168,50 @@ export const authService = {
   },
 
   /**
+   * Admin Registration — Step 1
+   * Validates reCAPTCHA and sends a 6-digit OTP to the given email.
+   */
+  async sendAdminOtp(
+    email: string,
+    captchaToken: string,
+    firstName?: string,
+    resend = false,
+  ): Promise<{ message: string; cooldown_seconds: number }> {
+    try {
+      const response = await authApi.post('/auth/send-admin-otp/', {
+        email: email.trim().toLowerCase(),
+        captcha_token: captchaToken,
+        first_name:    firstName ?? '',
+        resend,
+      });
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { detail: 'Failed to send verification code' };
+    }
+  },
+
+  /**
+   * Admin Registration — Step 2
+   * Verifies the 6-digit OTP; returns a short-lived verification token on success.
+   */
+  async verifyAdminOtp(
+    email: string,
+    code: string,
+  ): Promise<{ message: string; verification_token: string }> {
+    try {
+      const response = await authApi.post('/auth/verify-admin-otp/', { email: email.trim().toLowerCase(), code });
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { detail: 'OTP verification failed' };
+    }
+  },
+
+  /**
    * Request password reset - send verification code to email
    */
   async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
     try {
-      const response = await authApi.post<ForgotPasswordResponse>('/auth/forgot-password/', { email });
+      const response = await authApi.post<ForgotPasswordResponse>('/auth/forgot-password/', { email: email.trim().toLowerCase() });
       return response.data;
     } catch (error: any) {
       throw error.response?.data || { detail: 'Failed to send verification code' };
@@ -167,7 +223,7 @@ export const authService = {
    */
   async verifyCode(email: string, code: string): Promise<VerifyCodeResponse> {
     try {
-      const response = await authApi.post<VerifyCodeResponse>('/auth/verify-code/', { email, code });
+      const response = await authApi.post<VerifyCodeResponse>('/auth/verify-code/', { email: email.trim().toLowerCase(), code });
       return response.data;
     } catch (error: any) {
       throw error.response?.data || { detail: 'Code verification failed' };
@@ -181,7 +237,7 @@ export const authService = {
   async resetPassword(email: string, code: string, _newPassword: string): Promise<ResetPasswordResponse> {
     try {
       const response = await authApi.post<ResetPasswordResponse>('/auth/reset-password-with-code/', {
-        email,
+        email: email.trim().toLowerCase(),
         code
       });
       return response.data;
@@ -189,5 +245,28 @@ export const authService = {
       const err = error as { response?: { data?: { detail?: string } } };
       throw err.response?.data || { detail: 'Password reset failed' };
     }
-  }
+  },
+
+  /**
+   * Mandatory first-login password change.
+   * Called when must_change_password === true.
+   * Returns updated user + fresh JWT tokens.
+   */
+  async changePasswordFirstLogin(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ detail: string; user: User; tokens: AuthTokens }> {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await authApi.post(
+        '/auth/change-password-first-login/',
+        { current_password: currentPassword, new_password: newPassword },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      return response.data;
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } };
+      throw err.response?.data || { detail: 'Password change failed. Please try again.' };
+    }
+  },
 };

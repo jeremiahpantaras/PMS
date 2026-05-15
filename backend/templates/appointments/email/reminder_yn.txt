@@ -1,17 +1,28 @@
+APPOINTMENT REMINDER — {{ clinic_name }}
+
 Hi {{ patient_first_name }},
 
-This is a friendly reminder about your upcoming appointment.
+This is a friendly reminder for your upcoming appointment.
 
-📅 Date: {{ appointment_date }}
-⏰ Time: {{ appointment_time }}
-🏥 Service: {{ appointment_type }}
-{% if practitioner_name %}👤 Practitioner: {{ practitioner_name }}{% endif %}
-📍 Location: {{ location_name }}
+YOUR APPOINTMENT
+-----------------
+Date:         {{ appointment_date }}
+Time:         {{ appointment_time }}
+Service:      {{ appointment_type }}
+{% if practitioner_name %}Practitioner: {{ practitioner_name }}
+{% endif %}Location:     {{ location_name }}
 
-Please reply Y to confirm or N if you are unable to attend.
+Please confirm your attendance:
 
-If you need to reschedule, please contact us:
-{% if clinic_phone %}📞 {{ clinic_phone }}{% endif %}
-{% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+  Reply Y – to confirm
+  Reply N – if you cannot attend
 
-– {{ clinic_name }}
+If you need to reschedule, please contact us as soon as possible.
+
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

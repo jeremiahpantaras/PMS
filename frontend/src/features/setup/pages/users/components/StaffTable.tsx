@@ -6,13 +6,14 @@ import type { StaffMember } from '../../../types/staff.types';
 interface Props {
   staff:          StaffMember[];
   loading:        boolean;
+  currentUserId?: number;
   onEdit:         (s: StaffMember) => void;
   onDelete:       (id: number) => void;
   onToggleStatus: (id: number, isActive: boolean) => void;
 }
 
 export const StaffTable: React.FC<Props> = ({
-  staff, loading, onEdit, onDelete, onToggleStatus,
+  staff, loading, currentUserId, onEdit, onDelete, onToggleStatus,
 }) => {
   if (loading) {
     return (
@@ -48,7 +49,7 @@ export const StaffTable: React.FC<Props> = ({
             {th('Position')}
             {th('Discipline')}
             {th('Contact')}
-            {th('Role')}
+            {th('Role(s)')}
             {th('Status')}
             {th('Actions', 'right')}
           </tr>
@@ -58,6 +59,7 @@ export const StaffTable: React.FC<Props> = ({
             <StaffTableRow
               key={s.id}
               staff={s}
+              currentUserId={currentUserId}
               onEdit={onEdit}
               onDelete={onDelete}
               onToggleStatus={onToggleStatus}

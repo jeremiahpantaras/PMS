@@ -6,6 +6,8 @@ class EmailBackend(ModelBackend):
         email = kwargs.get('email', username)
         if email is None or password is None:
             return
+        # Normalize to lowercase so login is case-insensitive.
+        email = email.strip().lower()
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:

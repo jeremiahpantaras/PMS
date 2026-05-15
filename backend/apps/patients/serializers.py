@@ -14,7 +14,7 @@ class PatientSerializer(serializers.ModelSerializer):
     age             = serializers.SerializerMethodField()
     archived_by_name = serializers.SerializerMethodField()
     phone                   = serializers.CharField(max_length=20)
-    emergency_contact_phone = serializers.CharField(max_length=20)
+    emergency_contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     class Meta:
         model  = Patient
@@ -42,6 +42,53 @@ class PatientSerializer(serializers.ModelSerializer):
 
     def validate_emergency_contact_phone(self, value):
         return normalize_ph_phone(value) if value else value
+
+    def validate_email(self, value):
+        """Normalize patient email to lowercase for consistent storage."""
+        if value:
+            return value.strip().lower()
+        return value
+
+    def validate(self, attrs):
+        """Enforce emergency contact only for minor patients (age < 18)."""
+        from datetime import date
+
+        # Resolve date_of_birth from incoming data or existing instance (PATCH support).
+        dob = attrs.get('date_of_birth')
+        if dob is None and self.instance is not None:
+            dob = self.instance.date_of_birth
+
+        if dob is not None:
+            today = date.today()
+            age = today.year - dob.year - (
+                (today.month, today.day) < (dob.month, dob.day)
+            )
+            if age < 18:
+                errors = {}
+                # For PATCH, fall back to the existing value when a field is absent.
+                def _get(field):
+                    if field in attrs:
+                        return (attrs[field] or '').strip()
+                    if self.instance:
+                        return (getattr(self.instance, field, '') or '').strip()
+                    return ''
+
+                if not _get('emergency_contact_name'):
+                    errors['emergency_contact_name'] = (
+                        'Emergency contact name is required for minor patients.'
+                    )
+                if not _get('emergency_contact_phone'):
+                    errors['emergency_contact_phone'] = (
+                        'Emergency contact phone is required for minor patients.'
+                    )
+                if not _get('emergency_contact_relationship'):
+                    errors['emergency_contact_relationship'] = (
+                        'Emergency contact relationship is required for minor patients.'
+                    )
+                if errors:
+                    raise serializers.ValidationError(errors)
+
+        return attrs
 
 
 class IntakeFormSerializer(serializers.ModelSerializer):
@@ -536,10 +583,10 @@ class PublicClientFormSubmitSerializer(serializers.Serializer):
     city            = serializers.CharField(max_length=100)
     postal_code     = serializers.CharField(max_length=10, required=False, allow_blank=True)
 
-    # ── Emergency contact ─────────────────────────────────────────────────
-    emergency_contact_name         = serializers.CharField(max_length=200)
-    emergency_contact_phone        = serializers.CharField(max_length=15)
-    emergency_contact_relationship = serializers.CharField(max_length=100)
+    # ── Emergency contact (required only for minor patients, age < 18) ───────
+    emergency_contact_name         = serializers.CharField(max_length=200,  required=False, allow_blank=True)
+    emergency_contact_phone        = serializers.CharField(max_length=15,   required=False, allow_blank=True)
+    emergency_contact_relationship = serializers.CharField(max_length=100,  required=False, allow_blank=True)
 
     # ── Medical information ───────────────────────────────────────────────
     philhealth_number  = serializers.CharField(max_length=50,   required=False, allow_blank=True)
@@ -556,4 +603,30 @@ class PublicClientFormSubmitSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 'You must accept the Terms & Conditions and Data Privacy Policy.'
             )
+
+        # Enforce emergency contact for minor patients.
+        from datetime import date as _date
+        dob = attrs.get('date_of_birth')
+        if dob is not None:
+            today = _date.today()
+            age = today.year - dob.year - (
+                (today.month, today.day) < (dob.month, dob.day)
+            )
+            if age < 18:
+                errors = {}
+                if not (attrs.get('emergency_contact_name') or '').strip():
+                    errors['emergency_contact_name'] = (
+                        'Emergency contact name is required for minor patients.'
+                    )
+                if not (attrs.get('emergency_contact_phone') or '').strip():
+                    errors['emergency_contact_phone'] = (
+                        'Emergency contact phone is required for minor patients.'
+                    )
+                if not (attrs.get('emergency_contact_relationship') or '').strip():
+                    errors['emergency_contact_relationship'] = (
+                        'Emergency contact relationship is required for minor patients.'
+                    )
+                if errors:
+                    raise serializers.ValidationError(errors)
+
         return attrs

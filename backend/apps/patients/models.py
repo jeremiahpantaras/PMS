@@ -32,9 +32,11 @@ class Patient(TimeStampedModel, SoftDeleteModel):
     province    = models.CharField(max_length=100)
     postal_code = models.CharField(max_length=10, blank=True)
 
-    emergency_contact_name         = models.CharField(max_length=200)
-    emergency_contact_phone        = models.CharField(max_length=15, validators=[validate_ph_phone])
-    emergency_contact_relationship = models.CharField(max_length=100)
+    # Emergency contact is required only for minor patients (< 18 years old);
+    # blank=True allows adult records without an emergency contact.
+    emergency_contact_name         = models.CharField(max_length=200, blank=True)
+    emergency_contact_phone        = models.CharField(max_length=15, blank=True, validators=[validate_ph_phone])
+    emergency_contact_relationship = models.CharField(max_length=100, blank=True)
 
     philhealth_number = models.CharField(max_length=50, blank=True)
     hmo_provider      = models.CharField(max_length=200, blank=True)

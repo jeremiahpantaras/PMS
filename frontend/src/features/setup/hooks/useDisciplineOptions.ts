@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { DISCIPLINE_OPTIONS } from '../types/staff.types';
+import { useAuthStore } from '@/store/auth.store';
 
 export interface DisciplineOption {
   value: string;
@@ -7,11 +8,13 @@ export interface DisciplineOption {
   isCustom?: boolean;
 }
 
-const STORAGE_KEY = 'pms_custom_disciplines';
+/** Returns a clinic-scoped localStorage key so disciplines never bleed across clinics. */
+const getStorageKey = (clinicId: number | null): string =>
+  clinicId != null ? `pms_custom_disciplines_${clinicId}` : 'pms_custom_disciplines';
 
-const loadCustomDisciplines = (): DisciplineOption[] => {
+const loadCustomDisciplines = (storageKey: string): DisciplineOption[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     return raw ? (JSON.parse(raw) as DisciplineOption[]) : [];
   } catch {
     return [];
@@ -21,11 +24,22 @@ const loadCustomDisciplines = (): DisciplineOption[] => {
 /**
  * Returns the full list of discipline options (built-in + custom),
  * plus a helper to permanently add a new custom discipline.
+ *
+ * Custom disciplines are persisted in a clinic-scoped localStorage key so
+ * they are never visible to users of a different clinic.
  */
 export const useDisciplineOptions = () => {
+  const clinicId = useAuthStore(s => s.user?.clinic ?? null);
+  const storageKey = getStorageKey(clinicId);
+
   const [customDisciplines, setCustomDisciplines] = useState<DisciplineOption[]>(
-    loadCustomDisciplines,
+    () => loadCustomDisciplines(storageKey),
   );
+
+  // Re-sync when the clinic changes (e.g. after login resolves the user object)
+  useEffect(() => {
+    setCustomDisciplines(loadCustomDisciplines(storageKey));
+  }, [storageKey]);
 
   const allOptions: DisciplineOption[] = [
     ...DISCIPLINE_OPTIONS,
@@ -47,7 +61,7 @@ export const useDisciplineOptions = () => {
       .replace(/[^A-Z0-9_]/g, '');
 
     // Prevent duplicates against both built-in and custom options
-    const existing = [...DISCIPLINE_OPTIONS, ...loadCustomDisciplines()];
+    const existing = [...DISCIPLINE_OPTIONS, ...loadCustomDisciplines(storageKey)];
     if (existing.some(d => d.value === value || d.label.toLowerCase() === trimmed.toLowerCase())) {
       return existing.find(
         d => d.value === value || d.label.toLowerCase() === trimmed.toLowerCase(),
@@ -59,7 +73,7 @@ export const useDisciplineOptions = () => {
     setCustomDisciplines(prev => {
       const updated = [...prev, newOption];
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        localStorage.setItem(storageKey, JSON.stringify(updated));
       } catch {
         // quota exceeded – still work in-memory
       }
@@ -67,7 +81,7 @@ export const useDisciplineOptions = () => {
     });
 
     return newOption;
-  }, []);
+  }, [storageKey]);
 
   return { allOptions, addDiscipline };
 };

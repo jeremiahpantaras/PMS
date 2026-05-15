@@ -6,9 +6,9 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.http import JsonResponse
 
-from apps.accounts.views import AuthViewSet, UserViewSet, RoleViewSet, PermissionViewSet
+from apps.accounts.views import AuthViewSet, UserViewSet, RoleViewSet, PermissionViewSet, PermissionGroupViewSet
 from apps.clinics.views import ClinicViewSet, PractitionerViewSet, LocationViewSet
-from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, CalendarNoteViewSet, PublicRebookingLinkView
+from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, CalendarNoteViewSet, PublicRebookingLinkView, PublicAppointmentConfirmView
 from apps.records.views import ClinicalNoteViewSet, NoteTemplateViewSet, OutcomeMeasureViewSet, AttachmentViewSet
 from apps.billing.views import (
     InvoiceViewSet, InvoiceItemViewSet, PaymentViewSet,
@@ -32,10 +32,11 @@ def api_root(request):
 
 router = DefaultRouter()
 # Accounts
-router.register(r'auth',        AuthViewSet,       basename='auth')
-router.register(r'users',       UserViewSet,       basename='users')
-router.register(r'roles',       RoleViewSet,       basename='roles')
-router.register(r'permissions', PermissionViewSet, basename='permissions')
+router.register(r'auth',              AuthViewSet,             basename='auth')
+router.register(r'users',             UserViewSet,             basename='users')
+router.register(r'roles',             RoleViewSet,             basename='roles')
+router.register(r'permissions',       PermissionViewSet,       basename='permissions')
+router.register(r'permission-groups', PermissionGroupViewSet,  basename='permission-groups')
 
 # Clinics
 router.register(r'clinics',         ClinicViewSet,         basename='clinics')
@@ -96,6 +97,9 @@ urlpatterns = [
 
     # Public rebooking (no auth required)
     path('api/appointments/rebook/<uuid:token>/', PublicRebookingLinkView.as_view(), name='public-rebooking'),
+
+    # Public email confirmation (no auth required)
+    path('api/appointments/confirm-email/<uuid:token>/', PublicAppointmentConfirmView.as_view(), name='public-confirm-email'),
 ]
 
 if settings.DEBUG:

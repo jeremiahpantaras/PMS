@@ -1,13 +1,21 @@
+WE'D LOVE TO SEE YOU AGAIN — {{ clinic_name }}
+
 Hi {{ patient_first_name }},
 
-We noticed you haven't rescheduled your missed appointment yet. We understand things get busy, and we're here whenever you're ready.
+We noticed you haven't rescheduled your missed appointment.
+We hope you're doing well!
 
-Your well-being matters to us. Would you like to book a new appointment?
+Whenever you're ready, we'd love to help you book again.
+Your health matters to us.
 
-📅 Book here: {{ booking_url }}
+BOOK AN APPOINTMENT
+---------------------
+{{ booking_url }}
 
-Need assistance? Contact us:
-{% if clinic_phone %}📞 {{ clinic_phone }}{% endif %}
-{% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}
 
-– {{ clinic_name }}
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

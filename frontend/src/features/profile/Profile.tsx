@@ -4,12 +4,16 @@ import { ProfileHeader }        from './components/ProfileHeader';
 import { ProfileAvatarUpload }  from './components/ProfileAvatarUpload';
 import { ProfileInfoCard }      from './components/ProfileInfoCard';
 import { AccountSettingsCard }  from './components/AccountSettingsCard';
+import { ProfileRolesCard }     from './components/ProfileRolesCard';
 import { useProfile }           from './hooks/useProfile';
 import { useAuth }              from '@/hooks/useAuth';
+import { useAuthStore }         from '@/store/auth.store';
 import { Loader2 }              from 'lucide-react';
+import type { User }            from '@/types/auth';
 
 export const Profile: React.FC = () => {
   const { user: authUser } = useAuth();
+  const updateUser         = useAuthStore(s => s.updateUser);
   const [isEditing, setIsEditing] = useState(false);  // Track edit mode state
 
   const {
@@ -34,6 +38,15 @@ export const Profile: React.FC = () => {
       clearPendingAvatar();
     }
   };
+
+  const handleRolesUpdate = (updatedUser: User) => {
+    updateUser(updatedUser);
+  };
+
+  // Whether the current viewer is an admin (can edit roles)
+  const viewerIsAdmin = authUser
+    ? (authUser.roles ?? [authUser.role]).includes('ADMIN')
+    : false;
 
   if (!user) {
     return (
@@ -82,6 +95,7 @@ export const Profile: React.FC = () => {
                   <div className="w-full space-y-3 pt-1">
                     {[
                       { label: 'Role',   value: user.role },
+                      { label: 'Group',  value: user.permission_group_name ?? '—' },
                       { label: 'Status', value: user.is_active ? 'Active' : 'Inactive' },
                       {
                         label: 'Joined',
@@ -115,13 +129,18 @@ export const Profile: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── Right: Info + Reset Password ── */}
+              {/* ── Right: Info + Roles + Reset Password ── */}
               <div className="flex-1 min-w-0 space-y-6">
                 <ProfileInfoCard
                   user={user}
                   isSaving={isSaving}
                   onSave={saveProfile}
                   onEditingChange={handleEditingChange}
+                />
+                <ProfileRolesCard
+                  user={user}
+                  canEdit={viewerIsAdmin}
+                  onRolesUpdate={handleRolesUpdate}
                 />
                 <AccountSettingsCard
                   currentRotation={user.password_rotation ?? 'none'}

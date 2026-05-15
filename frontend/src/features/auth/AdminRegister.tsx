@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { authService } from '@/services/authService';
-import { 
-  validateEmail, 
+import {
+  validateEmail,
   validateName,
   validateCompanyName,
   sanitizeInput,
@@ -13,10 +14,40 @@ import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
 import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
 import type { AdminRegisterData, AuthError } from '@/types/auth';
 import toast from 'react-hot-toast';
+import { OTPVerificationModal } from './components/OTPVerificationModal';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY ?? '';
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export const AdminRegister: React.FC = () => {
-  const navigate = useNavigate();
-  
+  const navigate   = useNavigate();
+  const captchaRef = useRef<ReCAPTCHA>(null);
+
+  // reCAPTCHA
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaError, setCaptchaError] = useState('');
+
+  // ── OTP session (persists across modal open/close) ────────────────────────
+  // Separating session state from modal visibility is the key design:
+  // closing the modal only hides it — the countdown keeps running.
+  interface OtpSession {
+    expiresAt: number;          // epoch ms — when the OTP expires on the backend
+    resendAvailableAt: number;  // epoch ms — when the resend cooldown lifts
+  }
+  const [otpSession, setOtpSession]     = useState<OtpSession | null>(null);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+
+  // Tick to refresh floating-button visibility while session is active and modal is hidden
+  const [, setFloatTick] = useState(0);
+  useEffect(() => {
+    if (!otpSession || showOtpModal) return;
+    const id = setInterval(() => setFloatTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [otpSession, showOtpModal]);
+
   const [formData, setFormData] = useState<AdminRegisterData>({
     first_name: '',
     last_name: '',
@@ -31,7 +62,12 @@ export const AdminRegister: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const sanitized = name === 'phone' ? formatPHPhone(value) : sanitizeInput(value);
+    // Normalize email to lowercase immediately to prevent case-sensitive issues.
+    const sanitized = name === 'phone'
+      ? formatPHPhone(value)
+      : name === 'email'
+        ? value.toLowerCase()
+        : sanitizeInput(value);
     
     setFormData(prev => ({
       ...prev,
@@ -42,8 +78,14 @@ export const AdminRegister: React.FC = () => {
       ...prev,
       [name]: ''
     }));
-    
+
     setServerError('');
+
+    // Changing the email address invalidates any active OTP session
+    if (name === 'email') {
+      setOtpSession(null);
+      setShowOtpModal(false);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -81,81 +123,149 @@ export const AdminRegister: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ── Step 1: validate + reCAPTCHA + send OTP ──────────────────────────────
+
+  const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     setServerError('');
+    setCaptchaError('');
 
     if (isLoading) return;
     if (!validateForm()) {
-      toast.error('Please fix the highlighted errors before submitting.');
+      toast.error('Please fix the highlighted errors before continuing.');
+      return;
+    }
+
+    // If a valid OTP session is still running, just reopen the modal — no new request
+    if (otpSession && Date.now() < otpSession.expiresAt) {
+      setShowOtpModal(true);
+      return;
+    }
+
+    // reCAPTCHA gate (skipped when no site key is configured, e.g. local dev)
+    if (RECAPTCHA_SITE_KEY && !captchaToken) {
+      setCaptchaError('Please complete the reCAPTCHA verification.');
       return;
     }
 
     setIsLoading(true);
 
     try {
+      const res = await authService.sendAdminOtp(
+        formData.email,
+        captchaToken ?? '',
+        formData.first_name,
+      );
+      const now = Date.now();
+      setOtpSession({
+        expiresAt:         now + 300 * 1000,
+        resendAvailableAt: now + (res.cooldown_seconds ?? 60) * 1000,
+      });
+      setShowOtpModal(true);
+    } catch (err: unknown) {
+      const authError = err as AuthError & { detail?: string };
+      const msg =
+        authError.detail ||
+        authError.non_field_errors?.[0] ||
+        'Failed to send verification code. Please try again.';
+      setServerError(msg);
+      toast.error(msg);
+      captchaRef.current?.reset();
+      setCaptchaToken(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Step 2: OTP verified → create account ────────────────────────────────
+
+  const handleOtpVerified = useCallback(
+    async (token: string) => {
+      setShowOtpModal(false);
+      setOtpSession(null);  // verification complete — clear session
+      setIsLoading(true);
+
+      try {
         const payload = {
           ...formData,
-          phone: formData.phone ? normalizePHPhone(formData.phone) : '',
+          phone:              formData.phone ? normalizePHPhone(formData.phone) : '',
+          verification_token: token,
         };
         const response = await authService.registerAdmin(payload);
-        
+
         if (response.email_sent) {
-        toast.success('Account created! Check your email for login credentials.', {
+          toast.success('Account created! Check your email for login credentials.', {
             duration: 5000,
-        });
+          });
         } else {
-        toast.success('Account created! Email delivery pending.', {
-            duration: 5000,
-        });
+          toast.success('Account created! Email delivery pending.', { duration: 5000 });
         }
 
-        navigate('/register/success', { 
-        state: { 
-            email: formData.email,
-            emailSent: response.email_sent,
-            companyName: response.clinic.name
-        } 
+        navigate('/register/success', {
+          state: {
+            email:       formData.email,
+            emailSent:   response.email_sent,
+            companyName: response.clinic.name,
+          },
         });
-        
-    } catch (error: unknown) {
-        console.error('Registration error:', error);
-        
+      } catch (error: unknown) {
         const authError = error as AuthError;
-        
+
         if (authError.email) {
-          setValidationErrors(prev => ({ ...prev, email: authError.email![0] }));
+          setValidationErrors((prev) => ({ ...prev, email: authError.email![0] }));
           toast.error('This email address is already registered. Please use a different email.');
         }
         if (authError.phone) {
-          setValidationErrors(prev => ({ ...prev, phone: authError.phone![0] }));
+          setValidationErrors((prev) => ({ ...prev, phone: authError.phone![0] }));
           if (!authError.email) {
-            toast.error('This phone number is already in use. Please use a different number.');
+            toast.error('This phone number is already in use.');
           }
         }
         if (authError.first_name) {
-          setValidationErrors(prev => ({ ...prev, first_name: authError.first_name![0] }));
+          setValidationErrors((prev) => ({ ...prev, first_name: authError.first_name![0] }));
         }
         if (authError.last_name) {
-          setValidationErrors(prev => ({ ...prev, last_name: authError.last_name![0] }));
+          setValidationErrors((prev) => ({ ...prev, last_name: authError.last_name![0] }));
         }
         if (authError.company_name) {
-          setValidationErrors(prev => ({ ...prev, company_name: authError.company_name![0] }));
+          setValidationErrors((prev) => ({ ...prev, company_name: authError.company_name![0] }));
         }
-        
+
         if (!authError.email && !authError.phone) {
-          const errorMessage = 
-            authError.detail || 
-            authError.non_field_errors?.[0] || 
+          const msg =
+            authError.detail ||
+            authError.non_field_errors?.[0] ||
             'Registration failed. Please try again.';
-          setServerError(errorMessage);
-          toast.error(errorMessage);
+          setServerError(msg);
+          toast.error(msg);
         }
-        
-    } finally {
+      } finally {
         setIsLoading(false);
-    }
-  };
+      }
+    },
+    [formData, navigate],
+  );
+
+  // ── Step 2b: resend OTP ───────────────────────────────────────────────────
+
+  const handleResendOtp = useCallback(
+    async (): Promise<{ expiresAt: number; resendAvailableAt: number }> => {
+      const res = await authService.sendAdminOtp(
+        formData.email,
+        '',   // no captcha required on resend
+        formData.first_name,
+        true, // resend flag
+      );
+      const now = Date.now();
+      const newSession = {
+        expiresAt:         now + 300 * 1000,
+        resendAvailableAt: now + (res.cooldown_seconds ?? 60) * 1000,
+      };
+      setOtpSession(newSession);
+      return newSession;
+    },
+    [formData.email, formData.first_name],
+  );
 
   return (
     <div className="min-h-screen flex">
@@ -241,7 +351,7 @@ export const AdminRegister: React.FC = () => {
           </div>
 
           {/* Form */}
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-5" onSubmit={handleContinue}>
             {/* Server Error Display */}
             {serverError && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-4">
@@ -367,7 +477,7 @@ export const AdminRegister: React.FC = () => {
                 <p className="mt-1.5 text-sm text-red-600">{validationErrors.email}</p>
               )}
               <p className="mt-1.5 text-xs text-gray-500">
-                Your login credentials will be sent to this email
+                A verification code will be sent to verify this email
               </p>
             </div>
 
@@ -398,6 +508,28 @@ export const AdminRegister: React.FC = () => {
               )}
             </div>
 
+            {/* reCAPTCHA — only rendered when a site key is configured */}
+            {RECAPTCHA_SITE_KEY && (
+              <div className="flex flex-col items-center gap-1">
+                <ReCAPTCHA
+                  ref={captchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token) => {
+                    setCaptchaToken(token);
+                    setCaptchaError('');
+                  }}
+                  onExpired={() => {
+                    setCaptchaToken(null);
+                    setCaptchaError('reCAPTCHA expired. Please verify again.');
+                  }}
+                  theme="light"
+                />
+                {captchaError && (
+                  <p className="text-sm text-red-600">{captchaError}</p>
+                )}
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
@@ -410,12 +542,12 @@ export const AdminRegister: React.FC = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Creating Account...
+                  Sending Code…
                 </span>
               ) : (
                 <span className="flex items-center">
-                  Create Account
-                  <CheckCircle className="ml-2 w-4 h-4" />
+                  Continue
+                  <Mail className="ml-2 w-4 h-4" />
                 </span>
               )}
             </button>
@@ -444,6 +576,31 @@ export const AdminRegister: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Floating OTP re-entry button — visible when session is active but modal is closed */}
+      {otpSession && Date.now() < otpSession.expiresAt && !showOtpModal && (
+        <button
+          onClick={() => setShowOtpModal(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-xl text-white bg-primary-gradient hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-care-blue focus:ring-offset-2"
+          aria-label="Reopen email verification"
+        >
+          <Mail className="w-5 h-5" />
+          <span className="text-sm font-semibold">Verify Email</span>
+        </button>
+      )}
+
+      {/* OTP Verification Modal */}
+      {showOtpModal && otpSession && (
+        <OTPVerificationModal
+          email={formData.email}
+          firstName={formData.first_name}
+          expiresAt={otpSession.expiresAt}
+          resendAvailableAt={otpSession.resendAvailableAt}
+          onVerified={handleOtpVerified}
+          onClose={() => setShowOtpModal(false)}
+          onResend={handleResendOtp}
+        />
+      )}
     </div>
   );
 };

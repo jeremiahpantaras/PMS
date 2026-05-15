@@ -4,11 +4,14 @@ import { StaffTable }              from './components/StaffTable';
 import { CreateStaffAccountModal } from '../../components/modals/CreateStaffAccountModal';
 import { useStaffManagement }      from '../../hooks/useStaffManagement';
 import type { CreateStaffData, StaffMember } from '../../types/staff.types';
+import { useAuthStore }            from '@/store/auth.store';
 
 export const Staff: React.FC = () => {
   const [isModalOpen, setIsModalOpen]     = useState(false);
   const [searchQuery, setSearchQuery]     = useState('');
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+
+  const currentUser = useAuthStore(s => s.user);
 
   const {
     staff, loading, error,
@@ -103,6 +106,7 @@ export const Staff: React.FC = () => {
       <StaffTable
         staff={filteredStaff}
         loading={loading}
+        currentUserId={currentUser?.id}
         onEdit={handleEdit}
         onDelete={async id => await deleteStaff(id)}
         onToggleStatus={async (id, isActive) => await toggleStaffStatus(id, isActive)}
@@ -114,6 +118,7 @@ export const Staff: React.FC = () => {
         onClose={handleModalClose}
         onSubmit={handleModalSubmit}
         editingStaff={selectedStaff}
+        currentUserId={currentUser?.id}
       />
     </div>
   );

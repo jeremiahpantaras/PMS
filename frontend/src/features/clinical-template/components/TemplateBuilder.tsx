@@ -342,8 +342,12 @@ const FieldSettings: React.FC<FieldSettingsProps> = ({ field, onChange, onDelete
                     type="text"
                     value={opt.label}
                     onChange={(e) => {
-                      updateOption(index, 'label', e.target.value);
-                      updateOption(index, 'value', e.target.value.toLowerCase().replace(/\s+/g, '_'));
+                      const newLabel = e.target.value;
+                      const newValue = newLabel.toLowerCase().replace(/\s+/g, '_') || `option_${index + 1}`;
+                      const options = (field.options || []).map((o, i) =>
+                        i === index ? { ...o, label: newLabel, value: newValue } : o
+                      );
+                      onChange({ ...field, options });
                     }}
                     className="flex-1 text-sm border border-gray-200 rounded px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     placeholder={`Option ${index + 1}`}

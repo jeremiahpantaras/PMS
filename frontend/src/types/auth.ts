@@ -1,21 +1,73 @@
+export type AccessLevel = 'none' | 'view' | 'edit';
+
+export type UserRole = 'ADMIN' | 'PRACTITIONER' | 'STAFF';
+
+export type FeatureKey =
+  | 'dashboard'
+  | 'appointments'
+  | 'calendar'
+  | 'diary'
+  | 'clinical_notes'
+  | 'client_cases'
+  | 'patients'
+  | 'reports'
+  | 'inventory'
+  | 'invoices'
+  | 'billing'
+  | 'subscriptions'
+  | 'setup'
+  | 'staff_management'
+  | 'permissions'
+  | 'settings'
+  | 'documents'
+  | 'outcome_measures'
+  | 'contacts'
+  | 'communication'
+  // Granular Setup card permissions
+  | 'setup_practice'
+  | 'setup_items'
+  | 'setup_users'
+  | 'setup_account'
+  | 'setup_communication'
+  // Granular Manage card permissions
+  | 'manage_administration'
+  | 'manage_clinical'
+  | 'manage_communications'
+  // Granular Report card permissions
+  | 'reports_administration'
+  | 'reports_clinic'
+  | 'reports_financial'
+  | 'reports_performance';
+
+export type PermissionsMap = Record<FeatureKey, AccessLevel>;
+
 export interface User {
   id:                    number;
   email:                 string;
   first_name:            string;
   last_name:             string;
-  role:                  'ADMIN' | 'PRACTITIONER' | 'STAFF';
+  /** Primary role — highest-priority entry in `roles`. Kept for backward compat. */
+  role:                  UserRole;
+  /** All roles currently assigned to this user (multi-role support). */
+  roles:                 UserRole[];
   phone:                 string;
   avatar:                string | null;
-  avatar_url:            string | null;  // ← NEW: full URL for avatar
+  avatar_url:            string | null;
   is_active:             boolean;
   clinic:                number | null;
   created_at:            string;
   password_changed:       boolean;
   needs_password_change:  boolean;
+  /** True when a temporary password is active — user MUST change it before proceeding. */
+  must_change_password:   boolean;
   password_rotation:      'none' | 'weekly' | 'monthly' | 'yearly';
   last_password_change:   string | null;
-  clinic_setup_complete: boolean;   // ← NEW
-  practitioner_id?:      number;    // ← For PRACTITIONER role: the linked Practitioner record ID
+  clinic_setup_complete: boolean;
+  practitioner_id?:      number;
+  // RBAC
+  permission_group?:      number | null;
+  permission_group_name?: string | null;
+  permissions_map?:       PermissionsMap;
 }
 
 export interface AuthTokens {
@@ -29,11 +81,13 @@ export interface LoginCredentials {
 }
 
 export interface AdminRegisterData {
-  first_name:   string;
-  last_name:    string;
-  company_name: string;
-  email:        string;
-  phone?:       string;
+  first_name:          string;
+  last_name:           string;
+  company_name:        string;
+  email:               string;
+  phone?:              string;
+  /** Issued by verify-admin-otp; required for account creation */
+  verification_token?: string;
 }
 
 export interface AdminRegisterResponse {

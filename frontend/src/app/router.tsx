@@ -27,6 +27,11 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Must change password before accessing anything else
+  if (user?.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   if (shouldCheckSubscription && isCheckingSubscription) {
     return <RouteGuardLoading />;
   }
@@ -52,6 +57,10 @@ export const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children 
   const { isAuthenticated, user } = useAuthStore();
 
   if (isAuthenticated) {
+    // Must change password first — redirect to the mandatory change page
+    if (user?.must_change_password) {
+      return <Navigate to="/change-password" replace />;
+    }
     // Redirect admin to setup if not complete
     if (user?.role === 'ADMIN' && user.clinic_setup_complete === false) {
       return <Navigate to="/clinic-setup" replace />;
@@ -91,6 +100,11 @@ export const ClinicMemberRoute: React.FC<{ children: React.ReactNode }> = ({ chi
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Must change password before accessing any member routes
+  if (user?.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   if (shouldCheckSubscription && isCheckingSubscription) {
     return <RouteGuardLoading />;
   }
@@ -105,7 +119,7 @@ export const ClinicMemberRoute: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Same setup guard
   if (
-    user.role === 'ADMIN' &&
+    (user.roles ?? [user.role]).includes('ADMIN') &&
     user.clinic_setup_complete === false &&
     location.pathname !== '/clinic-setup'
   ) {
@@ -125,8 +139,35 @@ export const ClinicSetupRoute: React.FC<{ children: React.ReactNode }> = ({ chil
     return <Navigate to="/login" replace />;
   }
 
+  // Password change is mandatory before clinic setup
+  if (user?.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   // Non-admins or already-setup admins → go to dashboard
   if (user?.role !== 'ADMIN' || user.clinic_setup_complete === true) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// ── ChangePasswordRoute ────────────────────────────────────────────────────────
+// Gate for /change-password — only accessible when must_change_password === true.
+// Unauthenticated users → /login.
+// Authenticated users who have already set their password → /dashboard (or /clinic-setup).
+export const ChangePasswordRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, user } = useAuthStore();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user?.must_change_password) {
+    // Already done — redirect to the appropriate next step
+    if (user?.role === 'ADMIN' && user.clinic_setup_complete === false) {
+      return <Navigate to="/clinic-setup" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -1,129 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Recurring Appointments Confirmed</title>
-  <style>
-    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    body {
-      margin: 0 !important; padding: 0 !important;
-      background-color: #f4f4f5;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    }
-    .email-wrapper { width: 100%; background-color: #f4f4f5; padding: 32px 16px; }
-    .email-container {
-      max-width: 560px; margin: 0 auto; background-color: #ffffff;
-      border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-    .header {
-      background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-      padding: 32px 40px; text-align: center;
-    }
-    .header-logo { font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; margin: 0 0 4px 0; }
-    .header-tagline { font-size: 12px; color: rgba(255,255,255,0.85); margin: 0; }
-    .body { padding: 32px 40px; }
-    .greeting { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 8px 0; }
-    .subtext { font-size: 14px; color: #6b7280; margin: 0 0 24px 0; line-height: 1.6; }
-    .appt-card {
-      background-color: #f0f9ff; border: 1.5px solid #bae6fd;
-      border-radius: 10px; padding: 20px 24px; margin-bottom: 24px;
-    }
-    .appt-card-title {
-      font-size: 11px; font-weight: 700; color: #0284c7;
-      text-transform: uppercase; letter-spacing: 0.8px; margin: 0 0 16px 0;
-    }
-    .schedule-item {
-      font-size: 14px; color: #111827; padding: 8px 0;
-      border-bottom: 1px solid #e0f2fe;
-    }
-    .schedule-item:last-child { border-bottom: none; }
-    .divider { border: none; border-top: 1px solid #f3f4f6; margin: 24px 0; }
-    .cta-text { font-size: 13px; color: #6b7280; line-height: 1.7; margin: 0 0 24px 0; }
-    .cta-text strong { color: #111827; }
-    .footer {
-      background-color: #f9fafb; border-top: 1px solid #f3f4f6;
-      padding: 20px 40px; text-align: center;
-    }
-    .footer-clinic { font-size: 13px; font-weight: 600; color: #374151; margin: 0 0 4px 0; }
-    .footer-contact { font-size: 12px; color: #9ca3af; margin: 0 0 12px 0; line-height: 1.6; }
-    .footer-legal { font-size: 11px; color: #d1d5db; margin: 0; }
-    @media only screen and (max-width: 600px) {
-      .body, .header, .footer { padding-left: 24px !important; padding-right: 24px !important; }
-    }
-  </style>
-</head>
-<body>
-  <div class="email-wrapper">
-    <div class="email-container">
+{% extends "appointments/email/_base_email.html" %}
 
-      <div class="header">
-        {% if clinic_logo_url %}
-        <img src="{{ clinic_logo_url }}" alt="{{ clinic_name }} Logo" style="max-height:60px;max-width:200px;margin-bottom:4px;" />
-        {% else %}
-        <p class="header-logo">{{ clinic_name }}</p>
+{% block title %}Recurring Appointments Confirmed{% endblock %}
+{% block title_color %}#0ea5e9{% endblock %}
+
+{% block header_icon %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;">
+  <tr>
+    <td align="center" style="width:40px;height:40px;background-color:#e0f2fe;border-radius:8px;text-align:center;vertical-align:middle;">
+      <span style="font-size:18px;line-height:40px;">&#128260;</span>
+    </td>
+  </tr>
+</table>
+{% endblock %}
+
+{% block email_heading %}Recurring Appointments Confirmed{% endblock %}
+
+{% block header_subtitle %}
+<p style="margin:6px 0 0;font-size:13px;color:#6b7280;">{{ total_appointments }} sessions booked · {{ clinic_name }}</p>
+{% endblock %}
+
+{% block content %}
+<p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 6px;">Hi {{ patient_first_name }},</p>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
+  Your recurring appointment series of <strong>{{ total_appointments }} sessions</strong> has been confirmed.
+</p>
+
+<!-- Series details card -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f9ff;border:1px solid #d0e8f2;border-radius:6px;margin-bottom:20px;">
+  <tr>
+    <td style="padding:16px 20px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0369a1;margin:0 0 14px;">Series Details</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="36%" style="font-size:13px;color:#6b7280;padding:4px 0;">Service</td>
+          <td width="64%" style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;">{{ service_name }}</td>
+        </tr>
+        {% if practitioner_name %}
+        <tr>
+          <td style="font-size:13px;color:#6b7280;padding:4px 0;">Practitioner</td>
+          <td style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;">{{ practitioner_name }}</td>
+        </tr>
         {% endif %}
-        <p class="header-tagline">Recurring Appointments Confirmed</p>
-      </div>
+        <tr>
+          <td style="font-size:13px;color:#6b7280;padding:4px 0;">Location</td>
+          <td style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;">{{ location_name }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 
-      <div class="body">
-        <p class="greeting">Hi {{ patient_first_name }},</p>
-        <p class="subtext">
-          Your <strong>{{ total_appointments }} recurring appointments</strong> have been confirmed!
-        </p>
+<!-- Schedule list -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fafafa;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:20px;">
+  <tr>
+    <td style="padding:16px 20px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#374151;margin:0 0 12px;">Your Schedule</p>
+      {% for item in schedule_list %}
+      <p style="font-size:13px;color:#1f2937;margin:0 0 5px;line-height:1.5;">{{ item }}</p>
+      {% endfor %}
+    </td>
+  </tr>
+</table>
 
-        <div class="appt-card">
-          <p class="appt-card-title">🔄 Your Schedule</p>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="font-size:12px;color:#9ca3af;width:110px;">Service</td>
-              <td style="font-size:14px;font-weight:600;color:#111827;">{{ service_name }}</td>
-            </tr>
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            {% if practitioner_name %}
-            <tr>
-              <td style="font-size:12px;color:#9ca3af;width:110px;">Practitioner</td>
-              <td style="font-size:14px;font-weight:600;color:#111827;">{{ practitioner_name }}</td>
-            </tr>
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            {% endif %}
-            <tr>
-              <td style="font-size:12px;color:#9ca3af;width:110px;">Location</td>
-              <td style="font-size:14px;font-weight:600;color:#111827;">{{ location_name }}</td>
-            </tr>
-          </table>
-        </div>
-
-        <div style="background-color:#f9fafb;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
-          <p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.8px;margin:0 0 12px 0;">📅 Appointment Dates</p>
-          {% for item in schedule_list %}
-          <div class="schedule-item">{{ item }}</div>
-          {% endfor %}
-        </div>
-
-        <hr class="divider" />
-
-        <p class="cta-text">
-          If you need to <strong>reschedule or cancel</strong> any appointment,
-          please contact us as soon as possible.
-          {% if clinic_phone %}<br/>📞 <strong>{{ clinic_phone }}</strong>{% endif %}
-          {% if clinic_email %}<br/>✉️ <a href="mailto:{{ clinic_email }}" style="color:#0ea5e9;">{{ clinic_email }}</a>{% endif %}
-        </p>
-
-        <p class="cta-text">
-          We look forward to seeing you, {{ patient_first_name }}!
-        </p>
-      </div>
-
-      <div class="footer">
-        <p class="footer-clinic">{{ clinic_name }}</p>
-        <p class="footer-contact">
-          {% if clinic_phone %}📞 {{ clinic_phone }}{% endif %}
-          {% if clinic_email %} | ✉️ {{ clinic_email }}{% endif %}
-        </p>
-        <p class="footer-legal">This is an automated message from {{ clinic_name }}.</p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0;">
+  We look forward to seeing you. If you need to reschedule any session,
+  please contact us as soon as possible.
+</p>
+{% endblock %}

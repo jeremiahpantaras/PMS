@@ -4,7 +4,6 @@ import {
   FileText,
   Edit2,
   Archive,
-  GitBranch,
   MoreVertical,
   CheckCircle,
   XCircle,
@@ -221,13 +220,6 @@ export const TemplateList: React.FC<TemplateListProps> = ({
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                             Edit Template
-                          </button>
-                          <button
-                            onClick={() => { onCreateVersion(template); setOpenMenuId(null); }}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <GitBranch className="w-3.5 h-3.5" />
-                            New Version
                           </button>
                           <hr className="my-1 border-gray-100" />
                           <button

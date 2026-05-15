@@ -1,103 +1,57 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reschedule Your Appointment</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1a1a2e;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f8;">
-    <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+{% extends "appointments/email/_base_email.html" %}
 
-          <!-- Header -->
-          <tr>
-            <td align="center" style="background:#6366f1;padding:28px 40px 24px;">
-              {% if clinic_logo_url %}
-              <img src="{{ clinic_logo_url }}" alt="{{ clinic_name }}" style="display:block;margin:0 auto 14px;max-height:56px;max-width:200px;object-fit:contain;" />
-              {% endif %}
-              <div style="display:inline-block;background:rgba(255,255,255,0.2);border-radius:50%;width:48px;height:48px;line-height:48px;text-align:center;margin-bottom:10px;">
-                <span style="font-size:22px;">📅</span>
-              </div>
-              <h1 style="color:#ffffff;font-size:22px;font-weight:700;margin:0 0 4px;">Reschedule Your Appointment</h1>
-              <p style="color:#e0e7ff;font-size:13px;margin:0;">{{ clinic_name }}</p>
-            </td>
-          </tr>
+{% block title %}Reschedule Your Appointment{% endblock %}
+{% block title_color %}#6366f1{% endblock %}
 
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px 40px;">
-              <p style="font-size:16px;font-weight:600;margin:0 0 6px;">Hi {{ patient_first_name }},</p>
-              <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 8px;">
-                Thanks for letting us know. We understand plans change, and we're here to help you reschedule
-                your appointment that was originally booked for:
-              </p>
+{% block header_icon %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;">
+  <tr>
+    <td align="center" style="width:40px;height:40px;background-color:#e0e7ff;border-radius:8px;text-align:center;vertical-align:middle;">
+      <span style="font-size:18px;line-height:40px;">&#128197;</span>
+    </td>
+  </tr>
+</table>
+{% endblock %}
 
-              <!-- Original appointment info -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="font-size:13px;color:#4338ca;font-weight:600;margin:0 0 6px;">Original Appointment</p>
-                    <p style="font-size:14px;color:#1f2937;margin:0;">{{ appointment_date }} at {{ appointment_time }}</p>
-                  </td>
-                </tr>
-              </table>
+{% block email_heading %}Reschedule Your Appointment{% endblock %}
 
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                <tr>
-                  <td align="center">
-                    <a href="{{ booking_url }}"
-                       style="display:inline-block;background:#6366f1;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;">
-                      Rebook My Appointment
-                    </a>
-                  </td>
-                </tr>
-              </table>
+{% block content %}
+<p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 6px;">Hi {{ patient_first_name }},</p>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
+  Thanks for letting us know. We understand plans change, and we're here to help you reschedule
+  your appointment that was originally booked for:
+</p>
 
-              <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0 0 24px;">
-                This link expires in 72 hours and can only be used once.
-              </p>
+<!-- Original appointment info -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:14px 20px;">
+      <p style="font-size:13px;color:#4338ca;font-weight:600;margin:0 0 4px;">Original Appointment</p>
+      <p style="font-size:14px;color:#1f2937;margin:0;">{{ appointment_date }} at {{ appointment_time }}</p>
+    </td>
+  </tr>
+</table>
 
-              <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0 0 20px;">
-                If the button above doesn't work, copy and paste this URL into your browser:
-              </p>
-              <p style="font-size:12px;color:#6366f1;word-break:break-all;margin:0 0 24px;">{{ booking_url }}</p>
+<!-- CTA Button -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;">
+  <tr>
+    <td align="center">
+      <a href="{{ booking_url }}"
+         style="display:inline-block;background-color:#6366f1;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:6px;mso-padding-alt:0;">
+        <!--[if mso]><i style="mso-font-width:150%;mso-text-raise:18pt;">&nbsp;</i><![endif]-->
+        Rebook My Appointment
+        <!--[if mso]><i style="mso-font-width:150%;">&nbsp;</i><![endif]-->
+      </a>
+    </td>
+  </tr>
+</table>
 
-              <!-- Contact block -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;border-radius:10px;">
-                <tr>
-                  <td style="padding:16px 20px;font-size:13px;color:#374151;line-height:1.8;">
-                    <strong style="color:#111827;display:block;margin-bottom:4px;">{{ clinic_name }}</strong>
-                    {% if clinic_phone %}📞 {{ clinic_phone }}<br />{% endif %}
-                    {% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+<p style="font-size:12px;color:#9ca3af;text-align:center;margin:0 0 24px;">
+  This link expires in 72 hours and can only be used once.
+</p>
 
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;text-align:center;font-size:12px;color:#9ca3af;">
-              This is an automated notification from {{ clinic_name }}. Please do not reply directly to this email.
-            </td>
-          </tr>
-
-          <!-- Malasakit Branding -->
-          <tr>
-            <td align="center" style="background:#f9fafb;padding:8px 40px 20px;">
-              <svg width="120" height="19" viewBox="0 0 800 127" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto 5px;">
-                <path d="M536.794 49.155C546.28 49.155 553.746 51.1603 559.19 55.1698C563.939 58.6474 566.973 63.2161 568.29 68.8761C568.623 70.3071 567.527 71.6268 566.061 71.7171L551.911 72.5876C550.646 72.6654 549.553 71.7771 549.035 70.6208C548.67 69.8056 548.192 69.0397 547.601 68.323C546.525 66.9865 545.107 65.9266 543.347 65.1442C541.619 64.3292 539.549 63.9223 537.137 63.9223C533.91 63.9223 531.187 64.606 528.971 65.9751C526.754 67.3116 525.646 69.1053 525.646 71.3545C525.646 73.1472 526.363 74.6632 527.797 75.9018C529.231 77.1405 531.693 78.1347 535.181 78.8845L548.774 81.6228C556.076 83.1223 561.521 85.5345 565.107 88.8595C568.692 92.1844 570.485 96.5528 570.485 101.964C570.485 106.886 569.034 111.206 566.133 114.922C563.264 118.638 559.32 121.539 554.3 123.626C549.313 125.679 543.558 126.706 537.039 126.706C527.096 126.706 519.175 124.636 513.275 120.496C508.169 116.865 504.902 112.098 503.474 106.196C503.125 104.751 504.235 103.413 505.72 103.335L521.266 102.518C522.519 102.452 523.599 103.328 524.056 104.496C524.849 106.523 526.145 108.14 527.944 109.348C530.324 110.912 533.372 111.694 537.088 111.694C540.739 111.694 543.672 110.993 545.889 109.592C548.138 108.157 549.28 106.316 549.312 104.067C549.28 102.176 548.481 100.627 546.917 99.421C545.352 98.1823 542.939 97.2376 539.679 96.5856L526.673 93.9939C519.338 92.527 513.878 89.9839 510.292 86.3656C506.739 82.7472 504.962 78.1343 504.962 72.5275C504.962 67.7031 506.266 63.5466 508.874 60.0586C511.514 56.5709 515.214 53.8817 519.973 51.991C524.765 50.1003 530.373 49.155 536.794 49.155Z" fill="#41535B"/><path fill-rule="evenodd" clip-rule="evenodd" d="M357.374 49.155C361.546 49.155 365.54 49.644 369.354 50.6219C373.2 51.5998 376.607 53.1162 379.573 55.1698C382.572 57.2234 384.936 59.8632 386.663 63.0902C388.391 66.2848 389.254 70.1157 389.254 74.5816V122.705C389.254 124.105 388.12 125.239 386.72 125.239H372.035C370.635 125.239 369.5 124.105 369.5 122.705V115.189C369.5 114.987 369.337 114.824 369.136 114.824C368.999 114.824 368.874 114.901 368.811 115.022C367.616 117.288 366.036 119.292 364.072 121.034C362.051 122.794 359.622 124.18 356.787 125.19C353.951 126.168 350.675 126.657 346.959 126.657C342.167 126.657 337.896 125.826 334.147 124.164C330.398 122.469 327.432 119.975 325.248 116.682C323.097 113.357 322.021 109.217 322.021 104.262C322.021 100.09 322.787 96.5856 324.319 93.7496C325.851 90.9136 327.937 88.6309 330.577 86.9032C333.218 85.1756 336.217 83.8721 339.575 82.9919C342.965 82.1118 346.518 81.492 350.234 81.1334C354.602 80.677 358.123 80.2532 360.796 79.862C363.469 79.4383 365.409 78.819 366.616 78.0041C367.821 77.1892 368.424 75.9831 368.424 74.3861V74.0928C368.424 70.996 367.446 68.6001 365.49 66.905C363.567 65.2099 360.829 64.3616 357.276 64.3616C353.527 64.3616 350.545 65.1936 348.328 66.8561C346.714 68.0429 345.497 69.4542 344.678 71.0903C344.139 72.1677 343.064 72.9468 341.863 72.8493L327.538 71.6861C326.013 71.5621 324.935 70.12 325.401 68.6626C326.487 65.2614 328.164 62.247 330.431 59.6194C333.3 56.2618 336.999 53.6862 341.53 51.8933C346.094 50.0678 351.376 49.155 357.374 49.155ZM368.571 93.3666C368.571 92.0996 367.09 91.2179 365.882 91.5978C364.774 91.9237 363.519 92.2337 362.117 92.5271C360.715 92.7878 359.313 93.032 357.911 93.2602C356.51 93.4558 355.239 93.6355 354.098 93.7984C351.653 94.157 349.517 94.7274 347.692 95.5097C345.866 96.2921 344.448 97.352 343.438 98.6885C342.428 99.9923 341.922 101.622 341.922 103.577C341.922 106.413 342.949 108.581 345.003 110.081C347.089 111.548 349.73 112.282 352.924 112.282C355.988 112.282 358.694 111.678 361.041 110.473C363.388 109.234 365.23 107.571 366.567 105.485C367.903 103.399 368.571 101.035 368.571 98.3946V93.3666Z" fill="#41535B"/><path d="M229.855 25.0969C230.884 25.097 231.81 25.7188 232.2 26.6702L258.911 91.8372C259.046 92.1656 259.365 92.3804 259.72 92.3804C260.075 92.3804 260.395 92.1656 260.53 91.8372L287.241 26.6702C287.631 25.7187 288.557 25.0969 289.585 25.0969H311.462C312.861 25.0969 313.996 26.2315 313.996 27.631V122.705C313.996 124.105 312.861 125.239 311.462 125.239H295.994C294.594 125.239 293.46 124.105 293.46 122.705V60.5548C293.46 60.2809 293.237 60.0586 292.963 60.0586C292.761 60.0587 292.578 60.1823 292.503 60.3704L267.351 123.158C266.965 124.119 266.033 124.75 264.998 124.75H254.445C253.408 124.75 252.476 124.118 252.091 123.156L226.936 60.1261C226.861 59.9379 226.679 59.8144 226.477 59.8143C226.203 59.8143 225.981 60.0358 225.981 60.3092V122.705C225.981 124.105 224.847 125.239 223.447 125.239H207.977C206.578 125.239 205.443 124.105 205.443 122.705V27.631C205.443 26.2315 206.579 25.0969 207.978 25.0969H229.855Z" fill="#41535B"/><path d="M25.124 0C52.8747 0.000164749 75.3709 22.4964 75.3711 50.2471V115.569C75.371 121.119 70.8714 125.618 65.3213 125.618H10.0498C4.4997 125.618 0.000123569 121.119 0 115.569V10.0498C0 4.49963 4.49963 0 10.0498 0H25.124ZM92.1211 25.124C115.247 25.1241 133.994 43.8706 133.994 66.9961V115.569C133.994 121.119 129.494 125.618 123.944 125.618H93.7959C88.2458 125.618 83.7463 121.119 83.7461 115.569V33.498C83.7462 28.873 87.496 25.124 92.1211 25.124ZM147.393 50.2471C158.493 50.2471 167.491 59.2463 167.491 70.3467V115.569C167.491 121.119 162.992 125.618 157.442 125.618H152.417C146.867 125.618 142.368 121.119 142.368 115.569V55.2725C142.368 52.4974 144.618 50.2471 147.393 50.2471Z" fill="url(#ml_grad)"/><defs><linearGradient id="ml_grad" x1="0" y1="0" x2="167.252" y2="125.438" gradientUnits="userSpaceOnUse"><stop offset="0.172787" stop-color="#0575E6"/><stop offset="1" stop-color="#5CDB95"/></linearGradient></defs>
-              </svg>
-              <p style="font-size:11px;color:#9ca3af;margin:0;">This is automated by <strong style="color:#41535b;font-weight:600;">Malasakit PMS</strong></p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
+<p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0 0 8px;">
+  If the button above doesn't work, copy and paste this URL into your browser:
+</p>
+<p style="font-size:12px;color:#6366f1;word-break:break-all;margin:0;">{{ booking_url }}</p>
+{% endblock %}

@@ -278,18 +278,48 @@ class ClinicCommunicationSettings(TimeStampedModel):
         related_name='communication_settings',
     )
 
-    # ── Channel preferences ───────────────────────────────────────────────────
+    # ── Per-reminder-type channel preferences ────────────────────────────────
     booking_confirmation_method = models.CharField(
         max_length=5,
         choices=CHANNEL_CHOICES,
         default='EMAIL',
-        help_text='How to send booking confirmations.',
+        help_text='Channel for booking confirmations.',
     )
     reminder_method = models.CharField(
         max_length=5,
         choices=CHANNEL_CHOICES,
         default='EMAIL',
-        help_text='How to send appointment reminders.',
+        help_text='Channel for appointment reminders.',
+    )
+    cancellation_method = models.CharField(
+        max_length=5,
+        choices=CHANNEL_CHOICES,
+        default='SMS',
+        help_text='Channel for appointment cancellation notices.',
+    )
+    dna_followup_method = models.CharField(
+        max_length=5,
+        choices=CHANNEL_CHOICES,
+        default='SMS',
+        help_text='Channel for DNA / did-not-attend follow-ups.',
+    )
+    rebook_followup_method = models.CharField(
+        max_length=5,
+        choices=CHANNEL_CHOICES,
+        default='EMAIL',
+        help_text='Channel for no-rebook delayed follow-ups.',
+    )
+    inactive_checkin_method = models.CharField(
+        max_length=5,
+        choices=CHANNEL_CHOICES,
+        default='EMAIL',
+        help_text='Channel for inactive patient wellness check-ins.',
+    )
+    profile_creation_method = models.CharField(
+        max_length=5,
+        choices=CHANNEL_CHOICES,
+        default='EMAIL',
+        help_text='Channel for new patient profile creation notifications.',
     )
 
     # ── Reminder timing (hours before appointment) ────────────────────────────
@@ -319,6 +349,10 @@ class ClinicCommunicationSettings(TimeStampedModel):
         default=True,
         help_text='Send appointment reminders.',
     )
+    cancellation_enabled = models.BooleanField(
+        default=True,
+        help_text='Send notification when an appointment is cancelled.',
+    )
     dna_followup_enabled = models.BooleanField(
         default=True,
         help_text='Send follow-up after DNA / patient declines.',
@@ -330,6 +364,10 @@ class ClinicCommunicationSettings(TimeStampedModel):
     inactive_checkin_enabled = models.BooleanField(
         default=True,
         help_text='Send wellness check-in to inactive patients.',
+    )
+    profile_creation_enabled = models.BooleanField(
+        default=True,
+        help_text='Send notification when a new patient profile is created.',
     )
 
     class Meta:

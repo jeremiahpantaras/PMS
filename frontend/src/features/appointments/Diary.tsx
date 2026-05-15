@@ -24,9 +24,10 @@ type CalendarView = 'day' | 'week' | 'month';
 export const Diary: React.FC = () => {
   // Get user info early for role-based logic
   const { user } = useAuthStore();
-  const isAdmin        = user?.role === 'ADMIN';
-  const isPractitioner = user?.role === 'PRACTITIONER';
-  const isStaff        = user?.role === 'STAFF';
+  const effectiveRoles = (user?.roles && user.roles.length > 0) ? user.roles : (user?.role ? [user.role] : []);
+  const isAdmin        = effectiveRoles.includes('ADMIN');
+  const isPractitioner = effectiveRoles.includes('PRACTITIONER');
+  const isStaff        = effectiveRoles.includes('STAFF');
 
   // ── Rebook Mode ──────────────────────────────────────────────────
   const { rebookMode, rebookData, startRebook, exitRebook } = useRebookMode();
@@ -80,7 +81,9 @@ export const Diary: React.FC = () => {
   // The practitioner-list id of the logged-in user's own entry (e.g. Practitioner pk or 'staff-{id}')
   const [cachedOwnId, setCachedOwnId] = useState<number | string | null>(null);
 
-  // Single effect: cache own availability + home branch, and auto-navigate to it once.
+  // Single effect: cache own availability + home branch, and auto-navigate to it.
+  // Re-runs whenever the practitioners list changes (including after a refetch caused
+  // by a branch reassignment), so the calendar always reflects the latest assignment.
   useEffect(() => {
     if (!(isPractitioner || isStaff) || practitioners.length === 0) return;
 
@@ -98,26 +101,56 @@ export const Diary: React.FC = () => {
     if (own.availability) setCachedOwnAvailability(own.availability);
     if (cachedOwnId == null) setCachedOwnId(own.id);
 
-    if (own.clinic_branch_id != null) {
-      if (cachedOwnBranchId == null) setCachedOwnBranchId(own.clinic_branch_id);
+    // ── Branch-change detection ────────────────────────────────────────────
+    // Compare the practitioner's current branch with what we last cached.
+    // When they differ (branch reassignment, or "All Branches" toggle), reset
+    // the auto-select guard so the calendar snaps to the new scope immediately.
+    const currentBranchId = own.clinic_branch_id ?? null;
+    if (currentBranchId !== cachedOwnBranchId) {
+      setCachedOwnBranchId(currentBranchId);
+      hasAutoSelectedBranch.current = false; // allow re-selection on next check
+    }
 
-      // Auto-open the user's assigned clinic tab on first page load
+    if (own.clinic_branch_id != null) {
+      // Branch-assigned: navigate to that branch tab.
       if (!hasAutoSelectedBranch.current) {
         hasAutoSelectedBranch.current = true;
         setSelectedClinicBranch(own.clinic_branch_id);
+        setSelectedPractitioner(own.id);
+      }
+    } else {
+      // All-branches practitioner (e.g. Admin+Practitioner with no branch).
+      // Explicitly reset to the All Branches tab so switching away from a
+      // previously-cached specific branch actually takes effect.
+      if (!hasAutoSelectedBranch.current) {
+        hasAutoSelectedBranch.current = true;
+        setSelectedClinicBranch(null);
         setSelectedPractitioner(own.id);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPractitioner, isStaff, user?.practitioner_id, user?.id, practitioners]);
 
-  // True when the currently selected branch tab is the user's own home clinic.
+  // True when the currently selected branch tab is the user's "own" clinic:
+  // - Branch-assigned practitioner/staff: their home branch tab is active.
+  // - All-branches practitioner (e.g. Admin+Practitioner with no branch): the
+  //   "All Branches" tab (null) is considered their home view.
   const isOwnAssignedClinic =
-    (isPractitioner || isStaff) && cachedOwnBranchId !== null && selectedClinicBranch === cachedOwnBranchId;
+    (isPractitioner || isStaff) && (
+      (cachedOwnBranchId !== null && selectedClinicBranch === cachedOwnBranchId) ||
+      (cachedOwnBranchId === null  && selectedClinicBranch === null)
+    );
 
   // Compute the availability to pass to Calendar
   const practitionerAvailabilityForCalendar = useMemo(() => {
-    if (!selectedPractitioner) return undefined;
+    if (!selectedPractitioner) {
+      // No explicit practitioner filter — overlay own schedule only when on the
+      // user's home tab.  For branch-assigned Admin+Practitioners browsing a
+      // different branch, isOwnAssignedClinic is false, so we return undefined
+      // and the calendar renders without their availability shading.
+      if (isPractitioner && cachedOwnAvailability && isOwnAssignedClinic) return cachedOwnAvailability;
+      return undefined;
+    }
 
     // Find in current practitioners list (works for both number and string ids)
     const practitionerInList = practitioners.find(p => p.id === selectedPractitioner);
@@ -131,7 +164,7 @@ export const Diary: React.FC = () => {
     }
 
     return undefined;
-  }, [selectedPractitioner, practitioners, isPractitioner, isStaff, cachedOwnAvailability]);
+  }, [selectedPractitioner, practitioners, isPractitioner, isStaff, cachedOwnAvailability, isOwnAssignedClinic]);
 
   // Build a full availability map for ALL practitioners so Calendar can colour
   // every slot correctly even when no specific practitioner is selected.
@@ -220,15 +253,23 @@ export const Diary: React.FC = () => {
     setComparePractitioners([null, null]);
 
     if ((isPractitioner || isStaff) && cachedOwnBranchId !== null) {
-      // If switching back to the user's own assigned clinic, restore their filter.
-      // In any other tab, clear the filter so the calendar starts clean.
+      // Branch-assigned: restore own practitioner filter on home branch, clear elsewhere.
       if (branchId === cachedOwnBranchId) {
         setSelectedPractitioner(cachedOwnId);
       } else {
         setSelectedPractitioner(null);
       }
+    } else if ((isPractitioner || isStaff) && cachedOwnBranchId === null) {
+      // All-branches practitioner (e.g. Admin+Practitioner with no branch assignment):
+      // restore own selection when returning to "All Branches" tab; clear on specific
+      // branch tabs (they won't be in the branch-filtered practitioner list anyway).
+      if (branchId === null) {
+        setSelectedPractitioner(cachedOwnId);
+      } else {
+        setSelectedPractitioner(null);
+      }
     } else {
-      // Admin: always clear filter when switching branches
+      // Admin-only: always clear filter when switching branches
       setSelectedPractitioner(null);
     }
   };
@@ -593,7 +634,7 @@ export const Diary: React.FC = () => {
                         {showFilterDropdown && !loadingPractitioners && (
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setShowFilterDropdown(false)} />
-                            <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-gray-200 z-20 max-h-80 overflow-y-auto">
+                            <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-80 overflow-y-auto">
 
                               {selectedClinicBranch && (
                                 <div className="px-4 py-2 bg-care-blue/10 border-b border-care-blue/20">

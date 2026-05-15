@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.db.models import Q, Prefetch
 from datetime import datetime, timedelta
 import pytz
-from .models import Appointment, PractitionerSchedule, AppointmentReminder, BlockAppointment, RebookingLink, CalendarNote
+from .models import Appointment, PractitionerSchedule, AppointmentReminder, BlockAppointment, RebookingLink, CalendarNote, AppointmentConfirmToken
 from .serializers import (
     AppointmentSerializer,
     AppointmentEditSerializer,
@@ -965,7 +965,11 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
             base_qs = base_qs.filter(
                 Q(user__clinic_branch_id=branch_id) |
-                Q(clinic_id=branch_id, user__clinic_branch__isnull=True)
+                Q(clinic_id=branch_id, user__clinic_branch__isnull=True) |
+                # Admin+Practitioner users have no branch restriction — they should
+                # appear in every branch view so they can be selected as a practitioner
+                # regardless of which branch tab the admin is viewing.
+                Q(user__clinic_branch__isnull=True, user__roles__contains=['ADMIN'])
             )
 
         practitioners_data = [
@@ -987,11 +991,16 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         # ── Also include STAFF users so they appear in the diary filter ──
         from apps.accounts.models import User as UserModel
+        # Use roles__contains to correctly match multi-role users who have STAFF
+        # in their roles array, rather than relying only on the primary `role` field.
         staff_qs = UserModel.objects.filter(
             clinic_id__in=all_branch_ids,
-            role='STAFF',
+            roles__contains=['STAFF'],
             is_active=True,
             is_deleted=False,
+        ).exclude(
+            # Exclude users already listed as PRACTITIONERs to avoid duplicates
+            roles__contains=['PRACTITIONER'],
         ).select_related('clinic_branch', 'clinic')
 
         if clinic_branch_param:
@@ -1570,3 +1579,85 @@ class PublicRebookingLinkView(APIView):
             'start_time': new_appt.start_time.strftime('%H:%M'),
             'end_time': new_appt.end_time.strftime('%H:%M'),
         }, status=status.HTTP_201_CREATED)
+
+
+class PublicAppointmentConfirmView(APIView):
+    """
+    POST /api/appointments/confirm-email/<uuid:token>/
+
+    Called by the frontend /confirm/<token> page (no auth required).
+    Validates the one-time confirm token and marks the appointment CONFIRMED.
+    Logs the confirmation in CommunicationLog.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, token):
+        try:
+            ct = AppointmentConfirmToken.objects.select_related(
+                'appointment__patient',
+                'appointment__clinic',
+            ).get(token=token)
+        except AppointmentConfirmToken.DoesNotExist:
+            return Response(
+                {'detail': 'Invalid confirmation token.', 'code': 'invalid'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if ct.is_used:
+            return Response(
+                {'detail': 'This confirmation link has already been used.', 'code': 'used'},
+                status=status.HTTP_410_GONE,
+            )
+
+        if ct.is_expired:
+            return Response(
+                {'detail': 'This confirmation link has expired.', 'code': 'expired'},
+                status=status.HTTP_410_GONE,
+            )
+
+        appt = ct.appointment
+
+        # Mark token used
+        ct.is_used = True
+        ct.used_at = timezone.now()
+        ct.save(update_fields=['is_used', 'used_at'])
+
+        # Confirm the appointment
+        if appt.status == 'SCHEDULED':
+            appt.status = 'CONFIRMED'
+        appt.confirmation_status = 'CONFIRMED'
+        appt.patient_reply = 'Y'
+        appt.patient_reply_at = timezone.now()
+        appt.save(update_fields=[
+            'status', 'confirmation_status', 'patient_reply', 'patient_reply_at',
+        ])
+
+        # Update the most recent APPOINTMENT_REMINDER communication log for this appointment
+        try:
+            from apps.notifications.models import CommunicationLog
+            CommunicationLog.objects.filter(
+                appointment=appt,
+                comm_type='APPOINTMENT_REMINDER',
+                status='SENT',
+            ).order_by('-created_at').update(
+                status='REPLIED',
+                patient_reply='Y',
+                replied_at=timezone.now(),
+            )
+        except Exception as e:
+            logger.warning('Failed to update CommunicationLog for confirm token #%s: %s', ct.id, e)
+
+        logger.info(
+            'Appointment #%s confirmed via email link by patient %s',
+            appt.id, appt.patient_id,
+        )
+
+        return Response({
+            'detail': 'Your appointment has been confirmed!',
+            'appointment_id': appt.id,
+            'appointment_date': str(appt.date),
+            'appointment_time': appt.start_time.strftime('%H:%M'),
+            'clinic_name': appt.clinic.name if appt.clinic else '',
+            'patient_name': appt.patient.get_full_name() if appt.patient else '',
+        }, status=status.HTTP_200_OK)

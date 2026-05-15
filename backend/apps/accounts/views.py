@@ -8,16 +8,19 @@ from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
-from .models import User, Role, Permission
+from .models import User, Role, Permission, PermissionGroup, FeaturePermission, DEFAULT_PERMISSIONS, FEATURE_KEYS, ROLE_PRIORITY, UserRoleChangeLog
 from .serializers import (
     UserSerializer, AdminRegistrationSerializer, UserRegistrationSerializer,
-    RoleSerializer, PermissionSerializer, PasswordChangeSerializer
+    RoleSerializer, PermissionSerializer, PasswordChangeSerializer,
+    PermissionGroupSerializer, PermissionGroupWriteSerializer,
 )
 from .services.password_service import PasswordService
 from .services.email_service import EmailService
+from .services import otp_service
 from .utils.generators import generate_verification_code
 from apps.clinics.models import Clinic, Practitioner
-from apps.common.permissions import IsAdminOrStaffOnly
+from apps.common.permissions import IsAdminOrStaffOnly, HasFeaturePermission
+from apps.common.recaptcha import verify_recaptcha
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,16 +35,136 @@ class AuthViewSet(viewsets.GenericViewSet):
         if self.action in [
             'register_admin', 'register', 'login', 'verify_token',
             'forgot_password', 'verify_code', 'reset_password_with_code',
+            'send_admin_otp', 'verify_admin_otp',
         ]:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
     
+    # ── OTP: Step 1 — send verification code ─────────────────────────────────
+    @action(detail=False, methods=['post'], url_path='send-admin-otp', permission_classes=[AllowAny])
+    def send_admin_otp(self, request):
+        """
+        Step 1 of admin registration:
+        - Validates reCAPTCHA
+        - Validates the email is not already registered
+        - Sends a 6-digit OTP to the provided email
+        """
+        email           = (request.data.get('email') or '').strip().lower()
+        captcha_token   = request.data.get('captcha_token', '')
+        resend          = bool(request.data.get('resend', False))
+
+        if not email:
+            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate reCAPTCHA (skip on resend — cooldown already limits abuse)
+        if not resend:
+            remote_ip = (
+                request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+                or request.META.get('REMOTE_ADDR', '')
+            )
+            captcha_ok, captcha_err = verify_recaptcha(captcha_token, remote_ip)
+            if not captcha_ok:
+                return Response({'detail': captcha_err}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check for duplicate email
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'detail': 'An account with this email already exists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Generate OTP (enforces cooldown + hourly limit)
+        try:
+            code, err = otp_service.generate_otp(email)
+        except Exception:
+            logger.exception("send_admin_otp: unexpected error generating OTP for %s", otp_service._email_hash(email))
+            return Response(
+                {'detail': 'Unable to send OTP right now. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if err:
+            cooldown = otp_service.get_cooldown_seconds(email)
+            return Response(
+                {'detail': err, 'cooldown_seconds': cooldown},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Build a display name from request data for the email greeting
+        first_name = (request.data.get('first_name') or '').strip()
+        display_name = first_name if first_name else email
+
+        try:
+            email_sent = EmailService.send_admin_otp_email(
+                user_email=email,
+                user_name=display_name,
+                otp_code=code,
+            )
+        except Exception:
+            logger.exception("send_admin_otp: email delivery error for %s", otp_service._email_hash(email))
+            email_sent = False
+
+        if not email_sent:
+            logger.warning("send_admin_otp: email delivery failed for %s", otp_service._email_hash(email))
+            return Response(
+                {'detail': 'Failed to send verification code. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {'message': 'Verification code sent.', 'cooldown_seconds': otp_service.RESEND_COOLDOWN},
+            status=status.HTTP_200_OK,
+        )
+
+    # ── OTP: Step 2 — verify code ─────────────────────────────────────────────
+    @action(detail=False, methods=['post'], url_path='verify-admin-otp', permission_classes=[AllowAny])
+    def verify_admin_otp(self, request):
+        """
+        Step 2 of admin registration:
+        - Verifies the OTP submitted by the user
+        - On success, issues a short-lived verification token that must
+          be included in the subsequent register-admin request.
+        """
+        email = (request.data.get('email') or '').strip().lower()
+        code  = (request.data.get('code') or '').strip()
+
+        if not email or not code:
+            return Response(
+                {'detail': 'Email and verification code are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valid, err = otp_service.verify_otp(email, code)
+        if not valid:
+            return Response({'detail': err}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = otp_service.issue_verification_token(email)
+        return Response(
+            {
+                'message': 'Email verified successfully.',
+                'verification_token': token,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    # ── Registration: Step 3 — create account ─────────────────────────────────
     @action(detail=False, methods=['post'], url_path='register-admin', permission_classes=[AllowAny])
     def register_admin(self, request):
         """Register admin — auto-generates password, emails credentials,
-        and creates a PortalLink for the new clinic."""
+        and creates a PortalLink for the new clinic.
+
+        Requires a valid ``verification_token`` issued by verify-admin-otp.
+        """
+        # ── Consume the OTP verification token ───────────────────────────────
+        verification_token = (request.data.get('verification_token') or '').strip()
+        email              = (request.data.get('email') or '').strip().lower()
+
+        token_valid, token_err = otp_service.consume_verification_token(verification_token, email)
+        if not token_valid:
+            return Response({'detail': token_err}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = AdminRegistrationSerializer(data=request.data)
 
         if not serializer.is_valid():
@@ -73,8 +196,10 @@ class AuthViewSet(viewsets.GenericViewSet):
                     last_name=serializer.validated_data['last_name'],
                     phone=serializer.validated_data.get('phone', ''),
                     role='ADMIN',
+                    roles=['ADMIN'],
                     clinic=clinic,
-                    password_changed=False
+                    password_changed=False,
+                    must_change_password=True,
                 )
 
                 # ── Auto-create portal link for the new clinic ───────────────
@@ -114,7 +239,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def login(self, request):
         """User login."""
-        email    = request.data.get('email')
+        email    = (request.data.get('email') or '').strip().lower()
         password = request.data.get('password')
         
         if not email or not password:
@@ -137,7 +262,27 @@ class AuthViewSet(viewsets.GenericViewSet):
                 {'detail': 'Account is inactive. Please contact support.'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
+        # Reject login when temporary credentials have exceeded their TTL.
+        # The user must ask an admin to reset the account.
+        if (
+            user.must_change_password
+            and user.temp_password_expires_at is not None
+            and timezone.now() > user.temp_password_expires_at
+        ):
+            logger.warning(
+                "Expired temporary credentials used for %s; login rejected.", user.email
+            )
+            return Response(
+                {
+                    'detail': (
+                        'Your temporary login credentials have expired. '
+                        'Please contact your administrator to have your account reset.'
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         refresh = RefreshToken.for_user(user)
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
@@ -148,7 +293,8 @@ class AuthViewSet(viewsets.GenericViewSet):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             },
-            'needs_password_change': user.needs_password_change
+            'needs_password_change': user.needs_password_change,
+            'must_change_password': user.must_change_password,
         }, status=status.HTTP_200_OK)
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
@@ -255,7 +401,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         """
         Step 1: Request password reset - send verification code to email.
         """
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         
         if not email:
             return Response(
@@ -313,7 +459,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         """
         Step 2: Verify the code entered by user.
         """
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         code = request.data.get('code')
         
         if not email or not code:
@@ -361,7 +507,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         Step 3: Reset password using verified code.
         After verification, generates a new password and sends it via email.
         """
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         code = request.data.get('code')
         
         if not email or not code:
@@ -388,13 +534,18 @@ class AuthViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        from datetime import timedelta
         # Generate new password
         new_password = PasswordService.generate_temporary_password()
-        
-        # Set new password
+
+        # Set new password and enforce first-login change
         user.set_password(new_password)
-        user.password_changed = False
-        user.save(update_fields=['password', 'password_changed'])
+        user.password_changed        = False
+        user.must_change_password    = True
+        user.temp_password_expires_at = timezone.now() + timedelta(hours=48)
+        user.save(update_fields=[
+            'password', 'password_changed', 'must_change_password', 'temp_password_expires_at',
+        ])
         
         # Send email with new password
         email_sent = EmailService.send_password_reset_email(
@@ -549,11 +700,143 @@ class AuthViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='change-password-first-login',
+        permission_classes=[IsAuthenticated],
+    )
+    def change_password_first_login(self, request):
+        """
+        Mandatory first-login password change.
+
+        This endpoint is called ONLY when ``must_change_password=True``.
+        It verifies the current (temporary) password, enforces the new
+        password strength rules, updates the user record, and returns a
+        fresh JWT pair so the frontend never has to force a logout.
+
+        Request body:
+            current_password : str  — the temporary password the user received
+            new_password     : str  — the new password chosen by the user
+
+        On success:
+            - password is updated
+            - must_change_password is set to False
+            - password_changed is set to True
+            - last_password_change is updated
+            - fresh access + refresh tokens are returned
+        """
+        import re
+        user = request.user
+
+        current_password = request.data.get('current_password', '').strip()
+        new_password     = request.data.get('new_password', '').strip()
+
+        if not current_password or not new_password:
+            return Response(
+                {'detail': 'Both current_password and new_password are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify the current (temporary) password
+        if not user.check_password(current_password):
+            return Response(
+                {'detail': 'Current password is incorrect.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Reject reuse of the same password
+        if user.check_password(new_password):
+            return Response(
+                {'detail': 'New password must be different from your current password.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Enforce password strength: min 8 chars, upper, lower, digit, special
+        strong_pw = re.compile(
+            r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\'":\\|,.<>\/?]).{8,}$'
+        )
+        if not strong_pw.match(new_password):
+            return Response(
+                {
+                    'detail': (
+                        'Password must be at least 8 characters and contain an uppercase letter, '
+                        'a lowercase letter, a number, and a special character.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                user.set_password(new_password)
+                user.must_change_password    = False
+                user.password_changed        = True
+                user.last_password_change    = timezone.now()
+                user.temp_password_expires_at = None  # Invalidate temporary credential TTL
+                user.save(update_fields=[
+                    'password', 'must_change_password', 'password_changed',
+                    'last_password_change', 'temp_password_expires_at',
+                ])
+
+                # Issue a fresh token pair so the frontend stays authenticated
+                refresh = RefreshToken.for_user(user)
+
+                logger.info(
+                    "First-login password change completed for %s (role=%s)",
+                    user.email, user.role,
+                )
+
+                return Response(
+                    {
+                        'detail': 'Password updated successfully.',
+                        'user': UserSerializer(user, context={'request': request}).data,
+                        'tokens': {
+                            'access':  str(refresh.access_token),
+                            'refresh': str(refresh),
+                        },
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+        except Exception as e:
+            logger.error("change_password_first_login failed for %s: %s", user.email, str(e))
+            return Response(
+                {'detail': 'Password change failed. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+def _invalidate_practitioners_cache(user_or_instance):
+    """
+    Delete all practitioners-list cache keys for the clinic family of the given
+    user/staff instance.  Call this after any create, update, or status change
+    that could affect who appears in a branch's practitioner list so that
+    Calendar and Diary always see fresh branch-assignment data.
+    """
+    clinic = getattr(user_or_instance, 'clinic', None)
+    if not clinic:
+        return
+    main_clinic = clinic.main_clinic
+    try:
+        all_branch_ids = list(main_clinic.get_all_branches().values_list('id', flat=True))
+        # Cache keys: '' suffix = All Branches query; numeric suffix = branch-specific
+        keys = [f'practitioners_{main_clinic.id}_'] + [
+            f'practitioners_{main_clinic.id}_{bid}' for bid in all_branch_ids
+        ]
+        cache.delete_many(keys)
+    except Exception:
+        pass  # cache invalidation is best-effort; never break the response
+
 
 class UserViewSet(viewsets.ModelViewSet):
     """CRUD operations for users / staff management"""
     
-    queryset = User.objects.filter(is_deleted=False).select_related('clinic', 'clinic_branch')
+    queryset = (
+        User.objects.filter(is_deleted=False)
+        .select_related('clinic', 'clinic_branch', 'permission_group', 'practitioner_profile')
+        .prefetch_related('permission_group__feature_permissions')
+    )
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsAdminOrStaffOnly]
 
@@ -582,9 +865,10 @@ class UserViewSet(viewsets.ModelViewSet):
             base_qs = base_qs.filter(clinic_branch_id=branch_id)
 
         # ✅ Optional filter: ?role=STAFF or ?role=PRACTITIONER
+        # Queries the `roles` JSONField (contains) so multi-role users are included.
         role = self.request.query_params.get('role')
         if role:
-            base_qs = base_qs.filter(role=role)
+            base_qs = base_qs.filter(roles__contains=[role])
 
         return base_qs
 
@@ -640,9 +924,17 @@ class UserViewSet(viewsets.ModelViewSet):
         
         try:
             with transaction.atomic():
+                from datetime import timedelta
                 temp_password = PasswordService.generate_temporary_password()
                 role          = serializer.validated_data.get('role', 'STAFF')
-                
+                roles         = serializer.validated_data.get('roles', [role])
+                if not roles:
+                    roles = [role]
+
+                # Temporary credentials expire in 48 hours; must_change_password
+                # gates all protected routes until the user completes the flow.
+                temp_expires = timezone.now() + timedelta(hours=48)
+
                 user = User.objects.create_user(
                     email=serializer.validated_data['email'],
                     password=temp_password,
@@ -650,15 +942,19 @@ class UserViewSet(viewsets.ModelViewSet):
                     last_name=serializer.validated_data['last_name'],
                     phone=serializer.validated_data.get('phone', ''),
                     role=role,
+                    roles=roles,
                     position=serializer.validated_data.get('position', ''),
                     clinic=request.user.clinic,
-                    clinic_branch=branch,          # ✅ assign branch
-                    password_changed=False
+                    clinic_branch=branch,
+                    permission_group=serializer.validated_data.get('permission_group'),
+                    password_changed=False,
+                    must_change_password=True,
+                    temp_password_expires_at=temp_expires,
                 )
                 
-                # ── Create Practitioner profile if needed ────────────────────
+                # ── Create Practitioner profile if PRACTITIONER is in roles ──
                 practitioner_created = False
-                if role == 'PRACTITIONER':
+                if 'PRACTITIONER' in roles:
                     if not Practitioner.objects.filter(user=user).exists():
                         # Extract availability fields from request data
                         availability_data = {
@@ -672,16 +968,26 @@ class UserViewSet(viewsets.ModelViewSet):
                         }
                         Practitioner.objects.create(
                             user=user,
-                            clinic=request.user.clinic,
+                            # Use the user's assigned branch as their working clinic when
+                            # set (e.g. Admin+Practitioner assigned to a specific branch);
+                            # fall back to the main clinic for unrestricted accounts.
+                            clinic=branch or request.user.clinic,
                             license_number=request.data.get('license_number', ''),
+
                             specialization=request.data.get('specialization', ''),
                             consultation_fee=request.data.get('consultation_fee', 0),
                             is_accepting_patients=True,
                             **availability_data
                         )
                         practitioner_created = True
+                        # Mirror discipline on the User model so to_representation
+                        # always has a non-empty fallback for ADMIN+PRACTITIONER users.
+                        discipline_value = availability_data.get('discipline', 'OCCUPATIONAL_THERAPY')
+                        if discipline_value:
+                            User.objects.filter(pk=user.pk).update(discipline=discipline_value)
                         logger.info(f"Practitioner profile created for: {user.email}")
-                elif role == 'STAFF':
+
+                if 'STAFF' in roles:
                     # Save Staff availability and discipline directly on the User model
                     duty_schedule = request.data.get('duty_schedule', None)
                     duty_days = request.data.get('duty_days', [])
@@ -695,11 +1001,12 @@ class UserViewSet(viewsets.ModelViewSet):
                         user.save()
 
                 company_name = request.user.clinic.name if request.user.clinic else 'Your Organization'
-                email_sent   = EmailService.send_welcome_email(
+                email_sent   = EmailService.send_staff_welcome_email(
                     user_email=user.email,
                     user_name=user.get_full_name(),
+                    role=role,
                     password=temp_password,
-                    company_name=company_name
+                    company_name=company_name,
                 )
                 
                 if not email_sent:
@@ -707,15 +1014,19 @@ class UserViewSet(viewsets.ModelViewSet):
                 
                 logger.info(
                     f"Staff account created: {user.email} "
-                    f"(Role: {role}, Branch: {branch.name if branch else 'All'}) "
+                    f"(Roles: {roles}, Branch: {branch.name if branch else 'All'}) "
                     f"by {request.user.email}"
                 )
-                
+
+                # Purge practitioners cache so Calendar/Diary pick up the new
+                # member immediately without waiting for the 5-minute TTL.
+                _invalidate_practitioners_cache(user)
+
                 response_data = self.get_serializer(user).data
                 return Response({
                     **response_data,
                     'message': (
-                        f'{"Practitioner" if role == "PRACTITIONER" else "Staff"} account created successfully! '
+                        f'Account created successfully for role(s): {", ".join(roles)}. '
                         f'Login credentials sent to email.'
                     ),
                     'email_sent': email_sent,
@@ -756,24 +1067,61 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         old_role = instance.role
+        new_role_requested = serializer.validated_data.get('role', old_role)
+        new_roles_requested = serializer.validated_data.get('roles', instance.get_effective_roles())
+
+        # ── Owner demotion protection ─────────────────────────────────────────
+        # Protect when ADMIN is being removed from the roles list
+        if 'ADMIN' in instance.get_effective_roles() and 'ADMIN' not in new_roles_requested:
+            remaining_owners = User.objects.filter(
+                clinic=instance.clinic,
+                is_deleted=False,
+                is_active=True,
+            ).filter(roles__contains=['ADMIN']).exclude(pk=instance.pk).count()
+            if remaining_owners == 0:
+                return Response(
+                    {'detail': 'Cannot remove Admin role from the last Owner account. '
+                               'Assign another Owner first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # ── Owner deactivation protection ────────────────────────────────────
+        if 'ADMIN' in instance.get_effective_roles() and serializer.validated_data.get('is_active') is False:
+            remaining_active_owners = User.objects.filter(
+                clinic=instance.clinic,
+                is_deleted=False,
+                is_active=True,
+            ).filter(roles__contains=['ADMIN']).exclude(pk=instance.pk).count()
+            if remaining_active_owners == 0:
+                return Response(
+                    {'detail': 'Cannot deactivate the last active Owner account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         self.perform_update(serializer)
         instance.refresh_from_db()
-        new_role = instance.role
+        new_role  = instance.role
+        new_roles = instance.get_effective_roles()
 
-        # ── Sync Practitioner profile when role changes ──────────────────────
+        # ── Sync Practitioner profile when PRACTITIONER added/removed ────────
         practitioner_created = False
-        if new_role == 'PRACTITIONER' and old_role != 'PRACTITIONER':
-            # Role upgraded to PRACTITIONER — ensure profile exists
+        had_practitioner = 'PRACTITIONER' in (instance.roles or [old_role])
+        has_practitioner = 'PRACTITIONER' in new_roles
+
+        if has_practitioner and not Practitioner.objects.filter(user=instance, is_deleted=False).exists():
+            # PRACTITIONER role added — ensure profile exists
             _, practitioner_created = Practitioner.objects.get_or_create(
                 user=instance,
                 defaults={
-                    'clinic':                 instance.clinic or request.user.clinic,
+                    # Prefer the user's specific branch over the main clinic so
+                    # branch-assigned Admin+Practitioner users are scoped correctly.
+                    'clinic':                 instance.clinic_branch or instance.clinic or request.user.clinic,
+
                     'license_number':         '',
                     'specialization':         '',
                     'discipline':             request.data.get('discipline', 'OCCUPATIONAL_THERAPY'),
                     'consultation_fee':       0,
                     'is_accepting_patients':  True,
-                    # Availability fields
                     'duty_days':             request.data.get('duty_days', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']),
                     'duty_start_time':       request.data.get('duty_start_time', '08:00'),
                     'duty_end_time':         request.data.get('duty_end_time', '17:00'),
@@ -783,23 +1131,34 @@ class UserViewSet(viewsets.ModelViewSet):
                 },
             )
             if practitioner_created:
+                # Mirror discipline on the User model so to_representation always has
+                # a non-empty fallback for ADMIN+PRACTITIONER users.
+                new_discipline = request.data.get('discipline', 'OCCUPATIONAL_THERAPY')
+                if new_discipline:
+                    User.objects.filter(pk=instance.pk).update(discipline=new_discipline)
                 logger.info(
                     "Practitioner profile created on role change for: %s by %s",
                     instance.email, request.user.email,
                 )
 
-        elif old_role == 'PRACTITIONER' and new_role != 'PRACTITIONER':
-            # Role downgraded from PRACTITIONER — soft-delete or deactivate profile
+        elif not has_practitioner and Practitioner.objects.filter(user=instance, is_deleted=False).exists():
+            # PRACTITIONER role removed — soft-delete profile
             Practitioner.objects.filter(user=instance).update(is_deleted=True)
             logger.info(
-                "Staff account deactivated on role change for: %s by %s",
+                "Practitioner profile soft-deleted on role change for: %s by %s",
                 instance.email, request.user.email,
             )
 
         logger.info(
-            "Staff account updated: %s (role: %s → %s) by %s",
-            instance.email, old_role, new_role, request.user.email,
+            "Staff account updated: %s (roles: %s → %s) by %s",
+            instance.email, old_role, new_roles, request.user.email,
         )
+
+        # ── Invalidate practitioners cache ────────────────────────────────────
+        # Branch/role changes are now live — purge the 5-minute practitioners
+        # cache so Diary/Calendar refetch with the updated assignment immediately
+        # instead of serving stale branch data for up to 5 minutes.
+        _invalidate_practitioners_cache(instance)
 
         response_data = self.get_serializer(instance).data
         return Response({
@@ -808,21 +1167,35 @@ class UserViewSet(viewsets.ModelViewSet):
         })
 
     def destroy(self, request, *args, **kwargs):
-        """Soft delete user."""
+        """Soft delete user — with Owner protection."""
         instance = self.get_object()
-        
+
         if instance.id == request.user.id:
             return Response(
                 {'detail': 'You cannot delete your own account.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        # ── Owner protection: never delete the last ADMIN ────────────────────
+        if 'ADMIN' in instance.get_effective_roles():
+            remaining_owners = User.objects.filter(
+                clinic=instance.clinic,
+                is_deleted=False,
+                is_active=True,
+            ).filter(roles__contains=['ADMIN']).exclude(pk=instance.pk).count()
+            if remaining_owners == 0:
+                return Response(
+                    {'detail': 'Cannot delete the last Owner account. '
+                               'Assign another Owner first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         instance.is_deleted = True
         instance.is_active  = False
         instance.save()
-        
+
         logger.info(f"User soft deleted: {instance.email} by {request.user.email}")
-        
+
         return Response(
             {'detail': 'Staff member removed successfully.'},
             status=status.HTTP_204_NO_CONTENT
@@ -928,6 +1301,131 @@ class UserViewSet(viewsets.ModelViewSet):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # ── Multi-Role Management ─────────────────────────────────────────────────
+
+    @action(detail=True, methods=['get', 'put'], url_path='roles',
+            permission_classes=[IsAuthenticated])
+    def manage_roles(self, request, pk=None):
+        """
+        GET  /users/{id}/roles/  → list current roles
+        PUT  /users/{id}/roles/  → replace roles list (Admin only)
+
+        Request body (PUT):
+            { "roles": ["ADMIN", "PRACTITIONER"] }
+
+        Business rules:
+        - At least one role must remain.
+        - Removing ADMIN from the last owner is blocked.
+        - Adding PRACTITIONER auto-creates the Practitioner profile.
+        - Removing PRACTITIONER soft-deletes the Practitioner profile.
+        - Every change is recorded in UserRoleChangeLog for audit.
+        """
+        target = self.get_object()
+
+        if request.method == 'GET':
+            return Response({'roles': target.get_effective_roles()})
+
+        # ── PUT: only admins may change roles ────────────────────────────────
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Only administrators can modify user roles.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        new_roles_raw = request.data.get('roles', [])
+        if not isinstance(new_roles_raw, list) or not new_roles_raw:
+            return Response(
+                {'detail': '`roles` must be a non-empty list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valid_roles = {r for r, _ in User.ROLE_CHOICES}
+        invalid = [r for r in new_roles_raw if r not in valid_roles]
+        if invalid:
+            return Response(
+                {'detail': f'Invalid role(s): {invalid}. Valid: {list(valid_roles)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Deduplicate while preserving priority order
+        new_roles = [r for r in ROLE_PRIORITY if r in new_roles_raw]
+        old_roles  = target.get_effective_roles()
+
+        # ── Owner guard ──────────────────────────────────────────────────────
+        if 'ADMIN' in old_roles and 'ADMIN' not in new_roles:
+            remaining = User.objects.filter(
+                clinic=target.clinic,
+                is_deleted=False,
+                is_active=True,
+            ).filter(roles__contains=['ADMIN']).exclude(pk=target.pk).count()
+            if remaining == 0:
+                return Response(
+                    {'detail': 'Cannot remove Admin role from the last Owner. '
+                               'Assign another Owner first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        with transaction.atomic():
+            target.roles = new_roles
+            target.save()
+            target.refresh_from_db()
+
+            # ── Sync Practitioner profile ─────────────────────────────────
+            if 'PRACTITIONER' in new_roles and 'PRACTITIONER' not in old_roles:
+                Practitioner.objects.get_or_create(
+                    user=target,
+                    defaults={
+                        'clinic':               target.clinic or request.user.clinic,
+                        'is_accepting_patients': True,
+                        'discipline':           'OCCUPATIONAL_THERAPY',
+                    },
+                )
+                logger.info('Practitioner profile created for %s via roles update', target.email)
+
+            elif 'PRACTITIONER' not in new_roles and 'PRACTITIONER' in old_roles:
+                Practitioner.objects.filter(user=target).update(is_deleted=True)
+                logger.info('Practitioner profile soft-deleted for %s via roles update', target.email)
+
+            # ── Audit log ─────────────────────────────────────────────────
+            added   = set(new_roles) - set(old_roles)
+            removed = set(old_roles) - set(new_roles)
+            log_entries = []
+            for r in added:
+                log_entries.append(UserRoleChangeLog(
+                    target_user_id=target.pk,
+                    target_user_email=target.email,
+                    changed_by_id=request.user.pk,
+                    changed_by_email=request.user.email,
+                    action='add',
+                    role=r,
+                    roles_before=old_roles,
+                    roles_after=new_roles,
+                ))
+            for r in removed:
+                log_entries.append(UserRoleChangeLog(
+                    target_user_id=target.pk,
+                    target_user_email=target.email,
+                    changed_by_id=request.user.pk,
+                    changed_by_email=request.user.email,
+                    action='remove',
+                    role=r,
+                    roles_before=old_roles,
+                    roles_after=new_roles,
+                ))
+            if log_entries:
+                UserRoleChangeLog.objects.bulk_create(log_entries)
+
+            logger.info(
+                'Roles updated for %s: %s → %s by %s',
+                target.email, old_roles, new_roles, request.user.email,
+            )
+
+            # ── Emit real-time permission refresh ────────────────────────
+            from apps.accounts.permission_events import emit_permissions_updated
+            emit_permissions_updated(target.pk)
+
+        return Response(self.get_serializer(target).data)
+
 
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
@@ -938,4 +1436,202 @@ class RoleViewSet(viewsets.ModelViewSet):
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
+
+
+# ── RBAC: Permission Group Management ────────────────────────────────────────
+
+class PermissionGroupViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for clinic-scoped Permission Groups.
+
+    Rules:
+    * Only ADMIN users may manage permission groups.
+    * Groups are scoped to the requesting admin's clinic.
+    * Protected groups (Owner) cannot be deleted.
+    * At least one Owner group must always exist.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class   = PermissionGroupSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return PermissionGroup.objects.none()
+        if user.is_admin and user.clinic:
+            main_clinic = user.clinic.main_clinic
+            return (
+                PermissionGroup.objects
+                .filter(clinic=main_clinic)
+                .prefetch_related('feature_permissions')
+                .order_by('role_template', 'name')
+            )
+        # Non-admin: read-only, own group only
+        if user.permission_group_id:
+            return PermissionGroup.objects.filter(pk=user.permission_group_id).prefetch_related('feature_permissions')
+        return PermissionGroup.objects.none()
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return PermissionGroupWriteSerializer
+        return PermissionGroupSerializer
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminOrStaffOnly()]
+
+    def perform_create(self, serializer):
+        if not self.request.user.is_admin:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only administrators can create permission groups.')
+        main_clinic = self.request.user.clinic.main_clinic
+        serializer.save(clinic=main_clinic)
+
+    def perform_update(self, serializer):
+        """Save then notify every active member of the updated group."""
+        instance = serializer.save()
+        self._emit_permission_updates(instance)
+
+    def _emit_permission_updates(self, group):
+        """
+        Emit a lightweight permissions_updated WS event to all active users
+        assigned to `group`.  Non-fatal: failures are logged and ignored.
+        """
+        try:
+            from apps.accounts.permission_events import emit_permissions_updated
+            user_ids = list(
+                group.users.filter(is_deleted=False, is_active=True)
+                           .values_list('id', flat=True)
+            )
+            for uid in user_ids:
+                emit_permissions_updated(uid)
+            if user_ids:
+                logger.debug(
+                    '[PermissionGroupViewSet] Emitted permissions_updated to %d user(s) in group "%s"',
+                    len(user_ids), group.name,
+                )
+        except Exception as exc:
+            logger.warning('[PermissionGroupViewSet] Could not emit permission updates: %s', exc)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if instance.is_protected:
+            return Response(
+                {'detail': f'The "{instance.name}" group is protected and cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Reassign members to no group before deletion
+        instance.users.all().update(permission_group=None)
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'], url_path='duplicate')
+    def duplicate(self, request, pk=None):
+        """Clone a permission group with a new name."""
+        source = self.get_object()
+        new_name = request.data.get('name', f'{source.name} (Copy)')
+
+        if not request.user.is_admin:
+            return Response({'detail': 'Only administrators can duplicate groups.'}, status=403)
+
+        main_clinic = request.user.clinic.main_clinic
+        if PermissionGroup.objects.filter(clinic=main_clinic, name=new_name).exists():
+            return Response({'detail': 'A group with that name already exists.'}, status=400)
+
+        with transaction.atomic():
+            new_group = PermissionGroup.objects.create(
+                clinic=main_clinic,
+                name=new_name,
+                description=request.data.get('description', source.description),
+                role_template='CUSTOM',
+                is_protected=False,
+                is_system_template=False,
+            )
+            for fp in source.feature_permissions.all():
+                FeaturePermission.objects.create(
+                    group=new_group,
+                    feature_key=fp.feature_key,
+                    access_level=fp.access_level,
+                )
+
+        return Response(PermissionGroupSerializer(new_group).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='assign-user')
+    def assign_user(self, request, pk=None):
+        """Assign a user to this permission group."""
+        group = self.get_object()
+        if not request.user.is_admin:
+            return Response({'detail': 'Only administrators can assign permission groups.'}, status=403)
+
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'detail': 'user_id is required.'}, status=400)
+
+        try:
+            target = User.objects.get(
+                pk=user_id,
+                clinic=request.user.clinic,
+                is_deleted=False,
+            )
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=404)
+
+        # Owner protection: prevent removing the last admin from Owner group
+        if target.role == 'ADMIN' and target.permission_group and target.permission_group.is_protected:
+            remaining = User.objects.filter(
+                clinic=request.user.clinic,
+                role='ADMIN',
+                permission_group=target.permission_group,
+                is_deleted=False,
+                is_active=True,
+            ).exclude(pk=target.pk).count()
+            if remaining == 0:
+                return Response(
+                    {'detail': 'Cannot reassign the last Owner. Add another Owner first.'},
+                    status=400,
+                )
+
+        target.permission_group = group
+        target.save(update_fields=['permission_group'])
+
+        # Notify the reassigned user immediately so their UI refreshes
+        try:
+            from apps.accounts.permission_events import emit_permissions_updated
+            emit_permissions_updated(target.pk)
+        except Exception as exc:
+            logger.warning('[PermissionGroupViewSet.assign_user] Could not emit update: %s', exc)
+
+        return Response(UserSerializer(target).data)
+
+    @action(detail=False, methods=['get'], url_path='feature-keys')
+    def feature_keys(self, request):
+        """Return all valid feature keys and their labels."""
+        KEY_LABELS = {
+            'dashboard':        'Dashboard',
+            'appointments':     'Appointments',
+            'calendar':         'Calendar',
+            'diary':            'Diary',
+            'clinical_notes':   'Clinical Notes',
+            'client_cases':     'Client Cases',
+            'patients':         'Patients',
+            'reports':          'Reports',
+            'inventory':        'Inventory',
+            'invoices':         'Invoices',
+            'billing':          'Billing',
+            'subscriptions':    'Subscriptions',
+            'setup':            'Setup',
+            'staff_management': 'Staff Management',
+            'permissions':      'Permissions',
+            'settings':         'Settings',
+            'documents':        'Documents',
+            'outcome_measures': 'Outcome Measures',
+            'contacts':         'Contacts',
+            'communication':    'Communication',
+        }
+        return Response([
+            {'key': k, 'label': KEY_LABELS.get(k, k.replace('_', ' ').title())}
+            for k in FEATURE_KEYS
+        ])
     permission_classes = [IsAuthenticated, IsAdminOrStaffOnly] 

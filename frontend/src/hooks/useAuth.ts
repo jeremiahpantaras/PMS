@@ -41,10 +41,11 @@ export const useAuth = () => {
       
       toast.success(`Welcome back, ${response.user.first_name}!`);
       
-      // Redirect based on role
-      if (response.user.role === 'ADMIN') {
+      // Redirect based on highest-priority role
+      const userRoles = response.user.roles ?? [response.user.role];
+      if (userRoles.includes('ADMIN')) {
         navigate('/dashboard');
-      } else if (response.user.role === 'PRACTITIONER') {
+      } else if (userRoles.includes('PRACTITIONER')) {
         navigate('/appointments');
       } else {
         navigate('/patients');
@@ -119,14 +120,19 @@ export const useAuth = () => {
   }, [tokens, clearAuth, navigate]);
 
   /**
-   * Check if user has specific role
+   * Check if user has a specific role (multi-role aware).
+   * Returns true if the user holds ANY of the provided roles.
    */
   const hasRole = useCallback((role: string | string[]) => {
     if (!user) return false;
+    // Prefer the `roles` array; fall back to the single `role` field for compat.
+    const userRoles: string[] = (user.roles && user.roles.length > 0)
+      ? user.roles
+      : [user.role];
     if (Array.isArray(role)) {
-      return role.includes(user.role);
+      return role.some(r => userRoles.includes(r));
     }
-    return user.role === role;
+    return userRoles.includes(role);
   }, [user]);
 
   return {

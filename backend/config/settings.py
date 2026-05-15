@@ -24,6 +24,9 @@ USE_TZ = True
 # Frontend URL
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+# reCAPTCHA
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "")
+
 # Allowed Hosts
 if os.getenv("RENDER"):
     ALLOWED_HOSTS = ["mespms.com", "www.mespms.com", "api.mespms.com", "malasakit-jato.onrender.com",]

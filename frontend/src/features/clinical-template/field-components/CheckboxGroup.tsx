@@ -13,7 +13,7 @@ interface CheckboxGroupProps {
 }
 
 export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
-  label, value = [], onChange, options, error, required, disabled,
+  label, value = [], onChange, options, error, required, disabled, helpText,
 }) => {
   const toggle = (val: string) => {
     const current = Array.isArray(value) ? value : [];
@@ -41,6 +41,7 @@ export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
           </label>
         ))}
       </div>
+      {helpText && <p className="text-xs text-gray-400 mt-1 italic">{helpText}</p>}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );

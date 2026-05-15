@@ -1,18 +1,26 @@
+RECURRING APPOINTMENTS CONFIRMED — {{ clinic_name }}
+
 Hi {{ patient_first_name }},
 
-Your {{ total_appointments }} recurring appointments have been confirmed!
+Your recurring appointment series of {{ total_appointments }} sessions has been confirmed.
 
-Service: {{ service_name }}
-{% if practitioner_name %}Practitioner: {{ practitioner_name }}{% endif %}
-Location: {{ location_name }}
+SERIES DETAILS
+---------------
+Service:      {{ service_name }}
+{% if practitioner_name %}Practitioner: {{ practitioner_name }}
+{% endif %}Location:     {{ location_name }}
 
-📅 Appointment Dates:
+YOUR SCHEDULE
+--------------
 {{ schedule_list_text }}
 
-If you need to reschedule or cancel any appointment, please contact us:
-{% if clinic_phone %}📞 {{ clinic_phone }}{% endif %}
-{% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+We look forward to seeing you. If you need to reschedule any session,
+please contact us as soon as possible.
 
-We look forward to seeing you!
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}
 
-– {{ clinic_name }}
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

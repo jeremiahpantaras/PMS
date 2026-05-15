@@ -1,284 +1,84 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Appointment Reminder</title>
-  <style>
-    /* Reset */
-    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-    img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+{% extends "appointments/email/_base_email.html" %}
 
-    /* Base */
-    body {
-      margin: 0 !important;
-      padding: 0 !important;
-      background-color: #f4f4f5;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-                   Helvetica, Arial, sans-serif;
-    }
+{% block title %}Appointment Reminder{% endblock %}
+{% block title_color %}#d97706{% endblock %}
 
-    .email-wrapper {
-      width: 100%;
-      background-color: #f4f4f5;
-      padding: 32px 16px;
-    }
+{% block header_icon %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;">
+  <tr>
+    <td align="center" style="width:40px;height:40px;background-color:#fef3c7;border-radius:8px;text-align:center;vertical-align:middle;">
+      <span style="font-size:18px;line-height:40px;">&#128276;</span>
+    </td>
+  </tr>
+</table>
+{% endblock %}
 
-    .email-container {
-      max-width: 560px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
+{% block email_heading %}Appointment Reminder{% endblock %}
 
-    /* Header */
-    .header {
-      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-      padding: 32px 40px;
-      text-align: center;
-    }
-    .header-logo {
-      font-size: 22px;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.5px;
-      margin: 0 0 4px 0;
-    }
-    .header-tagline {
-      font-size: 12px;
-      color: rgba(255,255,255,0.85);
-      margin: 0;
-    }
+{% block content %}
+<p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 6px;">Hi {{ patient_first_name }},</p>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
+  This is a friendly reminder for your upcoming appointment.
+</p>
 
-    /* Body */
-    .body {
-      padding: 32px 40px;
-    }
+<!-- Appointment details card -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+  <tr>
+    <td style="padding:16px 20px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#92400e;margin:0 0 14px;">Your Appointment</p>
 
-    .greeting {
-      font-size: 18px;
-      font-weight: 700;
-      color: #111827;
-      margin: 0 0 8px 0;
-    }
-    .subtext {
-      font-size: 14px;
-      color: #6b7280;
-      margin: 0 0 24px 0;
-      line-height: 1.6;
-    }
-
-    /* Appointment card */
-    .appt-card {
-      background-color: #fff7ed;
-      border: 1.5px solid #fed7aa;
-      border-radius: 10px;
-      padding: 20px 24px;
-      margin-bottom: 24px;
-    }
-    .appt-card-title {
-      font-size: 11px;
-      font-weight: 700;
-      color: #ea580c;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin: 0 0 16px 0;
-    }
-
-    .appt-row {
-      display: flex;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-    .appt-label {
-      font-size: 12px;
-      color: #9ca3af;
-      width: 110px;
-      flex-shrink: 0;
-      padding-top: 1px;
-    }
-    .appt-value {
-      font-size: 14px;
-      font-weight: 600;
-      color: #111827;
-      flex: 1;
-    }
-
-    /* Divider */
-    .divider {
-      border: none;
-      border-top: 1px solid #f3f4f6;
-      margin: 24px 0;
-    }
-
-    /* Notes box */
-    .notes-box {
-      background-color: #f9fafb;
-      border-radius: 8px;
-      padding: 14px 16px;
-      margin-bottom: 24px;
-    }
-    .notes-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #9ca3af;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin: 0 0 6px 0;
-    }
-    .notes-text {
-      font-size: 14px;
-      color: #374151;
-      margin: 0;
-      line-height: 1.6;
-    }
-
-    /* CTA reminder */
-    .cta-text {
-      font-size: 13px;
-      color: #6b7280;
-      line-height: 1.7;
-      margin: 0 0 24px 0;
-    }
-    .cta-text strong { color: #111827; }
-
-    /* Footer */
-    .footer {
-      background-color: #f9fafb;
-      border-top: 1px solid #f3f4f6;
-      padding: 20px 40px;
-      text-align: center;
-    }
-    .footer-clinic {
-      font-size: 13px;
-      font-weight: 600;
-      color: #374151;
-      margin: 0 0 4px 0;
-    }
-    .footer-contact {
-      font-size: 12px;
-      color: #9ca3af;
-      margin: 0 0 12px 0;
-      line-height: 1.6;
-    }
-    .footer-legal {
-      font-size: 11px;
-      color: #d1d5db;
-      margin: 0;
-    }
-
-    /* Mobile */
-    @media only screen and (max-width: 600px) {
-      .body, .header, .footer { padding-left: 24px !important; padding-right: 24px !important; }
-      .appt-label { width: 90px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="email-wrapper">
-    <div class="email-container">
-
-      <!-- ── Header ── -->
-      <div class="header">
-        {% if clinic_logo_url %}
-        <img src="{{ clinic_logo_url }}" alt="{{ clinic_name }} Logo" style="max-height:60px;max-width:200px;margin-bottom:4px;" />
-        {% else %}
-        <p class="header-logo">{{ clinic_name }}</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="36%" style="font-size:13px;color:#6b7280;padding:4px 0;vertical-align:top;">Date</td>
+          <td width="64%" style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;vertical-align:top;">{{ appointment_date }}</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:#6b7280;padding:4px 0;vertical-align:top;">Time</td>
+          <td style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;vertical-align:top;">{{ appointment_time }}</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:#6b7280;padding:4px 0;vertical-align:top;">Service</td>
+          <td style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;vertical-align:top;">{{ appointment_type }}</td>
+        </tr>
+        {% if practitioner_name %}
+        <tr>
+          <td style="font-size:13px;color:#6b7280;padding:4px 0;vertical-align:top;">Practitioner</td>
+          <td style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;vertical-align:top;">{{ practitioner_name }}</td>
+        </tr>
         {% endif %}
-        <p class="header-tagline">Practice Management System</p>
-      </div>
+        <tr>
+          <td style="font-size:13px;color:#6b7280;padding:4px 0;vertical-align:top;">Location</td>
+          <td style="font-size:13px;font-weight:600;color:#111827;padding:4px 0;vertical-align:top;">{{ location_name }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 
-      <!-- ── Body ── -->
-      <div class="body">
+{% if chief_complaint %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:20px;">
+  <tr>
+    <td style="padding:14px 20px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#374151;margin:0 0 6px;">Chief Complaint</p>
+      <p style="font-size:13px;color:#1f2937;margin:0;line-height:1.5;">{{ chief_complaint }}</p>
+    </td>
+  </tr>
+</table>
+{% endif %}
 
-        <p class="greeting">Hi {{ patient_first_name }},</p>
-        <p class="subtext">
-          This is a friendly reminder that you have an appointment scheduled
-          <strong>tomorrow</strong>. Please find the details below.
-        </p>
+{% if notes_for_patient %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;margin-bottom:20px;">
+  <tr>
+    <td style="padding:14px 20px;">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#166534;margin:0 0 6px;">Notes</p>
+      <p style="font-size:13px;color:#1f2937;margin:0;line-height:1.5;">{{ notes_for_patient }}</p>
+    </td>
+  </tr>
+</table>
+{% endif %}
 
-        <!-- Appointment Card -->
-        <div class="appt-card">
-          <p class="appt-card-title">📅 Your Appointment Details</p>
-
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td class="appt-label">Date</td>
-              <td class="appt-value">{{ appointment_date }}</td>
-            </tr>
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            <tr>
-              <td class="appt-label">Time</td>
-              <td class="appt-value">{{ appointment_time }}</td>
-            </tr>
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            <tr>
-              <td class="appt-label">Type</td>
-              <td class="appt-value">{{ appointment_type }}</td>
-            </tr>
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            <tr>
-              <td class="appt-label">Practitioner</td>
-              <td class="appt-value">{{ practitioner_name }}</td>
-            </tr>
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            <tr>
-              <td class="appt-label">Location</td>
-              <td class="appt-value">{{ location_name }}</td>
-            </tr>
-            {% if clinic_address %}
-            <tr><td colspan="2" style="height:10px;"></td></tr>
-            <tr>
-              <td class="appt-label">Address</td>
-              <td class="appt-value" style="font-weight:400;color:#6b7280;">{{ clinic_address }}</td>
-            </tr>
-            {% endif %}
-          </table>
-        </div>
-
-        {% if notes_for_patient %}
-        <!-- Patient Notes -->
-        <div class="notes-box">
-          <p class="notes-label">📝 Notes for You</p>
-          <p class="notes-text">{{ notes_for_patient }}</p>
-        </div>
-        {% endif %}
-
-        <hr class="divider" />
-
-        <p class="cta-text">
-          If you need to <strong>reschedule or cancel</strong> your appointment,
-          please contact us as soon as possible so we can offer your slot to
-          another patient.
-          {% if clinic_phone %}<br/>📞 <strong>{{ clinic_phone }}</strong>{% endif %}
-          {% if clinic_email %}<br/>✉️ <a href="mailto:{{ clinic_email }}" style="color:#f97316;">{{ clinic_email }}</a>{% endif %}
-        </p>
-
-        <p class="cta-text">
-          We look forward to seeing you, {{ patient_first_name }}!
-        </p>
-
-      </div>
-
-      <!-- ── Footer ── -->
-      <div class="footer">
-        <p class="footer-clinic">{{ clinic_name }}</p>
-        <p class="footer-contact">
-          {% if clinic_phone %}{{ clinic_phone }}{% endif %}
-          {% if clinic_phone and clinic_email %} &nbsp;·&nbsp; {% endif %}
-          {% if clinic_email %}{{ clinic_email }}{% endif %}
-          {% if clinic_address %}<br/>{{ clinic_address }}{% endif %}
-        </p>
-        <p class="footer-legal">
-          This is an automated reminder from {{ clinic_name }}'s Practice Management System.
-          Please do not reply directly to this email.
-        </p>
-      </div>
-
-    </div>
-  </div>
-</body>
-</html>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0;">
+  We look forward to seeing you. If you need to reschedule or cancel,
+  please contact us as soon as possible.
+</p>
+{% endblock %}

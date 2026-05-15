@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { notificationsApi } from '../services/notifications.api';
 import type { Notification } from '../types/notifications.types';
+import { useAuthStore } from '@/store/auth.store';
 
 const POLL_INTERVAL_MS  = 60_000;
 const WS_BASE           = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000';
@@ -27,12 +29,14 @@ export function useNotifications(isOpen: boolean, onIncoming?: (n: Notification)
   const [page,          setPage]          = useState(1);
   const [hasMore,       setHasMore]       = useState(false);
 
-  const pollRef        = useRef<ReturnType<typeof setInterval> | null>(null);
-  const wsRef          = useRef<WebSocket | null>(null);
-  const retryCountRef  = useRef(0);
-  const retryTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMountedRef   = useRef(true);
-  const onIncomingRef  = useRef(onIncoming);
+  const pollRef           = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef             = useRef<WebSocket | null>(null);
+  const retryCountRef     = useRef(0);
+  const retryTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef      = useRef(true);
+  const onIncomingRef     = useRef(onIncoming);
+  // Throttle: prevent multiple permission refreshes within 2 s
+  const permRefreshTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref fresh without re-triggering connectWebSocket
   useEffect(() => { onIncomingRef.current = onIncoming; }, [onIncoming]);
@@ -153,6 +157,23 @@ export function useNotifications(isOpen: boolean, onIncoming?: (n: Notification)
           onIncomingRef.current?.(incoming);
         }
 
+        if (data.type === 'permissions.updated') {
+          // Throttle: only one refresh per 2 s in case of rapid successive events
+          if (!permRefreshTimer.current) {
+            permRefreshTimer.current = setTimeout(() => {
+              permRefreshTimer.current = null;
+              if (!isMountedRef.current) return;
+              useAuthStore.getState().refreshPermissions();
+              toast('Your access permissions have been updated.', {
+                id: 'rbac-permissions-updated',
+                icon: '🔒',
+                duration: 5000,
+              });
+            }, 500);
+          }
+          return;
+        }
+
         if (data.type === 'pong') return;
 
       } catch (err) {
@@ -218,6 +239,9 @@ export function useNotifications(isOpen: boolean, onIncoming?: (n: Notification)
 
       // Clear retry timer
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+
+      // Clear permission refresh throttle timer
+      if (permRefreshTimer.current) clearTimeout(permRefreshTimer.current);
 
       // Clear ping interval
       const ws = wsRef.current as WebSocket & { _pingInterval?: ReturnType<typeof setInterval> } | null;

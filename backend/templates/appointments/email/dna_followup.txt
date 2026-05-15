@@ -1,14 +1,24 @@
+RESCHEDULE YOUR APPOINTMENT — {{ clinic_name }}
+
 Hi {{ patient_first_name }},
 
-We understand that plans can change. Your appointment on {{ appointment_date }} at {{ appointment_time }} has been noted as missed or declined.
+Thanks for letting us know. We understand plans change.
 
-Your health is important to us, and we'd love to help you reschedule at a time that works for you.
+Your appointment that was booked for {{ appointment_date }} at {{ appointment_time }}
+has been marked as missed. We'd love to help you reschedule.
 
-📅 Book a new appointment here:
+REBOOK YOUR APPOINTMENT
+------------------------
+Click the link below to choose a new date and time:
+
 {{ booking_url }}
 
-You can also reach us directly:
-{% if clinic_phone %}📞 {{ clinic_phone }}{% endif %}
-{% if clinic_email %}✉️ {{ clinic_email }}{% endif %}
+This link expires in 72 hours and can only be used once.
 
-– {{ clinic_name }}
+{{ clinic_name }}
+{% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
+{% if clinic_email %}Email: {{ clinic_email }}{% endif %}
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

@@ -215,8 +215,9 @@ const computeColumnLayout = (
       if (item.start < other.end && item.end > other.start) maxCol = Math.max(maxCol, otherCol);
     }
     const total    = maxCol + 1;
-    const leftPct  = (col / total) * 100;
-    const rightPct = ((total - col - 1) / total) * 100;
+    // Cards occupy the left 90% of the column; right 10% stays as the action zone.
+    const leftPct  = (col / total) * 90;
+    const rightPct = 100 - ((col + 1) / total) * 90;
     const style    = {
       left:  `calc(${leftPct.toFixed(2)}% + 2px)`,
       right: `calc(${rightPct.toFixed(2)}% + 2px)`,
@@ -983,12 +984,31 @@ const CalendarComponent: React.FC<CalendarProps> = ({
   // Time label with consistent h-6 height for 15-min grid alignment
   const renderTimeLabel = (slot: typeof timeSlots[0], i: number) => {
     const isLunch = slot.isLunchBreak;
+    if (isLunch) {
+      const lunchStart = practitionerAvailability?.lunch_start_time || '12:00';
+      const [lH, lM] = lunchStart.split(':').map(Number);
+      const isFirstLunchSlot = slot.hour === lH && slot.minutes === lM;
+      return (
+        <div
+          key={i}
+          className={`h-6 px-2 text-right flex items-center justify-end
+            ${slot.quarter === 0 ? 'border-t border-amber-400' : 'border-t border-amber-300'}
+            bg-amber-100`}
+        >
+          {isFirstLunchSlot && (
+            <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide whitespace-nowrap">
+              Lunch Break
+            </span>
+          )}
+        </div>
+      );
+    }
     return (
       <div
         key={i}
         className={`h-6 px-3 text-xs font-medium text-right flex items-center justify-end
           ${slot.quarter === 0 ? 'border-t border-gray-300' : 'border-t border-gray-100'}
-          ${isLunch ? 'bg-yellow-50 text-yellow-600' : 'bg-gray-50 text-gray-500'}`}
+          bg-gray-50 text-gray-500`}
       >
         {slot.label}
       </div>
@@ -1407,7 +1427,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       ...baseStyle,
       position:     'absolute',
       left:         positionOverride?.left  ?? '4px',
-      right:        positionOverride?.right ?? '4px',
+      right:        positionOverride?.right ?? 'calc(10% + 2px)',
       zIndex:       isDragged ? 5 : (resizeOvr ? 15 : 10),
       overflow:     'hidden',
       borderRadius: '0',
@@ -1428,7 +1448,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         onMouseEnter={(e) => { if (!dragState.isDragging && !isResizing) onCardMouseEnter(apt, e); }}
         onMouseLeave={() => { if (!dragState.isDragging && !isResizing) onCardMouseLeave(); }}
         onMouseDown={canDrag ? (e) => { e.stopPropagation(); hideHover(); startHold(apt, e); } : (e) => e.stopPropagation()}
-        onMouseUp={canDrag ? (e) => { e.stopPropagation(); if (!dragState.isDragging) { cancelHold(); handleAppointmentClick(apt); } } : (e) => e.stopPropagation()}
+        onMouseUp={canDrag ? (e) => { if (isResizing) return; e.stopPropagation(); if (!dragState.isDragging) { cancelHold(); handleAppointmentClick(apt); } } : (e) => { if (!isResizing) e.stopPropagation(); }}
         onClick={(e) => { e.stopPropagation(); if (!canDrag && !dragState.isDragging) handleAppointmentClick(apt); }}
         className={`hover:brightness-90 select-none transition-all duration-150 shadow-sm rounded-none group relative ${!col.useHex ? `${col.bg} ${col.border}` : ''}`}
         title={canDrag ? 'Drag to reschedule · Drag edges to resize' : undefined}
@@ -1547,8 +1567,9 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     };
 
     const handleMouseUp = (e: React.MouseEvent) => {
+      if (isResizing) return;
       e.stopPropagation();
-      if (!blockDragState.isDragging && !isResizing) cancelBlockHold();
+      if (!blockDragState.isDragging) cancelBlockHold();
     };
 
     const handleMouseEnter = (e: React.MouseEvent) => {
@@ -1564,7 +1585,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       ...baseStyle,
       position:        'absolute',
       left:            positionOverride?.left  ?? '4px',
-      right:           positionOverride?.right ?? '4px',
+      right:           positionOverride?.right ?? 'calc(10% + 2px)',
       zIndex:          isDragged ? 5 : (resizeOvr ? 15 : 10),
       overflow:        'hidden',
       borderRadius:    '0',
@@ -1654,7 +1675,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     }
 
     const anyDragging = dragState.isDragging || blockDragState.isDragging || noteDragState.isDragging;
-    const defaultRight = positionOverride ? positionOverride.right : '15%';
+    const defaultRight = positionOverride ? positionOverride.right : 'calc(10% + 2px)';
     const style: React.CSSProperties = {
       ...baseNoteStyle,
       position:        'absolute',
@@ -1697,8 +1718,9 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         title="Drag to move · Drag edges to resize · Click to view"
         onMouseDown={(e) => { e.stopPropagation(); if (!isResizing) { hideNoteHover(); startNoteDrag(note, e); } }}
         onMouseUp={(e) => {
+          if (isResizing) return;
           e.stopPropagation();
-          if (!noteDragState.isDragging && !isResizing) {
+          if (!noteDragState.isDragging) {
             cancelNoteDrag();
             openNoteModal(note);
           }
@@ -1810,7 +1832,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
 
   // ── Shared time-slot renderer (drop target) ───────────────────────────────
   // ── Nookal-style time slot renderer with 15-min intervals ───────────────────
-  const renderTimeSlot = (slot: typeof timeSlots[0], date: Date, i: number) => {    const isSelected   = isSlotSelected(slot);
+  const renderTimeSlot = (slot: typeof timeSlots[0], date: Date, i: number, showLunchLabel = true, hasEvents = false) => {    const isSelected   = isSlotSelected(slot);
     const isDropTarget = dragState.isDragging;
     const isLunch      = isLunchBreak(slot.hour, slot.minutes);
     
@@ -1838,7 +1860,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
             ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
         >
-          {isFirstLunchSlot && (
+          {isFirstLunchSlot && showLunchLabel && (
             <div className="absolute inset-0 flex items-center px-2 z-10 pointer-events-none">
               <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wide whitespace-nowrap">
                 Lunch &nbsp;·&nbsp; {formatTime12Hour(lunchStart)} – {formatTime12Hour(lunchEnd)}
@@ -1894,8 +1916,8 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           ${slotBgClass}`}
         title={slotTitle}
       >
-        {/* Left 85% — appointment area (drag, select, double-click) */}
-        <div className="w-[85%] h-full relative">
+        {/* Left 90% — appointment/event area (drag, select, double-click) */}
+        <div className="w-[90%] h-full relative">
           {isSelected && (
             <div className="absolute inset-0 bg-sky-200 pointer-events-none" />
           )}
@@ -1903,20 +1925,24 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             <div className="absolute inset-0 border-b border-dashed border-emerald-300 pointer-events-none" />
           )}
         </div>
-        {/* Right 15% — dedicated single-click "add" strip */}
-        <div
-          className="w-[15%] h-full cursor-pointer hover:bg-gray-100/60 transition-colors duration-100"
-          onMouseDown={e => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onSlotAction) {
-              onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
-            } else {
-              openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
-            }
-          }}
-          title="Click to add appointment, block, or note"
-        />
+        {/* Right 10% — quick-action strip (only on slots with events) */}
+        {hasEvents && (
+          <div
+            className="w-[10%] h-full cursor-pointer border-l border-gray-100/80 hover:bg-blue-50/60 transition-colors duration-100 flex items-center justify-center group/strip"
+            onMouseDown={e => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onSlotAction) {
+                onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
+              } else {
+                openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
+              }
+            }}
+            title="Click to add appointment, block, or note"
+          >
+            <span className="text-[9px] text-gray-300 group-hover/strip:text-blue-400 font-bold leading-none select-none transition-colors">+</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -1930,16 +1956,13 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     i: number,
     avail: PractitionerAvailability | undefined,
     colKey: string,
+    hasEvents = false,
   ) => {
     const { isAvailable, isLunch, dayAvailable } = evalSlotAvailability(slot, date, avail);
     const isSelected   = isSlotSelected(slot);
     const isDropTarget = dragState.isDragging;
 
     if (isLunch && dayAvailable && avail) {
-      const lunchStart = avail.lunch_start_time;
-      const lunchEnd   = avail.lunch_end_time;
-      const [lH, lM] = lunchStart.split(':').map(Number);
-      const isFirstLunchSlot = slot.hour === lH && slot.minutes === lM;
       return (
         <div
           key={`${colKey}-${i}`}
@@ -1952,15 +1975,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           onDoubleClick={() => handleDoubleClick(date, slot)}
           className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
             ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
-        >
-          {isFirstLunchSlot && (
-            <div className="absolute inset-0 flex items-center px-2 z-10 pointer-events-none">
-              <span className="text-[9px] font-bold text-amber-900 uppercase tracking-wide whitespace-nowrap">
-                Lunch &nbsp;·&nbsp; {formatTime12Hour(lunchStart)}–{formatTime12Hour(lunchEnd)}
-              </span>
-            </div>
-          )}
-        </div>
+        />
       );
     }
 
@@ -1987,10 +2002,29 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         onMouseEnter={() => handleMouseEnter(slot)}
         onMouseUp={() => handleSlotMouseUp(date, slot)}
         onDoubleClick={() => handleDoubleClick(date, slot)}
-        className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 ${borderClass} ${slotBgClass}`}
+        className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
       >
-        {isSelected && <div className="absolute inset-0 bg-sky-200 pointer-events-none" />}
-        {isDropTarget && <div className="absolute inset-0 border-b border-dashed border-emerald-300 pointer-events-none" />}
+        <div className="w-[90%] h-full relative">
+          {isSelected && <div className="absolute inset-0 bg-sky-200 pointer-events-none" />}
+          {isDropTarget && <div className="absolute inset-0 border-b border-dashed border-emerald-300 pointer-events-none" />}
+        </div>
+        {hasEvents && (
+          <div
+            className="w-[10%] h-full cursor-pointer border-l border-gray-100/80 hover:bg-blue-50/60 transition-colors duration-100 flex items-center justify-center group/strip"
+            onMouseDown={e => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onSlotAction) {
+                onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
+              } else {
+                openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
+              }
+            }}
+            title="Click to add appointment, block, or note"
+          >
+            <span className="text-[9px] text-gray-300 group-hover/strip:text-blue-400 font-bold leading-none select-none transition-colors">+</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -2119,13 +2153,29 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                 </div>
                 {/* Practitioner A column */}
                 <div className="border-r border-gray-200 relative" onMouseUp={() => handleMouseUp(currentDate)}>
-                  {timeSlots.map((slot, i) => renderTimeSlotCompare(slot, currentDate, i, compareAvailabilityA, 'a'))}
+                  {timeSlots.map((slot, i) => {
+                    const slotMin = slot.hour * 60 + slot.minutes;
+                    const occupied = [...colAAppts, ...dayBlocks].some(ev => {
+                      const [sh, sm] = ev.start_time.split(':').map(Number);
+                      const [eh, em] = ev.end_time.split(':').map(Number);
+                      return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                    });
+                    return renderTimeSlotCompare(slot, currentDate, i, compareAvailabilityA, 'a', occupied);
+                  })}
                   {colAAppts.map(apt => renderTimelineCard(apt, false, false))}
                   {dayBlocks.map(block => renderBlockTimelineCard(block, false, false))}
                 </div>
                 {/* Practitioner B column */}
                 <div className="relative" onMouseUp={() => handleMouseUp(currentDate)}>
-                  {timeSlots.map((slot, i) => renderTimeSlotCompare(slot, currentDate, i, compareAvailabilityB, 'b'))}
+                  {timeSlots.map((slot, i) => {
+                    const slotMin = slot.hour * 60 + slot.minutes;
+                    const occupied = [...colBAppts, ...dayBlocks].some(ev => {
+                      const [sh, sm] = ev.start_time.split(':').map(Number);
+                      const [eh, em] = ev.end_time.split(':').map(Number);
+                      return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                    });
+                    return renderTimeSlotCompare(slot, currentDate, i, compareAvailabilityB, 'b', occupied);
+                  })}
                   {colBAppts.map(apt => renderTimelineCard(apt, false, false))}
                   {dayBlocks.map(block => renderBlockTimelineCard(block, false, false))}
                 </div>
@@ -2191,7 +2241,15 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                   </div>
                   {/* Day column — cards auto-offset when overlapping */}
                   <div className="relative" onMouseUp={() => handleMouseUp(currentDate)}>
-                    {slotsToRender.map((slot, i) => renderTimeSlot(slot, currentDate, i))}
+                    {slotsToRender.map((slot, i) => {
+                      const slotMin = slot.hour * 60 + slot.minutes;
+                      const occupied = [...dayAppts, ...dayBlocks, ...dayNotes].some(ev => {
+                        const [sh, sm] = ev.start_time.split(':').map(Number);
+                        const [eh, em] = ev.end_time.split(':').map(Number);
+                        return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                      });
+                      return renderTimeSlot(slot, currentDate, i, true, occupied);
+                    })}
                     {dayAppts.map(apt   => renderTimelineCard(apt, false, isDayAvailable, aptStyles.get(apt.id)))}
                     {dayBlocks.map(block => renderBlockTimelineCard(block, false, isDayAvailable, blockStyles.get(block.id)))}
                     {dayNotes.map(note   => renderNoteTimelineCard(note, false, isDayAvailable, noteStyles.get(note.id)))}
@@ -2233,42 +2291,42 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         <div {...calendarWrapperProps} className="h-full flex flex-col">
           <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 overflow-hidden">
 
-            {/* Compare banner */}
-            <div
-              className="flex-shrink-0 border-b border-gray-200 bg-gray-50"
-              style={{ display: 'grid', gridTemplateColumns: gridCols }}
-            >
-              <div className="p-2 border-r border-gray-200 flex items-center justify-center">
-                <span className="text-xs font-semibold text-gray-500">Wk</span>
-              </div>
-              {weekDays.map(day => (
-                <React.Fragment key={day.toISOString()}>
-                  {/* Prac A sub-header */}
-                  <div className={`p-2 text-center border-l border-gray-200 bg-sky-50 ${isSameDay(day, new Date()) ? 'ring-inset ring-1 ring-sky-300' : ''}`}>
-                    <div className="text-xs font-semibold text-sky-700 truncate leading-tight">
-                      {nameA.split(' ')[0]}
-                    </div>
-                    <div className="text-xs text-gray-500 leading-tight">{format(day, 'EEE d')}</div>
-                  </div>
-                  {/* Prac B sub-header */}
-                  <div className={`p-2 text-center border-l border-gray-200 bg-violet-50 ${isSameDay(day, new Date()) ? 'ring-inset ring-1 ring-violet-300' : ''}`}>
-                    <div className="text-xs font-semibold text-violet-700 truncate leading-tight">
-                      {nameB.split(' ')[0]}
-                    </div>
-                    <div className="text-xs text-gray-500 leading-tight">{format(day, 'EEE d')}</div>
-                  </div>
-                </React.Fragment>
-              ))}
-            </div>
-
             {dragState.isDragging && (
               <div className="flex-shrink-0 bg-emerald-50 border-b border-emerald-200 px-4 py-2 text-xs text-emerald-700 font-medium text-center animate-pulse">
                 🗓 Hover a time slot and release to reschedule
               </div>
             )}
 
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            {/* Scrollable body — header is sticky inside so it always aligns with columns */}
+            <div className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]">
+              {/* Compare banner — sticky inside scroll container */}
+              <div
+                className="sticky top-0 z-20 border-b border-gray-200 bg-gray-50"
+                style={{ display: 'grid', gridTemplateColumns: gridCols }}
+              >
+                <div className="p-2 border-r border-gray-200 flex items-center justify-center bg-gray-50">
+                  <span className="text-xs font-semibold text-gray-500">Wk</span>
+                </div>
+                {weekDays.map(day => (
+                  <React.Fragment key={day.toISOString()}>
+                    {/* Prac A sub-header */}
+                    <div className={`p-2 text-center border-l border-gray-200 bg-sky-50 ${isSameDay(day, new Date()) ? 'ring-inset ring-1 ring-sky-300' : ''}`}>
+                      <div className="text-xs font-semibold text-sky-700 truncate leading-tight">
+                        {nameA.split(' ')[0]}
+                      </div>
+                      <div className="text-xs text-gray-500 leading-tight">{format(day, 'EEE d')}</div>
+                    </div>
+                    {/* Prac B sub-header */}
+                    <div className={`p-2 text-center border-l border-gray-200 bg-violet-50 ${isSameDay(day, new Date()) ? 'ring-inset ring-1 ring-violet-300' : ''}`}>
+                      <div className="text-xs font-semibold text-violet-700 truncate leading-tight">
+                        {nameB.split(' ')[0]}
+                      </div>
+                      <div className="text-xs text-gray-500 leading-tight">{format(day, 'EEE d')}</div>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
                 {/* Time column */}
                 <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
@@ -2289,13 +2347,29 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                     <React.Fragment key={day.toISOString()}>
                       {/* Prac A sub-column */}
                       <div className="border-l border-gray-200 relative">
-                        {timeSlots.map((slot, i) => renderTimeSlotCompare(slot, day, i, compareAvailabilityA, `a-${dayStr}`))}
+                        {timeSlots.map((slot, i) => {
+                          const slotMin = slot.hour * 60 + slot.minutes;
+                          const occupied = [...colAAppts, ...dayBlocks].some(ev => {
+                            const [sh, sm] = ev.start_time.split(':').map(Number);
+                            const [eh, em] = ev.end_time.split(':').map(Number);
+                            return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                          });
+                          return renderTimeSlotCompare(slot, day, i, compareAvailabilityA, `a-${dayStr}`, occupied);
+                        })}
                         {colAAppts.map(apt => renderTimelineCard(apt, true))}
                         {dayBlocks.map(block => renderBlockTimelineCard(block, true))}
                       </div>
                       {/* Prac B sub-column */}
                       <div className="border-l border-gray-200 relative">
-                        {timeSlots.map((slot, i) => renderTimeSlotCompare(slot, day, i, compareAvailabilityB, `b-${dayStr}`))}
+                        {timeSlots.map((slot, i) => {
+                          const slotMin = slot.hour * 60 + slot.minutes;
+                          const occupied = [...colBAppts, ...dayBlocks].some(ev => {
+                            const [sh, sm] = ev.start_time.split(':').map(Number);
+                            const [eh, em] = ev.end_time.split(':').map(Number);
+                            return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                          });
+                          return renderTimeSlotCompare(slot, day, i, compareAvailabilityB, `b-${dayStr}`, occupied);
+                        })}
                         {colBAppts.map(apt => renderTimelineCard(apt, true))}
                         {dayBlocks.map(block => renderBlockTimelineCard(block, true))}
                       </div>
@@ -2320,61 +2394,65 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       <div {...calendarWrapperProps} className="h-full flex flex-col">
         <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 overflow-hidden">
 
-          {/* Sticky day-header row - Nookal-style with purple for non-duty days */}
-          <div className="flex-shrink-0 grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-200 bg-gray-50">
-            <div className="p-4" />
-            {weekDays.map(day => {
-              const isAvailableDay = isDutyDay(day);
-              return (
-                <div 
-                  key={day.toISOString()} 
-                  className={`p-4 text-center border-l border-gray-200 ${!isAvailableDay ? 'bg-trust-harbor/20' : 'bg-white'}`}
-                >
-                  <div className={`text-xs font-medium uppercase ${!isAvailableDay ? 'text-trust-harbor' : 'text-gray-500'}`}>{format(day, 'EEE')}</div>
-                  <div className={`text-sm font-semibold mt-1 ${!isAvailableDay ? 'text-trust-harbor' : ''} ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto text-xs' : 'text-gray-700'}`}>
-                    {format(day, 'd')}
-                  </div>
-                  {!isAvailableDay && (
-                    <div className="text-xs text-trust-harbor/70 mt-1">Non-duty</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
           {dragState.isDragging && (
             <div className="flex-shrink-0 bg-emerald-50 border-b border-emerald-200 px-4 py-2 text-xs text-emerald-700 font-medium text-center animate-pulse">
               🗓 Hover a time slot and release to reschedule
             </div>
           )}
 
-          {/* ── Scrollable body ── */}
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {(() => {
-              return (
-                <div className="grid grid-cols-[80px_repeat(7,1fr)]">
-                  {/* Time column */}
-                  <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
-                    {timeSlots.map((slot, i) => renderTimeLabel(slot, i))}
+          {/* ── Scrollable body (header is sticky inside to stay aligned with columns) ── */}
+          <div className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]">
+            {/* Sticky day-header row — lives inside scroll container so columns always align */}
+            <div className="sticky top-0 z-20 grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-200 bg-gray-50">
+              <div className="p-4 border-r border-gray-200 bg-gray-50" />
+              {weekDays.map(day => {
+                const isAvailableDay = isDutyDay(day);
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`p-4 text-center border-l border-gray-200 ${!isAvailableDay ? 'bg-trust-harbor/20' : 'bg-white'}`}
+                  >
+                    <div className={`text-xs font-medium uppercase ${!isAvailableDay ? 'text-trust-harbor' : 'text-gray-500'}`}>{format(day, 'EEE')}</div>
+                    <div className={`text-sm font-semibold mt-1 ${!isAvailableDay ? 'text-trust-harbor' : ''} ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto text-xs' : 'text-gray-700'}`}>
+                      {format(day, 'd')}
+                    </div>
+                    {!isAvailableDay && (
+                      <div className="text-xs text-trust-harbor/70 mt-1">Non-duty</div>
+                    )}
                   </div>
-                  {/* Day columns — cards auto-offset when overlapping */}
-                  {weekDays.map(day => {
-                    const dayAppts  = getAppointmentsForDate(day);
-                    const dayBlocks = getBlockAppointmentsForDate(day);
-                    const dayNotes  = getNotesForDate(day);
-                    const { aptStyles, blockStyles, noteStyles } = computeColumnLayout(dayAppts, dayBlocks, dayNotes);
-                    return (
-                      <div key={day.toISOString()} className="border-l border-gray-200 relative">
-                        {timeSlots.map((slot, i) => renderTimeSlot(slot, day, i))}
-                        {dayAppts.map(apt   => renderTimelineCard(apt, true, false, aptStyles.get(apt.id)))}
-                        {dayBlocks.map(block => renderBlockTimelineCard(block, true, false, blockStyles.get(block.id)))}
-                        {dayNotes.map(note   => renderNoteTimelineCard(note, true, false, noteStyles.get(note.id)))}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-[80px_repeat(7,1fr)]">
+              {/* Time column */}
+              <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
+                {timeSlots.map((slot, i) => renderTimeLabel(slot, i))}
+              </div>
+              {/* Day columns — cards auto-offset when overlapping */}
+              {weekDays.map(day => {
+                const dayAppts  = getAppointmentsForDate(day);
+                const dayBlocks = getBlockAppointmentsForDate(day);
+                const dayNotes  = getNotesForDate(day);
+                const { aptStyles, blockStyles, noteStyles } = computeColumnLayout(dayAppts, dayBlocks, dayNotes);
+                return (
+                  <div key={day.toISOString()} className="border-l border-gray-200 relative">
+                    {timeSlots.map((slot, i) => {
+                      const slotMin = slot.hour * 60 + slot.minutes;
+                      const occupied = [...dayAppts, ...dayBlocks, ...dayNotes].some(ev => {
+                        const [sh, sm] = ev.start_time.split(':').map(Number);
+                        const [eh, em] = ev.end_time.split(':').map(Number);
+                        return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                      });
+                      return renderTimeSlot(slot, day, i, false, occupied);
+                    })}
+                    {dayAppts.map(apt   => renderTimelineCard(apt, true, false, aptStyles.get(apt.id)))}
+                    {dayBlocks.map(block => renderBlockTimelineCard(block, true, false, blockStyles.get(block.id)))}
+                    {dayNotes.map(note   => renderNoteTimelineCard(note, true, false, noteStyles.get(note.id)))}
+                  </div>
+                );
+              })}
+            </div>
           </div>
           {/* ── Weekly statistics footer row ── */}
           <div className="shrink-0 border-t border-gray-200 grid grid-cols-[80px_repeat(7,1fr)] pb-18">

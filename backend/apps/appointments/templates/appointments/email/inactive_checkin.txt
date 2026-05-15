@@ -16,3 +16,7 @@ Warm regards,
 {{ clinic_name }} Team
 {% if clinic_phone %}Phone: {{ clinic_phone }}{% endif %}
 {% if clinic_email %}Email: {{ clinic_email }}{% endif %}
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email.

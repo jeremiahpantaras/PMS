@@ -1,4 +1,5 @@
 import type { DutyDay, DutySchedule, PractitionerAvailability } from '@/features/clinics/clinic.api';
+import type { UserRole } from '@/types/auth';
 
 export type TitleType = 'Mr' | 'Ms' | 'Mrs' | 'Miss' | 'Dr' | 'Prof' | 'Assoc Prof';
 
@@ -20,7 +21,10 @@ export interface StaffMember {
   middle_name?: string;
   nickname?: string;
   title?: TitleType;
-  role: 'STAFF' | 'PRACTITIONER';
+  /** Primary role — backward compat; use `roles` for multi-role checks. */
+  role: 'STAFF' | 'PRACTITIONER' | 'ADMIN';
+  /** All assigned roles (multi-role). */
+  roles: UserRole[];
   phone: string;
   avatar: string | null;
   is_active: boolean;
@@ -29,6 +33,8 @@ export interface StaffMember {
   clinic_branch_name?: string | null;
   created_at: string;
   password_changed: boolean;
+  permission_group?: number | null;
+  permission_group_name?: string | null;
 
   // Additional staff fields
   position?: string;
@@ -52,7 +58,10 @@ export interface CreateStaffData {
   middle_name?: string;
   nickname?: string;
   title?: TitleType;
-  role: 'STAFF' | 'PRACTITIONER';
+  /** Primary role. */
+  role: 'STAFF' | 'PRACTITIONER' | 'ADMIN';
+  /** All roles to assign. Defaults to [role] if omitted. */
+  roles?: UserRole[];
   phone: string;
   position?: string;
   discipline?: string;
@@ -60,6 +69,7 @@ export interface CreateStaffData {
   gender?: GenderType;
   address?: string;
   clinic_branch?: number | null;
+  permission_group?: number | null;
 
   // Legacy single-block availability (PRACTITIONER only, kept for compat)
   duty_start_time?: string;

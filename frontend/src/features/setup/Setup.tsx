@@ -3,9 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout';
 import { ArrowLeft, Building2, Package, Users, CreditCard, Bell } from 'lucide-react';
 import { SetupCard as SetupCardComponent } from './components/SetupCard';
-import { AccessDeniedPage } from '@/components/auth/AccessDeniedPage';
-import { useAuthStore } from '@/store/auth.store';
+import { FeatureAccessGuard } from '@/components/auth/FeatureAccessGuard';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { SetupCard } from './types/setup.types';
+import type { FeatureKey } from '@/types/auth';
 
 // Import all subpage components
 import { PracticeOption1 } from './pages/practice/Locations';
@@ -17,23 +18,26 @@ import { Subscription } from './pages/account/Subscription';
 import CommunicationSettings from './pages/communication/CommunicationSettings';
 import CommunicationLogs from './pages/communication/CommunicationLogs';
 
-// Option IDs restricted for Practitioner role
-const PRACTITIONER_RESTRICTED_OPTIONS = [
-  'option1',        // Locations
-  'option2',        // Invoicing
-  'staff',          // Staff
-  'permissions',    // Permissions
-  'subscription',   // Subscription (Account > option1)
-  'comm-settings',  // Communication Settings
-  'comm-logs',      // Communication Logs
-];
+// ─── Card → Feature key mapping ───────────────────────────────────────────────
+// Each Setup card maps to its own granular RBAC feature key.
+// 'none'  → card options are disabled / locked in the grid
+// 'view'  → card is accessible; FeatureAccessGuard makes subpage read-only
+// 'edit'  → full interaction
 
-// Map of card+option combos to restricted option IDs for lookup
-const RESTRICTED_OPTION_MAP: Record<string, string[]> = {
-  practice:       ['option1', 'option2'],
-  users:          ['staff', 'permissions'],
-  account:        ['subscription'],
-  communication:  ['comm-settings', 'comm-logs'],
+const CARD_FEATURE_KEY: Record<string, FeatureKey> = {
+  practice:      'setup_practice',
+  items:         'setup_items',
+  users:         'setup_users',
+  account:       'setup_account',
+  communication: 'setup_communication',
+};
+
+const CARD_FEATURE_LABEL: Record<string, string> = {
+  practice:      'Setup – Practice',
+  items:         'Setup – Items',
+  users:         'Setup – Users',
+  account:       'Setup – Account',
+  communication: 'Setup – Communication',
 };
 
 // Define setup cards
@@ -94,41 +98,53 @@ const SETUP_CARDS: SetupCard[] = [
 ];
 
 export const Setup: React.FC = () => {
-  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedCard,   setSelectedCard]   = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const { user } = useAuthStore();
+  const { accessLevel, isOwner } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isPractitioner = user?.role === 'PRACTITIONER';
+  /**
+   * Returns all option IDs for a card whose feature key has 'none' access.
+   * These IDs are forwarded to SetupCardComponent as `restrictedOptionIds`
+   * so the card grid shows the disabled / lock-icon state.
+   */
+  const getRestrictedOptionIds = (cardId: string): string[] => {
+    if (isOwner) return [];
+    const featureKey = CARD_FEATURE_KEY[cardId];
+    if (!featureKey || accessLevel(featureKey) !== 'none') return [];
+    return SETUP_CARDS.find((c) => c.id === cardId)?.options.map((o) => o.id) ?? [];
+  };
 
+  // Handle deep-link navigation via URL params (?card=X&option=Y)
   React.useEffect(() => {
     if (selectedCard || selectedOption) return;
 
     const params = new URLSearchParams(location.search);
-    const card = params.get('card');
+    const card   = params.get('card');
     const option = params.get('option');
 
     if (!card || !option) return;
 
-    const targetCard = SETUP_CARDS.find((c) => c.id === card);
+    const targetCard   = SETUP_CARDS.find((c) => c.id === card);
     const targetOption = targetCard?.options.find((opt) => opt.id === option);
     if (!targetCard || !targetOption) return;
 
-    if (isPractitioner && PRACTITIONER_RESTRICTED_OPTIONS.includes(option)) {
-      return;
-    }
+    // Block deep-link into a fully restricted card
+    const featureKey = CARD_FEATURE_KEY[card];
+    if (!isOwner && featureKey && accessLevel(featureKey) === 'none') return;
 
     setSelectedCard(card);
     setSelectedOption(option);
     navigate('/setup', { replace: true });
-  }, [location.search, isPractitioner, selectedCard, selectedOption, navigate]);
+  }, [location.search, isOwner, accessLevel, selectedCard, selectedOption, navigate]);
 
   const handleOptionClick = (cardId: string, optionId: string) => {
-    // Block practitioners from accessing restricted options
-    if (isPractitioner && PRACTITIONER_RESTRICTED_OPTIONS.includes(optionId)) {
-      return;
-    }
+    // Defense-in-depth: card button is already disabled for 'none' access,
+    // but guard here too so programmatic calls are also blocked.
+    const featureKey = CARD_FEATURE_KEY[cardId];
+    if (!isOwner && featureKey && accessLevel(featureKey) === 'none') return;
+
     setSelectedCard(cardId);
     setSelectedOption(optionId);
   };
@@ -141,38 +157,18 @@ export const Setup: React.FC = () => {
     }
   };
 
-  // Find the active component
-  const ActiveComponent = selectedCard && selectedOption
-    ? SETUP_CARDS
-        .find((card) => card.id === selectedCard)
-        ?.options.find((option) => option.id === selectedOption)?.component
+  // Resolve the active subpage component
+  const activeCard      = selectedCard ? SETUP_CARDS.find((c) => c.id === selectedCard) : null;
+  const ActiveComponent = activeCard && selectedOption
+    ? activeCard.options.find((opt) => opt.id === selectedOption)?.component
     : null;
-
-  // Double-check: block rendering of restricted component for practitioners
-  const isRestrictedAccess =
-    isPractitioner &&
-    selectedOption &&
-    PRACTITIONER_RESTRICTED_OPTIONS.includes(selectedOption);
 
   return (
     <DashboardLayout>
       <div className="h-full flex flex-col overflow-hidden bg-linear-to-br from-gray-50 to-gray-100">
 
         {/* ── Subpage View ── */}
-        {isRestrictedAccess ? (
-          <div className="h-full flex flex-col overflow-hidden">
-            <div className="shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur-sm px-6 py-4">
-              <button
-                onClick={handleBackToCards}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="text-sm font-medium">Back to Setup</span>
-              </button>
-            </div>
-            <AccessDeniedPage />
-          </div>
-        ) : ActiveComponent ? (
+        {ActiveComponent ? (
           <div className="h-full flex flex-col overflow-hidden">
             {/* Back button header */}
             <div className="shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur-sm px-6 py-4">
@@ -185,9 +181,21 @@ export const Setup: React.FC = () => {
               </button>
             </div>
 
-            {/* Subpage content */}
+            {/* Subpage content — FeatureAccessGuard enforces view vs edit access.
+                'view' → pointer-events-none overlay + toast ("view only").
+                'edit' → full interaction. */}
             <div className="flex-1 overflow-y-auto">
-              <ActiveComponent />
+              {selectedCard && CARD_FEATURE_KEY[selectedCard] ? (
+                <FeatureAccessGuard
+                  feature={CARD_FEATURE_KEY[selectedCard]}
+                  required="edit"
+                  featureLabel={CARD_FEATURE_LABEL[selectedCard]}
+                >
+                  <ActiveComponent />
+                </FeatureAccessGuard>
+              ) : (
+                <ActiveComponent />
+              )}
             </div>
           </div>
 
@@ -201,7 +209,7 @@ export const Setup: React.FC = () => {
               </p>
             </div>
 
-            {/* ── Cards Grid — 2 cols × 2 rows ── */}
+            {/* ── Cards Grid — 2 cols × 3 rows ── */}
             <div className="flex-1 overflow-y-auto p-8">
               <div className="max-w-4xl mx-auto">
                 <div className="grid grid-cols-2 gap-6">
@@ -210,7 +218,7 @@ export const Setup: React.FC = () => {
                       key={card.id}
                       card={card}
                       onOptionClick={handleOptionClick}
-                      restrictedOptionIds={isPractitioner ? (RESTRICTED_OPTION_MAP[card.id] ?? []) : []}
+                      restrictedOptionIds={getRestrictedOptionIds(card.id)}
                     />
                   ))}
                 </div>

@@ -7,6 +7,10 @@ import { TITLE_OPTIONS, GENDER_OPTIONS } from '../../types/staff.types';
 import { useDisciplineOptions } from '../../hooks/useDisciplineOptions';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';
 import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
+import {
+  listPermissionGroups,
+  type PermissionGroup as PGroup,
+} from '../../services/PermissionGroupService';
 
 const DUTY_DAY_OPTIONS: { value: DutyDay; label: string }[] = [
   { value: 'Mon', label: 'Mon' },
@@ -46,10 +50,12 @@ const buildDutySchedule = (staff: StaffMember): DutySchedule => {
 };
 
 interface CreateStaffAccountModalProps {
-  isOpen:        boolean;
-  onClose:       () => void;
-  onSubmit:      (data: CreateStaffData) => Promise<void>;
-  editingStaff?: StaffMember | null;
+  isOpen:          boolean;
+  onClose:         () => void;
+  onSubmit:        (data: CreateStaffData) => Promise<void>;
+  editingStaff?:   StaffMember | null;
+  /** ID of the currently logged-in user. Used to show the "Me" badge. */
+  currentUserId?:  number;
 }
 
 const EMPTY_FORM: CreateStaffData = {
@@ -67,6 +73,7 @@ const EMPTY_FORM: CreateStaffData = {
   gender:        'Male',
   role:          'STAFF',
   clinic_branch: null,
+  permission_group: null,
   // Availability defaults
   duty_days:        DEFAULT_DUTY_DAYS,
   lunch_start_time: '12:00',
@@ -101,13 +108,24 @@ const SectionTitle: React.FC<{ color?: string; children: React.ReactNode }> = ({
 );
 
 export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = ({
-  isOpen, onClose, onSubmit, editingStaff = null,
+  isOpen, onClose, onSubmit, editingStaff = null, currentUserId,
 }) => {
   const isEditMode = !!editingStaff;
+
+  // Multi-role helpers
+  const isMe = !!(editingStaff && currentUserId && editingStaff.id === currentUserId);
+  // Original roles array of the staff being edited (for submit payload preservation)
+  const originalRolesRef = useRef<string[]>([]);
 
   const [formData, setFormData] = useState<CreateStaffData>(EMPTY_FORM);
   const [errors, setErrors]     = useState<StaffFormErrors>({});
   const [loading, setLoading]   = useState(false);
+
+  // Permission groups
+  const [permGroups, setPermGroups] = useState<PGroup[]>([]);
+  useEffect(() => {
+    listPermissionGroups().then(setPermGroups).catch(() => {});
+  }, []);
 
   // ── Discipline create-inline state ─────────────────────────────────────────
   const [showCreateDiscipline, setShowCreateDiscipline] = useState(false);
@@ -129,38 +147,51 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
   const { branches, loading: loadingBranches } = useClinicBranches();
 
   useEffect(() => {
-    console.log('[CreateStaffModal] useEffect triggered', { editingStaff, isOpen });
     if (editingStaff) {
-      console.log('[CreateStaffModal] Editing existing staff:', editingStaff);
-      console.log('[CreateStaffModal] Staff availability:', editingStaff.availability);
-      console.log('[CreateStaffModal] Staff discipline:', editingStaff.discipline);
-      console.log('[CreateStaffModal] Staff position:', editingStaff.position);
-      
-      const newFormData = {
+      // Compute effective roles (multi-role aware)
+      const effectiveRoles: string[] =
+        editingStaff.roles && editingStaff.roles.length > 0
+          ? editingStaff.roles
+          : [editingStaff.role];
+      // Cache original roles for submit preservation
+      originalRolesRef.current = effectiveRoles;
+
+      // Determine the "clinical display role" for the form.
+      // Prefer PRACTITIONER over STAFF; fall back to primary role.
+      const clinicalRole: CreateStaffData['role'] = effectiveRoles.includes('PRACTITIONER')
+        ? 'PRACTITIONER'
+        : effectiveRoles.includes('STAFF')
+        ? 'STAFF'
+        : (editingStaff.role as CreateStaffData['role']);
+
+      setFormData({
         first_name:    editingStaff.first_name,
         last_name:     editingStaff.last_name,
         middle_name:   editingStaff.middle_name   ?? '',
         nickname:      editingStaff.nickname       ?? '',
         title:         editingStaff.title          ?? 'Mr',
         position:      editingStaff.position       ?? '',
-        discipline:    editingStaff.discipline     ?? 'OCCUPATIONAL_THERAPY',
+        // For ADMIN+PRACTITIONER users the discipline lives on the Practitioner
+        // model and is serialised into editingStaff.discipline by to_representation.
+        // The backend also mirrors it onto User.discipline as a fallback.
+        discipline:    editingStaff.discipline || 'OCCUPATIONAL_THERAPY',
         email:         editingStaff.email,
         phone:         editingStaff.phone ? formatPHPhone(editingStaff.phone) : '',
         address:       editingStaff.address        ?? '',
         date_of_birth: editingStaff.date_of_birth  ?? '',
         gender:        editingStaff.gender         ?? 'Male',
-        role:          editingStaff.role,
+        // Use clinical role (PRACTITIONER/STAFF) so the schedule section appears
+        role:          clinicalRole,
         clinic_branch: editingStaff.clinic_branch  ?? null,
+        permission_group: editingStaff.permission_group ?? null,
         // Availability
-        duty_days:       (editingStaff.duty_days ?? editingStaff.availability?.duty_days ?? DEFAULT_DUTY_DAYS) as DutyDay[],
+        duty_days:        (editingStaff.duty_days ?? editingStaff.availability?.duty_days ?? DEFAULT_DUTY_DAYS) as DutyDay[],
         lunch_start_time: editingStaff.lunch_start_time ?? editingStaff.availability?.lunch_start_time ?? '12:00',
         lunch_end_time:   editingStaff.lunch_end_time   ?? editingStaff.availability?.lunch_end_time   ?? '13:00',
         duty_schedule:    buildDutySchedule(editingStaff),
-      };
-      console.log('[CreateStaffModal] Setting form data to:', newFormData);
-      setFormData(newFormData);
+      });
     } else {
-      console.log('[CreateStaffModal] Creating new staff, using EMPTY_FORM');
+      originalRolesRef.current = [];
       setFormData(EMPTY_FORM);
     }
     setErrors({});
@@ -222,28 +253,33 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[CreateStaffModal] handleSubmit called');
-    console.log('[CreateStaffModal] Current formData:', formData);
-    console.log('[CreateStaffModal] Role:', formData.role);
-    
     if (!validateForm()) {
-      console.log('[CreateStaffModal] Validation failed, errors:', errors);
       toast.error('Please fix the highlighted errors before submitting.', { id: 'staff-validation' });
       return;
     }
-    
-    console.log('[CreateStaffModal] Validation passed, submitting...');
     setLoading(true);
     setErrors({});
     try {
-      const payload: CreateStaffData = { ...formData, phone: normalizePHPhone(formData.phone) };
-      console.log('[CreateStaffModal] Calling onSubmit with:', payload);
+      // Rebuild the full roles array: keep non-clinical roles (e.g. ADMIN) +
+      // replace clinical slot with whatever is selected in the toggle.
+      const originalRoles = originalRolesRef.current;
+      const hasAdmin = originalRoles.includes('ADMIN');
+      const nonClinicalRoles = originalRoles.filter(r => r !== 'PRACTITIONER' && r !== 'STAFF');
+      const finalRoles: string[] =
+        formData.role === 'PRACTITIONER' || formData.role === 'STAFF'
+          ? [...nonClinicalRoles, formData.role]
+          : hasAdmin
+          ? nonClinicalRoles
+          : [formData.role];
+
+      const payload: CreateStaffData = {
+        ...formData,
+        phone: normalizePHPhone(formData.phone),
+        ...(isEditMode ? { roles: finalRoles as any } : {}),
+      };
       await onSubmit(payload);
-      console.log('[CreateStaffModal] onSubmit completed successfully');
       handleClose();
     } catch (err: any) {
-      console.error('[CreateStaffModal] Submit error:', err);
-      console.error('[CreateStaffModal] Error response:', err?.response?.data);
       const data = err?.response?.data as Record<string, string | string[]> | undefined;
       if (data) {
         const mapped: StaffFormErrors = {};
@@ -367,9 +403,16 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                 <UserPlus className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-gray-900">
-                  {isEditMode ? 'Edit Staff Account' : 'New Staff Member'}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-gray-900">
+                    {isEditMode ? 'Edit Staff Account' : 'New Staff Member'}
+                  </h2>
+                  {isMe && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 leading-none">
+                      Me
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-400">
                   {isEditMode
                     ? `Editing ${editingStaff?.first_name} ${editingStaff?.last_name}`
@@ -587,10 +630,21 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
 
                   {/* Role — toggle buttons */}
                   <div className="md:col-span-2">
-                    <Label required>Role</Label>
+                    <Label required>Clinical Role</Label>
+                    {/* Show read-only Admin badge if the user being edited has the ADMIN role */}
+                    {originalRolesRef.current.includes('ADMIN') && (
+                      <div className="flex items-center gap-2 mb-2 p-2.5 bg-violet-50 border border-violet-200 rounded-lg">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 border border-violet-200">
+                          Admin
+                        </span>
+                        <span className="text-xs text-violet-600">
+                          Admin role is managed via Role Management. Set the clinical access below.
+                        </span>
+                      </div>
+                    )}
                     <div className="flex gap-3">
                       {[
-                        { value: 'STAFF',        label: 'Staff',        ring: 'ring-sky-400',   bg: 'bg-sky-50   text-sky-700   border-sky-200'   },
+                        { value: 'STAFF',        label: 'Staff',        ring: 'ring-sky-400',    bg: 'bg-sky-50   text-sky-700   border-sky-200'   },
                         { value: 'PRACTITIONER', label: 'Practitioner', ring: 'ring-purple-400', bg: 'bg-purple-50 text-purple-700 border-purple-200' },
                       ].map(opt => (
                         <button
@@ -608,6 +662,23 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                       ))}
                     </div>
                   </div>
+
+                  {/* Permission Group */}
+                  {permGroups.length > 0 && (
+                    <div className="md:col-span-2">
+                      <Label>Permission Group</Label>
+                      <select
+                        value={formData.permission_group ?? ''}
+                        onChange={(e) => set('permission_group', e.target.value ? Number(e.target.value) : null)}
+                        className={selectCls}
+                      >
+                        <option value="">— No group assigned —</option>
+                        {permGroups.map((g) => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* ── Availability Section (for PRACTITIONER and STAFF) ── */}
                   {(formData.role === 'PRACTITIONER' || formData.role === 'STAFF') && (
@@ -726,6 +797,14 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                         Assign to Clinic Branch
                       </span>
                     </Label>
+                    {originalRolesRef.current.includes('ADMIN') && (
+                      <div className="flex items-center gap-2 mb-2 p-2.5 bg-sky-50 border border-sky-200 rounded-lg">
+                        <Building2 className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                        <span className="text-xs text-sky-700">
+                          As an Admin, you have access to <strong>All Branches</strong>. Optionally assign a home branch for calendar filtering.
+                        </span>
+                      </div>
+                    )}
                     {loadingBranches ? (
                       <div className={`${selectCls} text-gray-400`}>Loading branches…</div>
                     ) : branches.length === 0 ? (
@@ -738,7 +817,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                         }
                         className={selectCls}
                       >
-                        <option value="">— No specific branch (all branches) —</option>
+                        <option value="">— All Branches (no specific branch) —</option>
                         {branches.map(b => (
                           <option key={b.id} value={b.id}>
                             {b.name}
@@ -749,7 +828,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                       </select>
                     )}
                     <p className="mt-0.5 text-[10px] text-gray-400">
-                      Allows filtering staff per location in the diary.
+                      Assigns a home branch for calendar filtering. Admins always see all branches.
                     </p>
                   </div>
 

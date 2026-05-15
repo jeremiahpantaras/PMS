@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { SidebarProvider } from '@/contexts/SidebarContext';
-import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute } from './router';
+import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute, ChangePasswordRoute } from './router';
 import { LogoutConfirmModal } from '@/components/modals/LogoutConfirmModal';
 import { useLogoutConfirm } from '@/hooks/useLogoutConfirm';
 
@@ -16,10 +16,12 @@ import { Login }                  from '@/features/auth/Login';
 import { AdminRegister }          from '@/features/auth/AdminRegister';
 import { RegisterSuccess }        from '@/features/auth/RegisterSuccess';
 import { ForgotPassword }         from '@/features/auth/ForgotPassword';
+import { ChangePasswordPage }     from '@/features/auth/ChangePasswordPage';
 import { PortalHome }             from '@/features/patient-portal/pages/PortalHome';
 import { BookAppointmentSuccess } from '@/features/patient-portal/pages/BookAppointmentSuccess';
 import { ClientFormPublicPage }   from '@/features/patients/pages/ClientFormPublicPage';
 import { RebookPage }             from '@/features/appointments/RebookPage';
+import { AppointmentConfirmPage } from '@/features/appointments/AppointmentConfirmPage';
 
 // Footer Pages - Product
 import { Features }  from '@/features/landing/components/footer-pages/Product/Features';
@@ -54,6 +56,7 @@ import PatientAppointmentsPage from '@/features/patients/PatientAppointmentsPage
 import PatientCasesNotesPage from '@/features/patients/PatientCasesNotesPage';
 import PatientUnassignedNotesPage from '@/features/patients/PatientUnassignedNotesPage';
 import PatientDocumentsPage from '@/features/patients/PatientDocumentsPage';
+import { PatientCommunicationHistoryPage } from '@/features/patients/PatientCommunicationHistoryPage';
 import ClientSettings from '@/features/patients/ClientSettings';
 import { PatientProfile } from '@/features/patients/PatientProfile';
 import { ClinicMessages } from '@/features/clinic-messages/ClinicMessages';
@@ -61,6 +64,7 @@ import { NoteEditor }     from '@/features/clinical-template/pages/NoteEditor';
 import { GenerateNewInvoice } from '@/features/billing/generateNewInvoice';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { FloatingNotificationsContainer } from '@/features/notifications/components/FloatingNotificationsContainer';
+import { FeatureAccessGuard } from '@/components/auth/FeatureAccessGuard';
 
 // ── NEW: Clinic Setup ─────────────────────────────────────────────────────────
 import { ClinicSetupPage } from '@/features/clinic-setup/ClinicSetupPage';
@@ -208,6 +212,16 @@ function App() {
           <Route path="/register/success" element={<PublicRoute><RegisterSuccess /></PublicRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
 
+          {/* ── Mandatory first-login password change ───────────────── */}
+          <Route
+            path="/change-password"
+            element={
+              <ChangePasswordRoute>
+                <ChangePasswordPage />
+              </ChangePasswordRoute>
+            }
+          />
+
           {/* ── Footer Pages - Product ──────────────────────────────── */}
           <Route path="/features"  element={<PublicRoute><Features /></PublicRoute>} />
           <Route path="/pricing"   element={<PublicRoute><Pricing /></PublicRoute>} />
@@ -233,6 +247,8 @@ function App() {
           <Route path="/client-form/:token" element={<ClientFormPublicPage />} />
           {/* ── Rebooking (DNA follow-up secure link) ───────────────── */}
           <Route path="/rebook/:token" element={<RebookPage />} />
+          {/* ── Email appointment confirmation ───────────────────────── */}
+          <Route path="/confirm/:token" element={<AppointmentConfirmPage />} />
           {/* ── Clinic Setup (first-login admin only) ───────────────── */}
           <Route
             path="/clinic-setup"
@@ -247,16 +263,16 @@ function App() {
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* ── Protected ───────────────────────────────────────────── */}
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/diary"     element={<ProtectedRoute><Diary /></ProtectedRoute>} />
-          <Route path="/clients"   element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-          <Route path="/contacts"  element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><FeatureAccessGuard feature="dashboard" featureLabel="Dashboard"><Dashboard /></FeatureAccessGuard></ProtectedRoute>} />
+          <Route path="/diary"     element={<ProtectedRoute><FeatureAccessGuard feature="diary" featureLabel="Diary"><Diary /></FeatureAccessGuard></ProtectedRoute>} />
+          <Route path="/clients"   element={<ProtectedRoute><FeatureAccessGuard feature="patients" featureLabel="Clients"><Clients /></FeatureAccessGuard></ProtectedRoute>} />
+          <Route path="/contacts"  element={<ProtectedRoute><FeatureAccessGuard feature="contacts" featureLabel="Contacts"><Contacts /></FeatureAccessGuard></ProtectedRoute>} />
           <Route path="/reports"   element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/profile"   element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
           <Route
             path="/patients/:patientId"
-            element={<ProtectedRoute><PatientProfileLayout /></ProtectedRoute>}
+            element={<ProtectedRoute><FeatureAccessGuard feature="patients" featureLabel="Clients"><PatientProfileLayout /></FeatureAccessGuard></ProtectedRoute>}
           >
             <Route index element={<Navigate to="profile" replace />} />
             <Route path="profile" element={<PatientProfilePage />} />
@@ -265,6 +281,7 @@ function App() {
             <Route path="unassigned-notes" element={<PatientUnassignedNotesPage />} />
             <Route path="notes" element={<Navigate to="../cases" replace />} />
             <Route path="documents" element={<PatientDocumentsPage />} />
+            <Route path="communications" element={<PatientCommunicationHistoryPage />} />
             <Route path="settings"  element={<ClientSettings />} />
           </Route>
 

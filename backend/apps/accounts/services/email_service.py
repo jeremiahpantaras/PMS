@@ -9,7 +9,33 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     """Service for sending emails"""
-    
+
+    @staticmethod
+    def _build_html(*, icon: str, title: str, accent: str, body_html: str) -> str:
+        """Shared email HTML wrapper matching the Malasakit PMS design system."""
+        return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>{title}</title>
+<!--[if mso]><style>table,td,div,p,a,span{{font-family:Arial,sans-serif!important;}}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1f2937;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f6f8;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+<tr><td style="padding:28px 40px 24px;border-bottom:1px solid #e5e7eb;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;"><tr>
+<td align="center" style="width:40px;height:40px;background:{accent}15;border-radius:8px;text-align:center;vertical-align:middle;">
+<span style="font-size:18px;line-height:40px;">{icon}</span></td></tr></table>
+<h1 style="margin:0;font-size:20px;font-weight:700;color:{accent};line-height:1.3;">{title}</h1>
+<p style="margin:6px 0 0;font-size:13px;color:#6b7280;">Malasakit EMR Solutions</p>
+</td></tr></table></td></tr>
+<tr><td style="padding:32px 40px;">{body_html}</td></tr>
+<tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
+<p style="margin:0 0 12px;font-size:12px;color:#9ca3af;line-height:1.5;">This email was generated automatically by Malasakit PMS.<br/>Please do not reply directly to this email.</p>
+<p style="margin:0;font-size:11px;color:#b0b5bc;">Powered by <strong style="color:#6b7280;font-weight:600;">Malasakit PMS</strong></p>
+</td></tr>
+</table></td></tr></table></body></html>"""
+
     @staticmethod
     def send_welcome_email(user_email: str, user_name: str, password: str, company_name: str) -> bool:
         """
@@ -18,92 +44,54 @@ class EmailService:
         try:
             subject = f'Welcome to Malasakit EMR Solutions - Your Account Credentials'
             
-            # HTML content
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); 
-                              color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                    .content {{ background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }}
-                    .credentials {{ background: white; padding: 20px; border-radius: 8px; 
-                                   margin: 20px 0; border-left: 4px solid #0ea5e9; }}
-                    .password {{ font-size: 24px; font-weight: bold; color: #0ea5e9; 
-                               letter-spacing: 2px; margin: 10px 0; }}
-                    .button {{ display: inline-block; padding: 12px 30px; background: #0ea5e9; 
-                             color: white; text-decoration: none; border-radius: 6px; 
-                             margin: 20px 0; font-weight: bold; }}
-                    .warning {{ background: #fff3cd; border-left: 4px solid #ffc107; 
-                              padding: 15px; margin: 20px 0; border-radius: 4px; }}
-                    .footer {{ text-align: center; color: #6c757d; font-size: 12px; 
-                             margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>🎉 Welcome to Malasakit EMR Solutions!</h1>
-                        <p>Your Clinic Management System</p>
-                    </div>
-                    
-                    <div class="content">
-                        <h2>Hello {user_name},</h2>
-                        
-                        <p>Your admin account for <strong>{company_name}</strong> has been successfully created!</p>
-                        
-                        <div class="credentials">
-                            <h3>Your Login Credentials:</h3>
-                            <p><strong>Email:</strong> {user_email}</p>
-                            <p><strong>Temporary Password:</strong></p>
-                            <div class="password">{password}</div>
-                        </div>
-                        
-                        <div class="warning">
-                            <strong>⚠️ Important Security Notice:</strong>
-                            <ul>
-                                <li>This is a temporary password</li>
-                                <li>Please change it immediately after your first login</li>
-                                <li>Never share your password with anyone</li>
-                            </ul>
-                        </div>
-                        
-                        <div style="text-align: center;">
-                            <a href="{settings.FRONTEND_URL}/login" class="button">
-                                Login to Your Account
-                            </a>
-                        </div>
-                        
-                        <p>Best regards,<br>
-                        <strong>The Malasakit EMR Solutions Team</strong></p>
-                    </div>
-                    
-                    <div class="footer">
-                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">Your admin account for <strong>{company_name}</strong> has been successfully created!</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f9ff;border:1px solid #d0e8f2;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;">
+<p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0369a1;margin:0 0 12px;">Your Login Credentials</p>
+<p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Email</p>
+<p style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px;">{user_email}</p>
+<p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Temporary Password</p>
+<p style="font-size:22px;font-weight:700;color:#0ea5e9;letter-spacing:2px;margin:0;">{password}</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;margin-bottom:16px;">
+<tr><td style="padding:14px 20px;">
+<p style="font-size:13px;color:#92400e;font-weight:700;margin:0 0 6px;">&#9888;&#65039; This Password is Temporary</p>
+<ul style="font-size:13px;color:#78350f;margin:0;padding-left:18px;line-height:1.8;">
+<li>This password works for your <strong>first login only</strong>.</li>
+<li>You will be <strong>required to create a new password</strong> immediately after logging in.</li>
+<li>You cannot access any part of the platform until the password change is complete.</li>
+<li>Never share this temporary password with anyone.</li>
+</ul>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;"><tr><td align="center">
+<a href="{settings.FRONTEND_URL}/login" style="display:inline-block;background:#0ea5e9;color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:6px;">Login &amp; Set Your Password</a>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong></p>"""
+
+            html_message = EmailService._build_html(icon='🎉', title='Welcome to Malasakit EMR Solutions', accent='#0ea5e9', body_html=body)
             
-            # Plain text fallback
-            plain_message = f"""
-            Welcome to Malasakit EMR Solutions!
-            
-            Hello {user_name},
-            
-            Your admin account for {company_name} has been created!
-            
-            Email: {user_email}
-            Temporary Password: {password}
-            
-            Login: {settings.FRONTEND_URL}/login
-            
-            Best regards,
-            Malasakit EMR Solutions Team
-            """
+            plain_message = f"""Welcome to Malasakit EMR Solutions!
+
+Hello {user_name},
+
+Your admin account for {company_name} has been created!
+
+Email:             {user_email}
+Temporary Password: {password}
+
+⚠ IMPORTANT: This password is temporary.
+You will be REQUIRED to create a new password after your first login.
+You cannot access any part of the platform until the password change is complete.
+
+Login: {settings.FRONTEND_URL}/login
+
+Best regards,
+Malasakit EMR Solutions Team
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
             
             # Create email with explicit encoding
             email = EmailMultiAlternatives(
@@ -135,96 +123,48 @@ class EmailService:
         try:
             subject = 'Malasakit EMR Solutions — Your Password Has Been Reset'
 
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-                               color: white; padding: 30px; text-align: center;
-                               border-radius: 10px 10px 0 0; }}
-                    .content {{ background: #f8f9fa; padding: 30px;
-                                border-radius: 0 0 10px 10px; }}
-                    .credentials {{ background: white; padding: 20px; border-radius: 8px;
-                                    margin: 20px 0; border-left: 4px solid #0891b2; }}
-                    .password {{ font-size: 26px; font-weight: bold; color: #0891b2;
-                                 letter-spacing: 3px; margin: 10px 0; }}
-                    .warning {{ background: #fff3cd; border-left: 4px solid #ffc107;
-                                padding: 15px; margin: 20px 0; border-radius: 4px; }}
-                    .button {{ display: inline-block; padding: 12px 30px;
-                               background: #0891b2; color: white; text-decoration: none;
-                               border-radius: 6px; margin: 20px 0; font-weight: bold; }}
-                    .footer {{ text-align: center; color: #6c757d; font-size: 12px;
-                               margin-top: 30px; padding-top: 20px;
-                               border-top: 1px solid #dee2e6; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>🔐 Password Reset</h1>
-                        <p>Malasakit EMR Solutions</p>
-                    </div>
-                    <div class="content">
-                        <h2>Hello {user_name},</h2>
-                        <p>Your password has been <strong>reset successfully</strong>.
-                           Use the temporary password below to log in.</p>
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">Your password has been <strong>reset successfully</strong>. Use the temporary password below to log in.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;">
+<p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0f766e;margin:0 0 12px;">Your New Temporary Password</p>
+<p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Email</p>
+<p style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px;">{user_email}</p>
+<p style="font-size:13px;color:#6b7280;margin:0 0 4px;">New Password</p>
+<p style="font-size:22px;font-weight:700;color:#0891b2;letter-spacing:3px;margin:0;">{new_password}</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:14px 20px;">
+<p style="font-size:13px;color:#92400e;font-weight:600;margin:0 0 6px;">&#9888;&#65039; Important</p>
+<p style="font-size:13px;color:#4b5563;margin:0;line-height:1.6;">You have been logged out of all active sessions. You will be prompted to set a new password on next login. Never share your password.</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;"><tr><td align="center">
+<a href="{settings.FRONTEND_URL}/login" style="display:inline-block;background:#0891b2;color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:6px;">Login Now</a>
+</td></tr></table>
+<p style="font-size:13px;color:#6b7280;margin:0 0 16px;">If you did not request this reset, contact your administrator immediately.</p>
+<p style="font-size:14px;color:#4b5563;margin:0;">Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong></p>"""
 
-                        <div class="credentials">
-                            <h3>Your New Temporary Password:</h3>
-                            <p><strong>Email:</strong> {user_email}</p>
-                            <p><strong>New Password:</strong></p>
-                            <div class="password">{new_password}</div>
-                        </div>
+            html_message = EmailService._build_html(icon='🔐', title='Password Reset', accent='#0891b2', body_html=body)
 
-                        <div class="warning">
-                            <strong>⚠️ Important:</strong>
-                            <ul>
-                                <li>You have been logged out of all active sessions.</li>
-                                <li>Log in with this temporary password.</li>
-                                <li>You will be prompted to set a new password on next login.</li>
-                                <li>Never share your password with anyone.</li>
-                            </ul>
-                        </div>
+            plain_message = f"""Malasakit EMR Solutions — Password Reset
 
-                        <div style="text-align:center;">
-                            <a href="{settings.FRONTEND_URL}/login" class="button">
-                                Login Now
-                            </a>
-                        </div>
+Hello {user_name},
 
-                        <p>If you did not request this reset, contact your administrator
-                           immediately.</p>
+Your password has been reset.
 
-                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
-                    </div>
-                    <div class="footer">
-                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+Email:        {user_email}
+New Password: {new_password}
 
-            plain_message = f"""
-            Malasakit EMR Solutions — Password Reset
+Login: {settings.FRONTEND_URL}/login
 
-            Hello {user_name},
+You will be prompted to change this password after login.
 
-            Your password has been reset.
+Best regards,
+Malasakit EMR Solutions Team
 
-            Email:        {user_email}
-            New Password: {new_password}
-
-            Login: {settings.FRONTEND_URL}/login
-
-            You will be prompted to change this password after login.
-
-            Best regards,
-            Malasakit EMR Solutions Team
-            """
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
 
             email = EmailMultiAlternatives(
                 subject=subject,
@@ -248,79 +188,41 @@ class EmailService:
         try:
             subject = 'Malasakit EMR Solutions — Password Reset Verification Code'
 
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-                               color: white; padding: 30px; text-align: center;
-                               border-radius: 10px 10px 0 0; }}
-                    .content {{ background: #f8f9fa; padding: 30px;
-                                border-radius: 0 0 10px 10px; }}
-                    .code-box {{ background: white; padding: 25px; border-radius: 8px;
-                                 margin: 20px 0; text-align: center; border: 2px dashed #0891b2; }}
-                    .code {{ font-size: 36px; font-weight: bold; color: #0891b2;
-                             letter-spacing: 8px; margin: 15px 0; }}
-                    .warning {{ background: #fff3cd; border-left: 4px solid #ffc107;
-                                padding: 15px; margin: 20px 0; border-radius: 4px; }}
-                    .footer {{ text-align: center; color: #6c757d; font-size: 12px;
-                               margin-top: 30px; padding-top: 20px;
-                               border-top: 1px solid #dee2e6; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>🔐 Password Reset</h1>
-                        <p>Malasakit EMR Solutions</p>
-                    </div>
-                    <div class="content">
-                        <h2>Hello {user_name},</h2>
-                        <p>You requested to reset your password. Use the verification code below to proceed.</p>
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">You requested to reset your password. Use the verification code below to proceed.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0fdfa;border:2px dashed #0891b2;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:20px;text-align:center;">
+<p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Your Verification Code</p>
+<p style="margin:0 0 8px;font-size:32px;font-weight:700;color:#0891b2;letter-spacing:8px;">{code}</p>
+<p style="margin:0;font-size:12px;color:#9ca3af;">This code expires in 10 minutes</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:14px 20px;">
+<p style="font-size:13px;color:#92400e;font-weight:600;margin:0 0 6px;">&#9888;&#65039; Security Notice</p>
+<p style="font-size:13px;color:#4b5563;margin:0;line-height:1.6;">Never share this code with anyone. If you didn't request this, please ignore this email.</p>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong></p>"""
 
-                        <div class="code-box">
-                            <p style="margin: 0; color: #666;">Your Verification Code:</p>
-                            <div class="code">{code}</div>
-                            <p style="margin: 0; color: #666; font-size: 12px;">This code expires in 10 minutes</p>
-                        </div>
+            html_message = EmailService._build_html(icon='🔐', title='Password Reset Verification', accent='#0891b2', body_html=body)
 
-                        <div class="warning">
-                            <strong>⚠️ Security Notice:</strong>
-                            <ul>
-                                <li>Never share this code with anyone.</li>
-                                <li>If you didn't request this, please ignore this email.</li>
-                            </ul>
-                        </div>
+            plain_message = f"""Malasakit EMR Solutions — Verification Code
 
-                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
-                    </div>
-                    <div class="footer">
-                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+Hello {user_name},
 
-            plain_message = f"""
-            Malasakit EMR Solutions — Password Reset Verification Code
+You requested to reset your password.
 
-            Hello {user_name},
+Your Verification Code: {code}
 
-            You requested to reset your password.
+This code expires in 10 minutes.
 
-            Your Verification Code: {code}
+If you didn't request this, please ignore this email.
 
-            This code expires in 10 minutes.
+Best regards,
+Malasakit EMR Solutions Team
 
-            If you didn't request this, please ignore this email.
-
-            Best regards,
-            Malasakit EMR Solutions Team
-            """
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
 
             email = EmailMultiAlternatives(
                 subject=subject,
@@ -347,63 +249,31 @@ class EmailService:
         try:
             subject = 'Malasakit EMR Solutions — Your Password Has Been Changed'
 
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background: linear-gradient(135deg, #059669 0%, #047857 100%);
-                               color: white; padding: 30px; text-align: center;
-                               border-radius: 10px 10px 0 0; }}
-                    .content {{ background: #f8f9fa; padding: 30px;
-                                border-radius: 0 0 10px 10px; }}
-                    .alert {{ background: #fff3cd; border-left: 4px solid #ffc107;
-                              padding: 15px; margin: 20px 0; border-radius: 4px; }}
-                    .footer {{ text-align: center; color: #6c757d; font-size: 12px;
-                               margin-top: 30px; padding-top: 20px;
-                               border-top: 1px solid #dee2e6; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>✅ Password Changed</h1>
-                        <p>Malasakit EMR Solutions</p>
-                    </div>
-                    <div class="content">
-                        <h2>Hello {user_name},</h2>
-                        <p>Your account password was successfully changed via Account Settings.</p>
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">Your account password was successfully changed via Account Settings.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:14px 20px;">
+<p style="font-size:13px;color:#92400e;font-weight:600;margin:0 0 6px;">&#9888;&#65039; Did not make this change?</p>
+<p style="font-size:13px;color:#4b5563;margin:0;line-height:1.6;">If you did not update your password, contact your administrator immediately and change your password right away.</p>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong></p>"""
 
-                        <div class="alert">
-                            <strong>⚠️ Did not make this change?</strong><br>
-                            If you did not update your password, contact your administrator
-                            immediately and change your password right away.
-                        </div>
+            html_message = EmailService._build_html(icon='✅', title='Password Changed', accent='#059669', body_html=body)
 
-                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
-                    </div>
-                    <div class="footer">
-                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+            plain_message = f"""Malasakit EMR Solutions — Password Changed
 
-            plain_message = f"""
-            Malasakit EMR Solutions — Password Changed
+Hello {user_name},
 
-            Hello {user_name},
+Your account password was successfully changed via Account Settings.
 
-            Your account password was successfully changed via Account Settings.
+If you did not make this change, contact your administrator immediately.
 
-            If you did not make this change, contact your administrator immediately.
+Best regards,
+Malasakit EMR Solutions Team
 
-            Best regards,
-            Malasakit EMR Solutions Team
-            """
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
 
             email = EmailMultiAlternatives(
                 subject=subject,
@@ -430,89 +300,47 @@ class EmailService:
         try:
             subject = 'Malasakit EMR Solutions — Scheduled Password Rotation'
 
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
-                               color: white; padding: 30px; text-align: center;
-                               border-radius: 10px 10px 0 0; }}
-                    .content {{ background: #f8f9fa; padding: 30px;
-                                border-radius: 0 0 10px 10px; }}
-                    .credentials {{ background: white; padding: 20px; border-radius: 8px;
-                                    margin: 20px 0; border-left: 4px solid #7c3aed; }}
-                    .password {{ font-size: 26px; font-weight: bold; color: #7c3aed;
-                                 letter-spacing: 3px; margin: 10px 0; }}
-                    .warning {{ background: #fff3cd; border-left: 4px solid #ffc107;
-                                padding: 15px; margin: 20px 0; border-radius: 4px; }}
-                    .button {{ display: inline-block; padding: 12px 30px;
-                               background: #7c3aed; color: white; text-decoration: none;
-                               border-radius: 6px; margin: 20px 0; font-weight: bold; }}
-                    .footer {{ text-align: center; color: #6c757d; font-size: 12px;
-                               margin-top: 30px; padding-top: 20px;
-                               border-top: 1px solid #dee2e6; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>🔄 Scheduled Password Rotation</h1>
-                        <p>Malasakit EMR Solutions</p>
-                    </div>
-                    <div class="content">
-                        <h2>Hello {user_name},</h2>
-                        <p>Your password has been automatically rotated as per your security settings.</p>
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">Your password has been automatically rotated as per your security settings.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;">
+<p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6d28d9;margin:0 0 12px;">Your New Temporary Password</p>
+<p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Email</p>
+<p style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px;">{user_email}</p>
+<p style="font-size:13px;color:#6b7280;margin:0 0 4px;">New Password</p>
+<p style="font-size:22px;font-weight:700;color:#7c3aed;letter-spacing:3px;margin:0;">{new_password}</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:14px 20px;">
+<p style="font-size:13px;color:#92400e;font-weight:600;margin:0 0 6px;">&#9888;&#65039; Action Required</p>
+<p style="font-size:13px;color:#4b5563;margin:0;line-height:1.6;">Log in with this temporary password. You will be prompted to set a new password on next login. Never share your password.</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;"><tr><td align="center">
+<a href="{settings.FRONTEND_URL}/login" style="display:inline-block;background:#7c3aed;color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:6px;">Login Now</a>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong></p>"""
 
-                        <div class="credentials">
-                            <h3>Your New Temporary Password:</h3>
-                            <p><strong>Email:</strong> {user_email}</p>
-                            <p><strong>New Password:</strong></p>
-                            <div class="password">{new_password}</div>
-                        </div>
+            html_message = EmailService._build_html(icon='🔄', title='Scheduled Password Rotation', accent='#7c3aed', body_html=body)
 
-                        <div class="warning">
-                            <strong>⚠️ Action Required:</strong>
-                            <ul>
-                                <li>Log in with this temporary password.</li>
-                                <li>You will be prompted to set a new password on next login.</li>
-                                <li>Never share your password with anyone.</li>
-                            </ul>
-                        </div>
+            plain_message = f"""Malasakit EMR Solutions — Scheduled Password Rotation
 
-                        <div style="text-align:center;">
-                            <a href="{settings.FRONTEND_URL}/login" class="button">Login Now</a>
-                        </div>
+Hello {user_name},
 
-                        <p>Best regards,<br><strong>The Malasakit EMR Solutions Team</strong></p>
-                    </div>
-                    <div class="footer">
-                        <p>© 2026 Malasakit EMR Solutions. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+Your password has been automatically rotated.
 
-            plain_message = f"""
-            Malasakit EMR Solutions — Scheduled Password Rotation
+Email:        {user_email}
+New Password: {new_password}
 
-            Hello {user_name},
+Login: {settings.FRONTEND_URL}/login
 
-            Your password has been automatically rotated.
+You will be prompted to change this password after login.
 
-            Email:        {user_email}
-            New Password: {new_password}
+Best regards,
+Malasakit EMR Solutions Team
 
-            Login: {settings.FRONTEND_URL}/login
-
-            You will be prompted to change this password after login.
-
-            Best regards,
-            Malasakit EMR Solutions Team
-            """
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
 
             email = EmailMultiAlternatives(
                 subject=subject,
@@ -528,4 +356,206 @@ class EmailService:
 
         except Exception as e:
             logger.error(f"❌ Password rotation email error: {str(e)}")
+            return False
+
+    @staticmethod
+    def send_admin_otp_email(user_email: str, user_name: str, otp_code: str, expiration_minutes: int = 5) -> bool:
+        """
+        Send a 6-digit OTP verification code to a prospective admin during registration.
+
+        Parameters
+        ----------
+        user_email          : recipient address
+        user_name           : display name for the greeting
+        otp_code            : 6-digit numeric OTP
+        expiration_minutes  : OTP validity window shown in the email (default 5)
+        """
+        try:
+            subject = 'Your Malasakit Verification Code'
+
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">
+  You requested to create a <strong>Malasakit EMR Solutions</strong> admin account.
+  Use the verification code below to confirm your email address.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#f0f9ff;border:2px dashed #0ea5e9;border-radius:8px;margin-bottom:20px;">
+<tr><td style="padding:24px;text-align:center;">
+  <p style="margin:0 0 8px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#0369a1;">
+    Your Verification Code
+  </p>
+  <p style="margin:0 0 10px;font-size:40px;font-weight:700;color:#0ea5e9;letter-spacing:12px;line-height:1.1;">{otp_code}</p>
+  <p style="margin:0;font-size:12px;color:#9ca3af;">
+    This code expires in <strong>{expiration_minutes} minutes</strong>
+  </p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:14px 20px;">
+  <p style="font-size:13px;color:#92400e;font-weight:600;margin:0 0 6px;">&#9888;&#65039; Security Notice</p>
+  <p style="font-size:13px;color:#4b5563;margin:0;line-height:1.6;">
+    Never share this code with anyone — not even Malasakit support.
+    If you did not attempt to register, you can safely ignore this email.
+  </p>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">
+  Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong>
+</p>"""
+
+            html_message = EmailService._build_html(
+                icon='🔑',
+                title='Email Verification',
+                accent='#0ea5e9',
+                body_html=body,
+            )
+
+            plain_message = f"""Malasakit EMR Solutions — Email Verification
+
+Hello {user_name},
+
+You requested to create an admin account on Malasakit EMR Solutions.
+
+Your Verification Code: {otp_code}
+
+This code expires in {expiration_minutes} minutes.
+
+Never share this code with anyone. If you did not attempt to register, ignore this email.
+
+Best regards,
+Malasakit EMR Solutions Team
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user_email],
+            )
+            email.attach_alternative(html_message, 'text/html')
+            email.send(fail_silently=False)
+
+            logger.info(f"✅ Admin OTP email sent to {user_email}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Admin OTP email error: {str(e)}")
+            return False
+
+    @staticmethod
+    def send_staff_welcome_email(
+        user_email: str,
+        user_name: str,
+        role: str,
+        password: str,
+        company_name: str,
+    ) -> bool:
+        """
+        Send onboarding email to a newly-created Staff or Practitioner account.
+
+        The temporary password is included so the user can complete first login.
+        The email clearly states that the password expires in 48 hours and that
+        a mandatory password change is required before any other action.
+
+        Parameters
+        ----------
+        user_email   : recipient address
+        user_name    : full display name
+        role         : 'STAFF' | 'PRACTITIONER'
+        password     : system-generated temporary password (plain-text, single use)
+        company_name : clinic / organisation name shown in the greeting
+        """
+        role_label = 'Practitioner' if role == 'PRACTITIONER' else 'Staff'
+
+        try:
+            subject = f'Welcome to {company_name} — Your Malasakit Account Credentials'
+
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">
+  Your <strong>{role_label}</strong> account at <strong>{company_name}</strong> has been
+  created by an administrator. Use the temporary credentials below to sign in.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#f0f9ff;border:1px solid #d0e8f2;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;">
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0369a1;margin:0 0 12px;">
+    Your Temporary Login Credentials
+  </p>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Email</p>
+  <p style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px;">{user_email}</p>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Temporary Password</p>
+  <p style="font-size:22px;font-weight:700;color:#0ea5e9;letter-spacing:2px;margin:0;">{password}</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;margin-bottom:16px;">
+<tr><td style="padding:14px 20px;">
+  <p style="font-size:13px;color:#92400e;font-weight:700;margin:0 0 6px;">&#9888;&#65039; Important — Action Required</p>
+  <ul style="font-size:13px;color:#78350f;margin:0;padding-left:18px;line-height:1.8;">
+    <li>This password is valid for your <strong>first login only</strong> and expires in <strong>48 hours</strong>.</li>
+    <li>You will be <strong>required to set a permanent password</strong> immediately after signing in.</li>
+    <li>You cannot access any module until the password change is complete.</li>
+    <li>Never share this password with anyone.</li>
+    <li>If you did not expect this email, contact your clinic administrator immediately.</li>
+  </ul>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="margin-bottom:20px;">
+<tr><td align="center">
+  <a href="{settings.FRONTEND_URL}/login"
+     style="display:inline-block;background:#0ea5e9;color:#fff;font-size:14px;font-weight:600;
+            text-decoration:none;padding:12px 32px;border-radius:6px;">
+    Sign In &amp; Set Your Password
+  </a>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">
+  Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong>
+</p>"""
+
+            html_message = EmailService._build_html(
+                icon='👋',
+                title=f'Welcome to {company_name}',
+                accent='#0ea5e9',
+                body_html=body,
+            )
+
+            plain_message = f"""Welcome to {company_name} — Malasakit EMR Solutions
+
+Hello {user_name},
+
+Your {role_label} account has been created by an administrator.
+
+Email:             {user_email}
+Temporary Password: {password}
+
+⚠ IMPORTANT:
+  - This password expires in 48 hours.
+  - You MUST set a permanent password immediately after your first login.
+  - You cannot access the platform until the password change is complete.
+  - Never share this password with anyone.
+
+Sign in: {settings.FRONTEND_URL}/login
+
+Best regards,
+Malasakit EMR Solutions Team
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
+
+            email_msg = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user_email],
+            )
+            email_msg.attach_alternative(html_message, 'text/html')
+            email_msg.send(fail_silently=False)
+
+            logger.info("✅ Staff/Practitioner welcome email sent to %s", user_email)
+            return True
+
+        except Exception as e:
+            logger.error("❌ Staff welcome email error for %s: %s", user_email, str(e))
             return False

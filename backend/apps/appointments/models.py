@@ -477,3 +477,64 @@ class CalendarNote(TimeStampedModel):
     def clean(self):
         if self.start_time and self.end_time and self.end_time <= self.start_time:
             raise ValidationError('End time must be after start time')
+
+
+# ── Appointment Confirm Token ─────────────────────────────────────────────────
+
+def _default_confirm_expires():
+    """Confirmation tokens expire after 48 hours."""
+    return timezone.now() + timedelta(hours=48)
+
+
+class AppointmentConfirmToken(TimeStampedModel):
+    """
+    Secure one-time token embedded in appointment reminder emails.
+
+    When a patient clicks "Confirm Appointment" in the reminder email,
+    their browser opens the frontend /confirm/{token} page which calls
+    POST /api/appointments/confirm-email/{token}/ to confirm the appointment.
+
+    Security:
+    - UUID token (unguessable)
+    - 48-hour expiry
+    - Single-use (is_used flag)
+    - Bound to a specific appointment
+    """
+
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name='confirm_tokens',
+        help_text='The appointment this token is for.',
+    )
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        db_index=True,
+        editable=False,
+    )
+    expires_at = models.DateTimeField(default=_default_confirm_expires)
+    is_used = models.BooleanField(
+        default=False,
+        help_text='True once the patient has clicked Confirm.',
+    )
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'appointment_confirm_tokens'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['appointment', 'is_used']),
+        ]
+
+    def __str__(self):
+        return f"ConfirmToken {self.token} — appointment {self.appointment_id}"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.is_used and not self.is_expired

@@ -51,6 +51,8 @@ class ContactSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         if value and '@' not in value:
             raise serializers.ValidationError('Enter a valid email address.')
+        if value:
+            value = value.strip().lower()
         return value
 
 

@@ -2,16 +2,26 @@ import axiosInstance from '@/lib/axios';
 
 export interface CommunicationSettings {
   id: number;
+  // Per-reminder-type channel methods
   booking_confirmation_method: 'EMAIL' | 'SMS' | 'BOTH';
   reminder_method: 'EMAIL' | 'SMS' | 'BOTH';
+  cancellation_method: 'EMAIL' | 'SMS' | 'BOTH';
+  dna_followup_method: 'EMAIL' | 'SMS' | 'BOTH';
+  rebook_followup_method: 'EMAIL' | 'SMS' | 'BOTH';
+  inactive_checkin_method: 'EMAIL' | 'SMS' | 'BOTH';
+  profile_creation_method: 'EMAIL' | 'SMS' | 'BOTH';
+  // Timing
   reminder_hours_before: number;
   no_rebook_followup_days: number;
   inactive_patient_months: number;
+  // Feature toggles
   booking_confirmations_enabled: boolean;
   reminders_enabled: boolean;
+  cancellation_enabled: boolean;
   dna_followup_enabled: boolean;
   rebook_followup_enabled: boolean;
   inactive_checkin_enabled: boolean;
+  profile_creation_enabled: boolean;
 }
 
 export interface CommunicationLogEntry {
@@ -66,6 +76,7 @@ export const communicationApi = {
     search?: string;
     page?: number;
     ordering?: string;
+    patient?: string | number;
   }): Promise<{ results: CommunicationLogEntry[]; count: number }> => {
     const { data } = await axiosInstance.get('/communication-logs/', { params });
     return data;

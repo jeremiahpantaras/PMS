@@ -90,16 +90,26 @@ class ClinicCommunicationSettingsSerializer(serializers.ModelSerializer):
         model  = ClinicCommunicationSettings
         fields = [
             'id',
+            # Per-reminder-type channel methods
             'booking_confirmation_method',
             'reminder_method',
+            'cancellation_method',
+            'dna_followup_method',
+            'rebook_followup_method',
+            'inactive_checkin_method',
+            'profile_creation_method',
+            # Timing
             'reminder_hours_before',
             'no_rebook_followup_days',
             'inactive_patient_months',
+            # Feature toggles
             'booking_confirmations_enabled',
             'reminders_enabled',
+            'cancellation_enabled',
             'dna_followup_enabled',
             'rebook_followup_enabled',
             'inactive_checkin_enabled',
+            'profile_creation_enabled',
         ]
         read_only_fields = ['id']
 

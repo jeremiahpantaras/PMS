@@ -36,7 +36,8 @@ export const ForgotPassword: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await authService.forgotPassword(email);
+      // Normalize email to lowercase for case-insensitive matching.
+      await authService.forgotPassword(email.trim().toLowerCase());
       toast.success('Verification code sent to your email');
       setStep('code');
     } catch (err: any) {
@@ -89,7 +90,7 @@ export const ForgotPassword: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await authService.forgotPassword(email);
+      await authService.forgotPassword(email.trim().toLowerCase());
       toast.success('New verification code sent to your email');
     } catch (err: any) {
       const errorMessage = err.detail || 'Failed to resend verification code';
@@ -233,7 +234,8 @@ export const ForgotPassword: React.FC = () => {
                     required
                     value={email}
                     onChange={(e) => {
-                      setEmail(e.target.value);
+                      // Normalize to lowercase immediately to prevent case-sensitive issues.
+                      setEmail(e.target.value.toLowerCase());
                       setEmailError('');
                     }}
                     className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg bg-white shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm ${

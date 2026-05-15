@@ -5,14 +5,22 @@ import { DISCIPLINE_OPTIONS } from '../../../types/staff.types';
 
 interface Props {
   staff:          StaffMember;
+  currentUserId?: number;
   onEdit:         (s: StaffMember) => void;
   onDelete:       (id: number) => void;
   onToggleStatus: (id: number, isActive: boolean) => void;
 }
 
 const ROLE_BADGE: Record<string, string> = {
+  ADMIN:        'bg-violet-50 text-violet-700 border-violet-200',
   PRACTITIONER: 'bg-purple-50 text-purple-700 border-purple-200',
   STAFF:        'bg-sky-50   text-sky-700   border-sky-200',
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN:        'Admin',
+  PRACTITIONER: 'Practitioner',
+  STAFF:        'Staff',
 };
 
 const DISCIPLINE_BADGE: Record<string, string> = {
@@ -20,12 +28,18 @@ const DISCIPLINE_BADGE: Record<string, string> = {
 };
 
 export const StaffTableRow: React.FC<Props> = ({
-  staff, onEdit, onDelete, onToggleStatus,
+  staff, currentUserId, onEdit, onDelete, onToggleStatus,
 }) => {
   const disciplineLabel =
     DISCIPLINE_OPTIONS.find(d => d.value === staff.discipline)?.label ?? staff.discipline;
 
   const initials = `${staff.first_name[0] ?? ''}${staff.last_name[0] ?? ''}`.toUpperCase();
+  const effectiveRoles = staff.roles && staff.roles.length > 0 ? staff.roles : [staff.role];
+  const isMe     = currentUserId != null && staff.id === currentUserId;
+  const isAdmin  = effectiveRoles.includes('ADMIN');
+  // Show the assigned branch name when present; fall back to 'All Branches' only
+  // for admins who have no specific branch assignment.
+  const branchLabel = staff.clinic_branch_name ?? (isAdmin ? 'All Branches' : null);
 
   return (
     <tr className="hover:bg-sky-50/40 transition-colors">
@@ -37,11 +51,21 @@ export const StaffTableRow: React.FC<Props> = ({
             {initials}
           </div>
           <div>
-            <p className="font-medium text-gray-900 text-sm leading-tight">
-              {staff.title} {staff.first_name} {staff.last_name}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-medium text-gray-900 text-sm leading-tight">
+                {staff.title} {staff.first_name} {staff.last_name}
+              </p>
+              {isMe && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 leading-none">
+                  Me
+                </span>
+              )}
+            </div>
             {staff.nickname && (
               <p className="text-xs text-gray-400">"{staff.nickname}"</p>
+            )}
+            {branchLabel && (
+              <p className="text-xs text-gray-400 mt-0.5">{branchLabel}</p>
             )}
           </div>
         </div>
@@ -75,11 +99,18 @@ export const StaffTableRow: React.FC<Props> = ({
         </div>
       </td>
 
-      {/* Role */}
+      {/* Role(s) — multi-role badges */}
       <td className="px-4 py-3">
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${ROLE_BADGE[staff.role] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-          {staff.role}
-        </span>
+        <div className="flex flex-wrap gap-1">
+          {((staff.roles && staff.roles.length > 0) ? staff.roles : [staff.role]).map(r => (
+            <span
+              key={r}
+              className={`px-2 py-0.5 rounded-full text-xs font-medium border ${ROLE_BADGE[r] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}
+            >
+              {ROLE_LABEL[r] ?? r}
+            </span>
+          ))}
+        </div>
       </td>
 
       {/* Status toggle */}

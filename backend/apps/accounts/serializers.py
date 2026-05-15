@@ -1,9 +1,96 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import User, Role, Permission
+from django.db import transaction
+import logging
+from .models import User, Role, Permission, PermissionGroup, FeaturePermission, FEATURE_KEYS, ROLE_PRIORITY, _union_permissions
 from apps.clinics.models import Practitioner
 from apps.common.validators import normalize_ph_phone, validate_ph_phone
 from django.core.exceptions import ValidationError as DjangoValidationError
+
+logger = logging.getLogger(__name__)
+
+
+# ── RBAC Serializers ──────────────────────────────────────────────────────────
+
+class FeaturePermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = FeaturePermission
+        fields = ['id', 'feature_key', 'access_level']
+
+
+class PermissionGroupSerializer(serializers.ModelSerializer):
+    feature_permissions = FeaturePermissionSerializer(many=True, read_only=True)
+    member_count        = serializers.SerializerMethodField()
+    permissions_map     = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = PermissionGroup
+        fields = [
+            'id', 'name', 'description', 'role_template',
+            'is_protected', 'is_system_template',
+            'clinic', 'feature_permissions', 'permissions_map',
+            'member_count', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'is_system_template']
+
+    def get_member_count(self, obj) -> int:
+        return obj.users.filter(is_deleted=False).count()
+
+    def get_permissions_map(self, obj) -> dict:
+        """Return a flat {feature_key: access_level} dict for UI consumption."""
+        return obj.get_permissions_dict()
+
+
+class PermissionGroupWriteSerializer(serializers.ModelSerializer):
+    """Used for create/update — accepts `permissions` as a dict."""
+    permissions = serializers.DictField(
+        child=serializers.ChoiceField(choices=['none', 'view', 'edit']),
+        required=False,
+        write_only=True,
+    )
+
+    class Meta:
+        model  = PermissionGroup
+        fields = ['name', 'description', 'role_template', 'is_protected', 'clinic', 'permissions']
+
+    def validate_permissions(self, value):
+        invalid = [k for k in value if k not in FEATURE_KEYS]
+        if invalid:
+            raise serializers.ValidationError(
+                f"Unknown feature keys: {invalid}. Valid keys: {FEATURE_KEYS}"
+            )
+        return value
+
+    def create(self, validated_data):
+        permissions = validated_data.pop('permissions', {})
+        group = PermissionGroup.objects.create(**validated_data)
+        for feature_key, access_level in permissions.items():
+            FeaturePermission.objects.create(
+                group=group,
+                feature_key=feature_key,
+                access_level=access_level,
+            )
+        return group
+
+    def update(self, instance, validated_data):
+        permissions = validated_data.pop('permissions', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if permissions is not None:
+            # Atomically replace ALL feature permissions so stale records
+            # from previous saves can never linger.
+            with transaction.atomic():
+                instance.feature_permissions.all().delete()
+                FeaturePermission.objects.bulk_create([
+                    FeaturePermission(
+                        group=instance,
+                        feature_key=feature_key,
+                        access_level=access_level,
+                    )
+                    for feature_key, access_level in permissions.items()
+                ])
+        return instance
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -15,6 +102,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     # ── NEW: expose whether the admin has completed clinic setup ──────────────
     clinic_setup_complete  = serializers.SerializerMethodField()
+
+    # ── RBAC: permission group + flat permissions map ─────────────────────────
+    permission_group_name  = serializers.SerializerMethodField()
+    permissions_map        = serializers.SerializerMethodField()
+
+    # ── Multi-Role: writable list of role slugs ───────────────────────────────
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=[r for r, _ in User.ROLE_CHOICES]),
+        required=False,
+        allow_empty=False,
+        help_text='All roles assigned to this user. Must contain at least one entry.',
+    )
 
     # ── Practitioner availability fields ─────────────────────────────────────────
     duty_days        = serializers.ListField(child=serializers.CharField(), required=False)
@@ -32,11 +131,14 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model  = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'role', 'phone',
+            'id', 'email', 'first_name', 'last_name', 'role', 'roles', 'phone',
             'avatar', 'avatar_url', 'is_active', 'clinic', 'clinic_branch', 'clinic_branch_name',
             'created_at', 'password', 'password_changed', 'needs_password_change',
-            'clinic_setup_complete',   # ← NEW
-            'password_rotation', 'last_password_change',  # ← password management
+            'must_change_password',
+            'clinic_setup_complete',
+            'password_rotation', 'last_password_change',
+            # RBAC
+            'permission_group', 'permission_group_name', 'permissions_map',
             # Position (for all staff)
             'position',
             # Availability fields (legacy single block)
@@ -46,7 +148,29 @@ class UserSerializer(serializers.ModelSerializer):
             # Discipline (for PRACTITIONER)
             'discipline',
         ]
-        read_only_fields = ['id', 'created_at', 'password_changed']
+        read_only_fields = ['id', 'created_at', 'password_changed', 'must_change_password']
+
+    def get_permission_group_name(self, obj) -> str | None:
+        if obj.permission_group_id:
+            return obj.permission_group.name
+        return None
+
+    def get_permissions_map(self, obj) -> dict:
+        """
+        Return a flat {feature_key: access_level} dict.
+
+        Resolution order:
+        1. ADMIN in roles → all 'edit'.
+        2. permission_group assigned → use the group's explicit matrix.
+        3. Fallback → union of DEFAULT_PERMISSIONS across all assigned roles.
+        """
+        effective_roles = obj.get_effective_roles()
+        if 'ADMIN' in effective_roles:
+            return {key: 'edit' for key in FEATURE_KEYS}
+        if obj.permission_group_id:
+            return obj.permission_group.get_permissions_dict()
+        # Union fallback
+        return _union_permissions(effective_roles)
 
     def get_avatar_url(self, obj) -> str | None:
         """Return the full URL for the avatar image."""
@@ -79,7 +203,9 @@ class UserSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         """Add practitioner/staff availability, discipline, and practitioner_id to the serialized output."""
         data = super().to_representation(instance)
-        if instance.role == 'PRACTITIONER':
+        effective_roles = instance.get_effective_roles()
+
+        if 'PRACTITIONER' in effective_roles:
             try:
                 practitioner = instance.practitioner_profile
                 if practitioner and not practitioner.is_deleted:
@@ -91,9 +217,19 @@ class UserSerializer(serializers.ModelSerializer):
                     data['lunch_end_time']   = practitioner.lunch_end_time.strftime('%H:%M') if practitioner.lunch_end_time else '13:00'
                     data['duty_schedule']    = practitioner.duty_schedule
                     data['discipline']       = practitioner.discipline or 'OCCUPATIONAL_THERAPY'
-            except Exception:
-                pass
-        elif instance.role == 'STAFF':
+                else:
+                    # Profile missing or soft-deleted — surface whatever is stored on the User model
+                    # so the frontend always gets a non-empty discipline for prefill.
+                    data['discipline'] = instance.discipline or 'OCCUPATIONAL_THERAPY'
+            except Exception as exc:
+                logger.warning(
+                    "UserSerializer.to_representation: could not load practitioner profile for user %s: %s",
+                    instance.pk, exc,
+                )
+                # Graceful fallback: use the User-level discipline field so the
+                # frontend is never handed an empty string for an ADMIN+PRACTITIONER.
+                data['discipline'] = instance.discipline or 'OCCUPATIONAL_THERAPY'
+        elif 'STAFF' in effective_roles:
             # Expose Staff availability stored directly on the User model
             data['duty_days']        = instance.duty_days or []
             data['duty_start_time']  = ''
@@ -103,6 +239,10 @@ class UserSerializer(serializers.ModelSerializer):
             data['duty_schedule']    = instance.duty_schedule
             data['discipline']       = instance.discipline or ''
         return data
+
+    def validate_email(self, value):
+        """Normalize email to lowercase for consistent storage and lookups."""
+        return value.strip().lower()
 
     def validate_clinic_branch(self, value):
         if value is None:
@@ -188,6 +328,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
+        # Ensure roles is set; derive from role if absent.
+        roles = validated_data.get('roles')
+        role  = validated_data.get('role', 'STAFF')
+        if not roles:
+            validated_data['roles'] = [role]
 
         # Pop fields that do not exist on the User model (Practitioner handles them)
         for field in ['duty_start_time', 'duty_end_time']:
@@ -218,12 +363,24 @@ class UserSerializer(serializers.ModelSerializer):
             if field in validated_data:
                 shared_availability[field] = validated_data.pop(field)
 
+        # Determine effective roles BEFORE calling instance.save(), because the
+        # User.save() override normalises instance.role to the highest-priority
+        # entry in instance.roles (e.g. ADMIN beats PRACTITIONER).  Using
+        # instance.role *after* save would therefore always resolve to 'ADMIN'
+        # for Admin+Practitioner users, preventing their schedule from syncing.
+        incoming_roles = validated_data.get('roles', None)
+        effective_roles_after = (
+            incoming_roles
+            if isinstance(incoming_roles, list) and incoming_roles
+            else instance.get_effective_roles()
+        )
+
         # Update User fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # Store availability on User for STAFF; Practitioner sync handles PRACTITIONER below
-        if instance.role == 'STAFF' or (validated_data.get('role') == 'STAFF'):
+        # Store availability on User for STAFF-only users (not combined with PRACTITIONER)
+        if 'STAFF' in effective_roles_after and 'PRACTITIONER' not in effective_roles_after:
             for field, value in shared_availability.items():
                 setattr(instance, field, value)
             if 'discipline' in practitioner_data:
@@ -234,8 +391,9 @@ class UserSerializer(serializers.ModelSerializer):
             instance.password_changed = True
         instance.save()
 
-        # Sync Practitioner availability fields when role is PRACTITIONER
-        if instance.role == 'PRACTITIONER':
+        # Sync Practitioner availability fields when PRACTITIONER is in effective roles.
+        # This handles pure-PRACTITIONER AND Admin+Practitioner users correctly.
+        if 'PRACTITIONER' in effective_roles_after:
             try:
                 practitioner = instance.practitioner_profile
                 if practitioner and not practitioner.is_deleted:
@@ -257,13 +415,32 @@ class UserSerializer(serializers.ModelSerializer):
                         if f in shared_availability:
                             update_data[f] = shared_availability[f]
                     if 'discipline' in practitioner_data:
-                        update_data['discipline'] = practitioner_data['discipline']
+                        # Only overwrite when a non-empty value is provided so that
+                        # an empty-string payload (caused by a frontend prefill miss)
+                        # does not silently erase a previously saved discipline.
+                        incoming_discipline = practitioner_data['discipline']
+                        if incoming_discipline:
+                            update_data['discipline'] = incoming_discipline
+                        else:
+                            # Fall back to keep existing value; use default only if
+                            # the practitioner record itself has no discipline yet.
+                            if not practitioner.discipline:
+                                update_data['discipline'] = 'OCCUPATIONAL_THERAPY'
 
                     if update_data:
                         Practitioner.objects.filter(pk=practitioner.pk).update(**update_data)
+                        # Mirror discipline on the User model so to_representation always
+                        # has a fallback even when the practitioner reverse accessor fails.
+                        if 'discipline' in update_data:
+                            User.objects.filter(pk=instance.pk).update(
+                                discipline=update_data['discipline']
+                            )
                         instance.__dict__.pop('practitioner_profile', None)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "UserSerializer.update: could not sync practitioner profile for user %s: %s",
+                    instance.pk, exc,
+                )
 
         return instance
 
@@ -297,6 +474,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model  = User
         fields = ['email', 'first_name', 'last_name', 'password', 'password_confirm', 'role', 'phone']
+
+    def validate_email(self, value):
+        """Normalize email to lowercase for consistent storage and lookups."""
+        return value.strip().lower()
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:

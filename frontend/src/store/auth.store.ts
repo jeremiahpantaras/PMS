@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User, AuthTokens, AuthState } from '@/types';
 import { authService } from '@/services/authService';
+import { queryClient } from '@/lib/queryClient';
+import { invalidateClinicSettingsCache } from '@/hooks/useClinicSettings';
 
 interface AuthStore extends AuthState {
   setAuth: (user: User, tokens: AuthTokens) => void;
@@ -9,6 +11,15 @@ interface AuthStore extends AuthState {
   updateUser: (user: User) => void;
   setLoading: (isLoading: boolean) => void;
   verifyAuth: () => Promise<boolean>;
+  /** Fetch the latest user data (including permissions_map) from /auth/me/ and update the store. */
+  refreshPermissions: () => Promise<void>;
+  /**
+   * Increments on every successful permissions refresh.
+   * Components that show permission data can watch this to re-fetch when
+   * an external session updates permissions via the WebSocket event.
+   * Not persisted — resets to 0 on page reload.
+   */
+  permissionsVersion: number;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -18,6 +29,7 @@ export const useAuthStore = create<AuthStore>()(
       tokens: null,
       isAuthenticated: false,
       isLoading: true,
+      permissionsVersion: 0,
 
       setAuth: (user, tokens) => {
         localStorage.setItem('access_token', tokens.access);
@@ -40,6 +52,10 @@ export const useAuthStore = create<AuthStore>()(
         localStorage.removeItem('user');
         localStorage.removeItem('auth-storage');
         sessionStorage.removeItem('session_active');
+        // Clear all React Query caches to prevent cross-clinic data leakage
+        queryClient.clear();
+        // Reset module-level clinic settings cache
+        invalidateClinicSettingsCache();
         set({
           user: null,
           tokens: null,
@@ -73,6 +89,21 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading });
       },
 
+      refreshPermissions: async () => {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+        try {
+          const freshUser = await authService.getMe(token);
+          get().updateUser(freshUser);
+          // Increment version so subscribed components (e.g. Permissions.tsx)
+          // know to re-fetch their own data.
+          set((state) => ({ permissionsVersion: state.permissionsVersion + 1 }));
+          console.debug('🔄 [auth] Permissions refreshed from /auth/me/');
+        } catch (err) {
+          console.warn('⚠️ [auth] Could not refresh permissions:', err);
+        }
+      },
+
       verifyAuth: async () => {
         console.log('🔐 Verifying authentication...');
 
@@ -87,24 +118,42 @@ export const useAuthStore = create<AuthStore>()(
           return false;
         }
 
-        const token       = localStorage.getItem('access_token');
+        const token        = localStorage.getItem('access_token');
         const refreshToken = localStorage.getItem('refresh_token');
-        const userStr     = localStorage.getItem('user');
 
-        if (!token || !userStr) {
-          console.log('❌ No token or user found');
+        if (!token) {
+          console.log('❌ No token found');
           set({ isAuthenticated: false, isLoading: false, user: null, tokens: null });
           return false;
         }
 
         try {
-          const user = JSON.parse(userStr);
-          const response = await authService.verifyToken(token);
+          const tokenCheck = await authService.verifyToken(token);
 
-          if (response.valid && refreshToken) {
-            console.log('✅ Token valid, restoring session');
+          if (tokenCheck.valid && refreshToken) {
+            // ── CRITICAL: Fetch FRESH user data from server ─────────────────
+            // This ensures the latest permissions_map is applied even if the
+            // admin changed the user's permission group since last login.
+            let freshUser: User;
+            try {
+              freshUser = await authService.getMe(token);
+              console.log('✅ Token valid, session refreshed with latest permissions');
+            } catch (meError) {
+              // Fallback to cached user only if /auth/me/ is unreachable (offline)
+              console.warn('⚠️ Could not refresh user from server, using cached data:', meError);
+              const userStr = localStorage.getItem('user');
+              if (!userStr) {
+                get().logout();
+                return false;
+              }
+              freshUser = JSON.parse(userStr);
+            }
+
+            // Sync fresh user to localStorage for subsequent cold-starts
+            localStorage.setItem('user', JSON.stringify(freshUser));
+
             set({
-              user,
+              user: freshUser,
               tokens: { access: token, refresh: refreshToken },
               isAuthenticated: true,
               isLoading: false,
