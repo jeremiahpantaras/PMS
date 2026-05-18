@@ -559,3 +559,94 @@ Please do not reply directly to this email."""
         except Exception as e:
             logger.error("❌ Staff welcome email error for %s: %s", user_email, str(e))
             return False
+
+    @staticmethod
+    def send_forgot_password_otp_email(
+        user_email: str,
+        user_name: str,
+        otp_code: str,
+        expiration_minutes: int = 5,
+    ) -> bool:
+        """
+        Send a 6-digit OTP verification code for the forgot-password flow.
+
+        Parameters
+        ----------
+        user_email          : recipient address
+        user_name           : display name for the greeting
+        otp_code            : 6-digit numeric OTP
+        expiration_minutes  : OTP validity window shown in the email (default 5)
+        """
+        try:
+            subject = 'Your Malasakit Password Reset Code'
+
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">
+  We received a request to reset the password for your <strong>Malasakit EMR Solutions</strong> account.
+  Use the verification code below to continue.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#fdf4ff;border:2px dashed #a855f7;border-radius:8px;margin-bottom:20px;">
+<tr><td style="padding:24px;text-align:center;">
+  <p style="margin:0 0 8px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#7e22ce;">
+    Password Reset Code
+  </p>
+  <p style="margin:0 0 10px;font-size:40px;font-weight:700;color:#a855f7;letter-spacing:12px;line-height:1.1;">{otp_code}</p>
+  <p style="margin:0;font-size:12px;color:#9ca3af;">
+    This code expires in <strong>{expiration_minutes} minutes</strong>
+  </p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#fffbeb;border:1px solid #f5deb3;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:14px 20px;">
+  <p style="font-size:13px;color:#92400e;font-weight:600;margin:0 0 6px;">&#9888;&#65039; Security Notice</p>
+  <p style="font-size:13px;color:#4b5563;margin:0;line-height:1.6;">
+    Never share this code with anyone — not even Malasakit support.
+    If you did not request a password reset, you can safely ignore this email.
+    Your password will <strong>not</strong> be changed unless you complete the process.
+  </p>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong></p>"""
+
+            html_message = EmailService._build_html(
+                icon='🔐',
+                title='Password Reset Verification',
+                accent='#a855f7',
+                body_html=body,
+            )
+
+            plain_message = f"""Malasakit EMR Solutions — Password Reset Code
+
+Hello {user_name},
+
+We received a request to reset your Malasakit account password.
+
+Your Password Reset Code: {otp_code}
+
+This code expires in {expiration_minutes} minutes.
+
+SECURITY NOTICE: Never share this code with anyone.
+If you did not request this, please ignore this email — your password will not change.
+
+Best regards,
+Malasakit EMR Solutions Team
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
+
+            email_msg = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user_email],
+            )
+            email_msg.attach_alternative(html_message, 'text/html')
+            email_msg.send(fail_silently=False)
+
+            logger.info("✅ Forgot-password OTP email sent to %s", user_email)
+            return True
+
+        except Exception as e:
+            logger.error("❌ Forgot-password OTP email error for %s: %s", user_email, str(e))
+            return False

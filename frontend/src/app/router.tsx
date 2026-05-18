@@ -173,3 +173,25 @@ export const ChangePasswordRoute: React.FC<{ children: React.ReactNode }> = ({ c
 
   return <>{children}</>;
 };
+
+// ── ResetPasswordRoute ─────────────────────────────────────────────────────────
+// Gate for /reset-password — blocks direct URL access unless navigated from
+// /forgot-password/otp (route state must contain email + resetToken).
+// Authenticated users are sent to their dashboard instead.
+export const ResetPasswordRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated } = useAuthStore();
+  const location = useLocation();
+  const state = location.state as { email?: string; resetToken?: string } | null;
+
+  // Authenticated users don't need the forgot-password flow
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Require route state — prevents direct URL access
+  if (!state?.email || !state?.resetToken) {
+    return <Navigate to="/forgot-password" replace />;
+  }
+
+  return <>{children}</>;
+};

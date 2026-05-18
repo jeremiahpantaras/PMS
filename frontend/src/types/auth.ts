@@ -147,6 +147,24 @@ export interface ResetPasswordResponse {
   password_reset: boolean;
 }
 
+// ── New OTP-based Forgot Password flow ────────────────────────────────────────
+
+export interface ForgotPasswordSendOtpResponse {
+  message:     string;
+  expires_in:  number;   // seconds until OTP expires (default 300)
+  cooldown:    number;   // seconds until resend is available (default 60)
+}
+
+export interface ForgotPasswordVerifyOtpResponse {
+  reset_token: string;   // short-lived token for the reset endpoint
+}
+
+export interface ForgotPasswordResetResponse {
+  message: string;
+  user:    User;
+  tokens:  AuthTokens;
+}
+
 export interface AuthError {
   detail?:           string;
   email?:            string[];

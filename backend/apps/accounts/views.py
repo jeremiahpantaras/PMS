@@ -36,6 +36,8 @@ class AuthViewSet(viewsets.GenericViewSet):
             'register_admin', 'register', 'login', 'verify_token',
             'forgot_password', 'verify_code', 'reset_password_with_code',
             'send_admin_otp', 'verify_admin_otp',
+            # New OTP-based forgot-password flow
+            'forgot_password_send_otp', 'forgot_password_verify_otp', 'forgot_password_reset',
         ]:
             permission_classes = [AllowAny]
         else:
@@ -568,6 +570,173 @@ class AuthViewSet(viewsets.GenericViewSet):
                 'password_reset': True
             },
             status=status.HTTP_200_OK
+        )
+
+    # ── New OTP-based Forgot Password flow ────────────────────────────────────
+
+    @action(detail=False, methods=['post'], url_path='forgot-password/send-otp', permission_classes=[AllowAny])
+    def forgot_password_send_otp(self, request):
+        """
+        Step 1 of the OTP-based forgot-password flow.
+        Accepts an email, silently skips invalid/unknown addresses (prevents
+        enumeration), generates a 6-digit OTP, and sends it via email.
+        """
+        from .services import forgot_password_otp_service as fp_otp
+
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Attempt OTP generation — always returns 200 to prevent email enumeration
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user:
+            code, err = fp_otp.generate_otp(email)
+            if err:
+                cooldown = fp_otp.get_cooldown_seconds(email)
+                return Response(
+                    {'detail': err, 'cooldown_seconds': cooldown},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            try:
+                EmailService.send_forgot_password_otp_email(
+                    user_email=user.email,
+                    user_name=(user.get_full_name() or user.first_name or 'User').strip(),
+                    otp_code=code,
+                )
+            except Exception:
+                logger.exception(
+                    'forgot_password_send_otp: email delivery failed for %s',
+                    fp_otp._email_hash(email),
+                )
+        else:
+            logger.info('forgot_password_send_otp: unknown email %s — silently ignored', fp_otp._email_hash(email))
+
+        # Generic response — never reveal whether the email exists
+        return Response(
+            {
+                'message': 'If an account exists with this email, a verification code has been sent.',
+                'expires_in': fp_otp.OTP_TTL,
+                'cooldown':   fp_otp.RESEND_COOLDOWN,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=['post'], url_path='forgot-password/verify-otp', permission_classes=[AllowAny])
+    def forgot_password_verify_otp(self, request):
+        """
+        Step 2 of the OTP-based forgot-password flow.
+        Verifies the submitted OTP and, on success, issues a short-lived
+        reset token that must be presented to the reset endpoint.
+        """
+        from .services import forgot_password_otp_service as fp_otp
+
+        email = (request.data.get('email') or '').strip().lower()
+        otp   = (request.data.get('otp')   or '').strip()
+
+        if not email or not otp:
+            return Response({'detail': 'Email and OTP are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid, err = fp_otp.verify_otp(email, otp)
+        if not valid:
+            return Response({'detail': err}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Confirm account still exists
+        if not User.objects.filter(email__iexact=email, is_active=True).exists():
+            return Response({'detail': 'Unable to process request.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reset_token = fp_otp.issue_reset_token(email)
+        return Response({'reset_token': reset_token}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='forgot-password/reset', permission_classes=[AllowAny])
+    def forgot_password_reset(self, request):
+        """
+        Step 3 of the OTP-based forgot-password flow.
+        Consumes the reset token, validates the new password, resets it,
+        and returns a fresh JWT pair (auto-login) on success.
+        """
+        from .services import forgot_password_otp_service as fp_otp
+        from django.contrib.auth.password_validation import validate_password as dj_validate_password
+        from django.core.exceptions import ValidationError as DjValidationError
+        import re
+
+        email        = (request.data.get('email')        or '').strip().lower()
+        reset_token  = (request.data.get('reset_token')  or '').strip()
+        new_password =  request.data.get('new_password', '')
+
+        if not email or not reset_token or not new_password:
+            return Response(
+                {'detail': 'email, reset_token, and new_password are all required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Consume reset token (single-use, 10-minute TTL)
+        valid, err = fp_otp.consume_reset_token(reset_token, email)
+        if not valid:
+            return Response({'detail': err}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email__iexact=email, is_active=True)
+        except User.DoesNotExist:
+            return Response({'detail': 'Unable to process request.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate password strength via Django validators
+        try:
+            dj_validate_password(new_password, user=user)
+        except DjValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Additional strength rules: min 8, upper, lower, digit, special
+        strong_pw = re.compile(
+            r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\'":\\|,.<>\/?]).{8,}$'
+        )
+        if not strong_pw.match(new_password):
+            return Response(
+                {
+                    'detail': (
+                        'Password must be at least 8 characters and contain an uppercase letter, '
+                        'a lowercase letter, a number, and a special character.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                # User chose their own password — no forced change, clear any temp state
+                PasswordService.reset_password(user, new_password=new_password)
+
+                # Issue a fresh JWT pair (auto-login)
+                refresh = RefreshToken.for_user(user)
+                tokens = {
+                    'access':  str(refresh.access_token),
+                    'refresh': str(refresh),
+                }
+
+                logger.info('forgot_password_reset: password successfully reset for %s', fp_otp._email_hash(email))
+
+        except Exception:
+            logger.exception('forgot_password_reset: unexpected error for %s', fp_otp._email_hash(email))
+            return Response(
+                {'detail': 'Password reset failed. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Send async security notification (non-blocking)
+        try:
+            EmailService.send_password_update_confirmation_email(
+                user_email=user.email,
+                user_name=(user.get_full_name() or user.first_name or 'User').strip(),
+            )
+        except Exception:
+            logger.exception('forgot_password_reset: confirmation email failed for %s', fp_otp._email_hash(email))
+
+        return Response(
+            {
+                'message': 'Password reset successfully.',
+                'user':    UserSerializer(user, context={'request': request}).data,
+                'tokens':  tokens,
+            },
+            status=status.HTTP_200_OK,
         )
 
     @action(

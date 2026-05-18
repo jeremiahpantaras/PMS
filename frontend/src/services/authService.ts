@@ -208,6 +208,7 @@ export const authService = {
 
   /**
    * Request password reset - send verification code to email
+   * @deprecated Use forgotPasswordSendOtp instead (legacy endpoint)
    */
   async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
     try {
@@ -220,6 +221,7 @@ export const authService = {
 
   /**
    * Verify the code entered by user
+   * @deprecated Use forgotPasswordVerifyOtp instead (legacy endpoint)
    */
   async verifyCode(email: string, code: string): Promise<VerifyCodeResponse> {
     try {
@@ -232,6 +234,7 @@ export const authService = {
 
   /**
    * Reset password using verified code
+   * @deprecated Use forgotPasswordReset instead (legacy endpoint)
    * Note: newPassword is not needed - backend will generate a new one
    */
   async resetPassword(email: string, code: string, _newPassword: string): Promise<ResetPasswordResponse> {
@@ -244,6 +247,74 @@ export const authService = {
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } } };
       throw err.response?.data || { detail: 'Password reset failed' };
+    }
+  },
+
+  // ── New OTP-based Forgot Password flow ────────────────────────────────────
+
+  /**
+   * Forgot Password — Step 1
+   * Sends a 6-digit OTP to the provided email (no disclosure whether the
+   * address exists, preventing email enumeration).
+   *
+   * Returns timing metadata for the OTP / resend timers.
+   */
+  async forgotPasswordSendOtp(
+    email: string,
+  ): Promise<{ message: string; expires_in: number; cooldown: number }> {
+    try {
+      const response = await authApi.post(
+        '/auth/forgot-password/send-otp/',
+        { email: email.trim().toLowerCase() },
+      );
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { detail: 'Unable to process request.' };
+    }
+  },
+
+  /**
+   * Forgot Password — Step 2
+   * Verifies the 6-digit OTP and returns a short-lived reset token that
+   * must be presented to forgotPasswordReset.
+   */
+  async forgotPasswordVerifyOtp(
+    email: string,
+    otp: string,
+  ): Promise<{ reset_token: string }> {
+    try {
+      const response = await authApi.post(
+        '/auth/forgot-password/verify-otp/',
+        { email: email.trim().toLowerCase(), otp },
+      );
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { detail: 'OTP verification failed.' };
+    }
+  },
+
+  /**
+   * Forgot Password — Step 3
+   * Consumes the reset token and sets the new user-chosen password.
+   * Returns fresh JWT tokens (auto-login) on success.
+   */
+  async forgotPasswordReset(
+    email: string,
+    resetToken: string,
+    newPassword: string,
+  ): Promise<{ message: string; user: User; tokens: AuthTokens }> {
+    try {
+      const response = await authApi.post(
+        '/auth/forgot-password/reset/',
+        {
+          email:        email.trim().toLowerCase(),
+          reset_token:  resetToken,
+          new_password: newPassword,
+        },
+      );
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { detail: 'Password reset failed.' };
     }
   },
 

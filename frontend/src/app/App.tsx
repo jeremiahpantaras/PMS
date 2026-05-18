@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { SidebarProvider } from '@/contexts/SidebarContext';
-import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute, ChangePasswordRoute } from './router';
+import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute, ChangePasswordRoute, ResetPasswordRoute } from './router';
 import { LogoutConfirmModal } from '@/components/modals/LogoutConfirmModal';
 import { SessionExpiryWarningModal } from '@/components/modals/SessionExpiryWarningModal';
 import { useLogoutConfirm } from '@/hooks/useLogoutConfirm';
@@ -18,6 +18,8 @@ import { Login }                  from '@/features/auth/Login';
 import { AdminRegister }          from '@/features/auth/AdminRegister';
 import { RegisterSuccess }        from '@/features/auth/RegisterSuccess';
 import { ForgotPassword }         from '@/features/auth/ForgotPassword';
+import { ForgotPasswordOTP }      from '@/features/auth/ForgotPasswordOTP';
+import { ResetPasswordPage }      from '@/features/auth/ResetPasswordPage';
 import { ChangePasswordPage }     from '@/features/auth/ChangePasswordPage';
 import { PortalHome }             from '@/features/patient-portal/pages/PortalHome';
 import { BookAppointmentSuccess } from '@/features/patient-portal/pages/BookAppointmentSuccess';
@@ -228,6 +230,15 @@ function App() {
           <Route path="/register"         element={<PublicRoute><AdminRegister /></PublicRoute>} />
           <Route path="/register/success" element={<PublicRoute><RegisterSuccess /></PublicRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/forgot-password/otp" element={<PublicRoute><ForgotPasswordOTP /></PublicRoute>} />
+          <Route
+            path="/reset-password"
+            element={
+              <ResetPasswordRoute>
+                <ResetPasswordPage />
+              </ResetPasswordRoute>
+            }
+          />
 
           {/* ── Mandatory first-login password change ───────────────── */}
           <Route
