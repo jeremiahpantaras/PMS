@@ -904,6 +904,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         
         # Create appointments
         created_appointments = []
+        # Resolve clinic group once for efficient emits
+        main_clinic_id = get_main_clinic_id(request.user)
         for appt_date in generated_dates:
             appointment = Appointment.objects.create(
                 clinic=clinic,
@@ -921,6 +923,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 updated_by=request.user,
             )
             created_appointments.append(appointment)
+            # Emit a lightweight calendar event for this new appointment so
+            # connected clients update instantly without a full refetch.
+            try:
+                if main_clinic_id:
+                    data = AppointmentSerializer(appointment, context={'request': request}).data
+                    emit_calendar_event(main_clinic_id, 'APPOINTMENT_CREATED', dict(data))
+            except Exception:
+                logger.exception('Failed to emit APPOINTMENT_CREATED for recurring appt #%s', getattr(appointment, 'id', '?'))
         
         # Serialize the created appointments
         serializer = AppointmentSerializer(created_appointments, many=True, context={'request': request})
@@ -1566,6 +1576,15 @@ class PublicRebookingLinkView(APIView):
             chief_complaint=original.chief_complaint or '',
             notes=f'Rebooked via secure link (original appt #{original.id})',
         )
+
+        # Emit calendar event so clients see the rebook instantly.
+        try:
+            main_clinic_id = new_appt.clinic.main_clinic.id if new_appt.clinic and new_appt.clinic.main_clinic else None
+            if main_clinic_id:
+                data = AppointmentSerializer(new_appt, context={'request': request}).data
+                emit_calendar_event(main_clinic_id, 'APPOINTMENT_CREATED', dict(data))
+        except Exception:
+            logger.exception('Failed to emit APPOINTMENT_CREATED for rebooked appt #%s', getattr(new_appt, 'id', '?'))
 
         link.is_used = True
         link.used_at = timezone.now()
