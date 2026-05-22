@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Clinic, Practitioner, Location
-from apps.common.validators import normalize_ph_phone, validate_ph_phone
+from apps.common.validators import normalize_ph_phone, validate_ph_phone, validate_email_detailed
 from django.core.exceptions import ValidationError as DjangoValidationError
 import logging
 
@@ -46,9 +46,14 @@ class ClinicSerializer(serializers.ModelSerializer):
         return None
 
     def validate_email(self, value):
-        """Normalize clinic email to lowercase for consistent storage."""
+        """Normalize clinic email to lowercase; validate format with specific messages."""
         if value:
-            return value.strip().lower()
+            normalized = value.strip().lower()
+            try:
+                validate_email_detailed(normalized)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.message)
+            return normalized
         return value
 
 
@@ -85,7 +90,12 @@ class ClinicProfileSetupSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         if not value or not value.strip():
             raise serializers.ValidationError("Clinic email is required.")
-        return value.lower().strip()
+        normalized = value.lower().strip()
+        try:
+            validate_email_detailed(normalized)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+        return normalized
 
     def validate_phone(self, value):
         if not value or not value.strip():

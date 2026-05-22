@@ -91,14 +91,14 @@ export interface AdminRegisterData {
 }
 
 export interface AdminRegisterResponse {
-  message:    string;
-  email_sent: boolean;
-  user:       User;
-  tokens:     AuthTokens;
+  message:          string;
+  onboarding_token: string;
+  user_email:       string;
   clinic: {
     id:   number;
     name: string;
   };
+  portal_token?: string;
 }
 
 export interface RegisterData {

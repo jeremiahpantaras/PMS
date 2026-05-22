@@ -340,4 +340,29 @@ export const authService = {
       throw err.response?.data || { detail: 'Password change failed. Please try again.' };
     }
   },
+
+  /**
+   * Admin Onboarding — Step 4
+   * Exchanges the onboarding_token (issued by register-admin) for a JWT
+   * by setting the admin's chosen password.  No prior auth required.
+   */
+  async setupOnboardingPassword(
+    onboardingToken: string,
+    email: string,
+    newPassword: string,
+  ): Promise<{ detail: string; user: User; tokens: AuthTokens }> {
+    try {
+      const response = await authApi.post(
+        '/auth/setup-onboarding-password/',
+        {
+          onboarding_token: onboardingToken,
+          email: email.trim().toLowerCase(),
+          new_password: newPassword,
+        },
+      );
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { detail: 'Password setup failed. Please try again.' };
+    }
+  },
 };

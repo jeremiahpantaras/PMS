@@ -4,6 +4,27 @@ export const validateEmail = (email: string): boolean => {
 };
 
 /**
+ * Returns a specific error message for an invalid email, or '' if valid.
+ * Checks for spaces, missing @, missing domain, and overall format.
+ */
+export const validateEmailDetailed = (email: string): string => {
+  const trimmed = email.trim();
+  if (!trimmed) return 'Email is required';
+  if (/\s/.test(email)) return 'Email must not contain spaces';
+  if (!trimmed.includes('@')) return 'Email must contain @';
+  const atIdx = trimmed.lastIndexOf('@');
+  const local  = trimmed.slice(0, atIdx);
+  const domain = trimmed.slice(atIdx + 1);
+  if (!local)  return 'Email must have content before @';
+  if (!domain) return 'Email must have a domain after @';
+  if (!domain.includes('.')) return 'Email must include a valid domain (e.g. .com)';
+  const tld = domain.split('.').pop() ?? '';
+  if (tld.length < 2) return 'Email domain extension is too short';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Please enter a valid email address';
+  return '';
+};
+
+/**
  * Validate Philippine phone number.
  * Delegates to isValidPHPhone from phoneFormatter utility.
  */
@@ -15,6 +36,29 @@ export const validatePhone = (phone: string): boolean => {
   if (cleaned.startsWith('0'))  cleaned = cleaned.slice(1);
   if (cleaned.startsWith('63')) cleaned = cleaned.slice(2);
   return /^9\d{9}$/.test(cleaned);
+};
+
+/**
+ * Returns a specific error message for an invalid PH phone number, or '' if valid.
+ * Distinguishes between invalid characters, wrong prefix, too short, and too long.
+ */
+export const validatePHPhoneDetailed = (value: string, required = true): string => {
+  const empty = !value || !value.trim() || value.trim() === '(+63)';
+  if (empty) return required ? 'Phone number is required' : '';
+
+  // Check for disallowed characters (anything that isn't digit, space, +, (, ))
+  const stripped = value.replace(/[\s()+]/g, '');
+  if (/[^0-9]/.test(stripped)) return 'Phone number contains invalid characters';
+
+  const digits = value.replace(/\D/g, '');
+  let cleaned = digits;
+  if (cleaned.startsWith('0'))  cleaned = cleaned.slice(1);
+  if (cleaned.startsWith('63')) cleaned = cleaned.slice(2);
+
+  if (!cleaned.startsWith('9')) return 'Phone number must start with a valid prefix (09 or +63 9)';
+  if (cleaned.length < 10) return 'Phone number is too short';
+  if (cleaned.length > 10) return 'Phone number is too long';
+  return '';
 };
 
 export const validatePassword = (password: string): { valid: boolean; message: string } => {

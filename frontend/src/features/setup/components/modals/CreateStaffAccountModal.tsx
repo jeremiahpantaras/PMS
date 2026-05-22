@@ -7,6 +7,7 @@ import { TITLE_OPTIONS, GENDER_OPTIONS } from '../../types/staff.types';
 import { useDisciplineOptions } from '../../hooks/useDisciplineOptions';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';
 import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
+import { validateEmailDetailed, validatePHPhoneDetailed } from '@/utils/validation';
 import {
   listPermissionGroups,
   type PermissionGroup as PGroup,
@@ -203,16 +204,13 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
     if (!formData.first_name.trim()) e.first_name = 'First name is required';
     if (!formData.last_name.trim())  e.last_name  = 'Last name is required';
     if (!formData.position?.trim())  e.position   = 'Position is required';
-    if (!formData.email.trim()) {
-      e.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      e.email = 'Invalid email format';
-    }
-    if (!formData.phone.trim()) {
-      e.phone = 'Phone number is required';
-    } else if (!isValidPHPhone(formData.phone)) {
-      e.phone = 'Enter a valid Philippine mobile number';
-    }
+
+    const emailErr = validateEmailDetailed(formData.email);
+    if (emailErr) e.email = emailErr;
+
+    const phoneErr = validatePHPhoneDetailed(formData.phone);
+    if (phoneErr) e.phone = phoneErr;
+
     if (formData.date_of_birth && new Date(formData.date_of_birth) > new Date())
       e.date_of_birth = 'Date of birth cannot be in the future';
 
@@ -848,7 +846,15 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                     <input
                       type="email"
                       value={formData.email}
-                      onChange={e => set('email', e.target.value)}
+                      onChange={e => {
+                        set('email', e.target.value);
+                        const msg = validateEmailDetailed(e.target.value);
+                        setErrors(prev => ({ ...prev, email: msg || undefined }));
+                      }}
+                      onBlur={e => {
+                        const msg = validateEmailDetailed(e.target.value);
+                        setErrors(prev => ({ ...prev, email: msg || undefined }));
+                      }}
                       disabled={isEditMode}
                       placeholder="john.doe@example.com"
                       className={`${inputCls(!!errors.email)} ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -867,7 +873,16 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                     <input
                       type="tel"
                       value={formData.phone}
-                      onChange={e => set('phone', formatPHPhone(e.target.value))}
+                      onChange={e => {
+                        const formatted = formatPHPhone(e.target.value);
+                        set('phone', formatted);
+                        const msg = validatePHPhoneDetailed(formatted);
+                        setErrors(prev => ({ ...prev, phone: msg || undefined }));
+                      }}
+                      onBlur={e => {
+                        const msg = validatePHPhoneDetailed(e.target.value);
+                        setErrors(prev => ({ ...prev, phone: msg || undefined }));
+                      }}
                       placeholder="(+63) 9XX XXX XXXX"
                       className={inputCls(!!errors.phone)}
                     />

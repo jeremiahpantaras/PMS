@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { SidebarProvider } from '@/contexts/SidebarContext';
-import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute, ChangePasswordRoute, ResetPasswordRoute } from './router';
+import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute, ChangePasswordRoute, ResetPasswordRoute, OnboardingPasswordRoute } from './router';
 import { LogoutConfirmModal } from '@/components/modals/LogoutConfirmModal';
 import { SessionExpiryWarningModal } from '@/components/modals/SessionExpiryWarningModal';
 import { useLogoutConfirm } from '@/hooks/useLogoutConfirm';
@@ -17,6 +17,7 @@ import { LandingPage }            from '@/features/landing/LandingPage';
 import { Login }                  from '@/features/auth/Login';
 import { AdminRegister }          from '@/features/auth/AdminRegister';
 import { RegisterSuccess }        from '@/features/auth/RegisterSuccess';
+import { SetOnboardingPasswordPage } from '@/features/auth/SetOnboardingPasswordPage';
 import { ForgotPassword }         from '@/features/auth/ForgotPassword';
 import { ForgotPasswordOTP }      from '@/features/auth/ForgotPasswordOTP';
 import { ResetPasswordPage }      from '@/features/auth/ResetPasswordPage';
@@ -229,6 +230,14 @@ function App() {
           <Route path="/login"            element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register"         element={<PublicRoute><AdminRegister /></PublicRoute>} />
           <Route path="/register/success" element={<PublicRoute><RegisterSuccess /></PublicRoute>} />
+          <Route
+            path="/register/set-password"
+            element={
+              <OnboardingPasswordRoute>
+                <SetOnboardingPasswordPage />
+              </OnboardingPasswordRoute>
+            }
+          />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/forgot-password/otp" element={<PublicRoute><ForgotPasswordOTP /></PublicRoute>} />
           <Route

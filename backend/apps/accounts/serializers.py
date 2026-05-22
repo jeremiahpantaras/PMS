@@ -4,7 +4,7 @@ from django.db import transaction
 import logging
 from .models import User, Role, Permission, PermissionGroup, FeaturePermission, FEATURE_KEYS, ROLE_PRIORITY, _union_permissions
 from apps.clinics.models import Practitioner
-from apps.common.validators import normalize_ph_phone, validate_ph_phone
+from apps.common.validators import normalize_ph_phone, validate_ph_phone, validate_email_detailed
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 logger = logging.getLogger(__name__)
@@ -241,8 +241,23 @@ class UserSerializer(serializers.ModelSerializer):
         return data
 
     def validate_email(self, value):
-        """Normalize email to lowercase for consistent storage and lookups."""
-        return value.strip().lower()
+        """Normalize email to lowercase; validate format with specific error messages."""
+        normalized = value.strip().lower()
+        try:
+            validate_email_detailed(normalized)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+        return normalized
+
+    def validate_phone(self, value):
+        """Validate phone with specific error messages and normalize to +63 format."""
+        if not value:
+            return value
+        try:
+            validate_ph_phone(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+        return normalize_ph_phone(value)
 
     def validate_clinic_branch(self, value):
         if value is None:
@@ -453,9 +468,14 @@ class AdminRegistrationSerializer(serializers.Serializer):
     phone        = serializers.CharField(max_length=15, required=False, allow_blank=True)
 
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        normalized = value.strip().lower()
+        try:
+            validate_email_detailed(normalized)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+        if User.objects.filter(email=normalized).exists():
             raise serializers.ValidationError("A user with this email already exists.")
-        return value.lower()
+        return normalized
 
     def validate_phone(self, value):
         if value:
@@ -476,8 +496,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ['email', 'first_name', 'last_name', 'password', 'password_confirm', 'role', 'phone']
 
     def validate_email(self, value):
-        """Normalize email to lowercase for consistent storage and lookups."""
-        return value.strip().lower()
+        """Normalize email to lowercase; validate format with specific error messages."""
+        normalized = value.strip().lower()
+        try:
+            validate_email_detailed(normalized)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+        return normalized
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:

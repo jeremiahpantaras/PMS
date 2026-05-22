@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { authService } from '@/services/authService';
 import {
-  validateEmail,
   validateName,
   validateCompanyName,
   sanitizeInput,
+  validateEmailDetailed,
+  validatePHPhoneDetailed,
 } from '@/utils/validation';
-import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 import { Mail, User, Building2, Phone, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
 import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
@@ -111,12 +112,14 @@ export const AdminRegister: React.FC = () => {
 
     if (!formData.email.trim()) {
       errors.email = 'Email is required';
-    } else if (!validateEmail(formData.email)) {
-      errors.email = 'Invalid email format';
+    } else {
+      const emailErr = validateEmailDetailed(formData.email);
+      if (emailErr) errors.email = emailErr;
     }
 
-    if (formData.phone && !isValidPHPhone(formData.phone)) {
-      errors.phone = 'Enter a valid Philippine mobile number (e.g. 09XX XXX XXXX)';
+    if (formData.phone) {
+      const phoneErr = validatePHPhoneDetailed(formData.phone, false);
+      if (phoneErr) errors.phone = phoneErr;
     }
 
     setValidationErrors(errors);
@@ -193,21 +196,16 @@ export const AdminRegister: React.FC = () => {
         };
         const response = await authService.registerAdmin(payload);
 
-        if (response.email_sent) {
-          toast.success('Account created! Check your email for login credentials.', {
-            duration: 5000,
-          });
-        } else {
-          toast.success('Account created! Email delivery pending.', { duration: 5000 });
-        }
+        // Store onboarding session data so SetOnboardingPasswordPage can use them
+        sessionStorage.setItem('reg_onboarding_token', response.onboarding_token);
+        sessionStorage.setItem('reg_user_email',       response.user_email);
+        sessionStorage.setItem('reg_clinic_name',      response.clinic.name);
 
-        navigate('/register/success', {
-          state: {
-            email:       formData.email,
-            emailSent:   response.email_sent,
-            companyName: response.clinic.name,
-          },
+        toast.success('Account created! Please set your password to continue.', {
+          duration: 4000,
         });
+
+        navigate('/register/set-password');
       } catch (error: unknown) {
         const authError = error as AuthError;
 

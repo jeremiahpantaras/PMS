@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast';
 import { invalidateClinicSettingsCache } from '@/hooks/useClinicSettings';
 import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
+import { validateEmailDetailed, validatePHPhoneDetailed } from '@/utils/validation';
 import { useStaffManagement } from '@/features/setup/hooks/useStaffManagement';
 import { useClinicServices } from '@/features/manage/hooks/useClinicServices';
 import type { ClinicBranch, CreateBranchData } from '@/types/clinic';
@@ -244,7 +245,28 @@ export const ClinicSetupPage: React.FC = () => {
     const { name, value } = e.target;
     const formatted = name === 'phone' ? formatPHPhone(value) : value;
     setForm(prev => ({ ...prev, [name]: formatted }));
-    setErrors(prev => ({ ...prev, [name]: undefined }));
+
+    // Real-time detailed validation for email and phone
+    if (name === 'email') {
+      const msg = validateEmailDetailed(value);
+      setErrors(prev => ({ ...prev, email: msg || undefined }));
+    } else if (name === 'phone') {
+      const msg = validatePHPhoneDetailed(formatted);
+      setErrors(prev => ({ ...prev, phone: msg || undefined }));
+    } else {
+      setErrors(prev => ({ ...prev, [name]: undefined }));
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    if (name === 'email') {
+      const msg = validateEmailDetailed(value);
+      setErrors(prev => ({ ...prev, email: msg || undefined }));
+    } else if (name === 'phone') {
+      const msg = validatePHPhoneDetailed(value);
+      setErrors(prev => ({ ...prev, phone: msg || undefined }));
+    }
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,12 +337,30 @@ export const ClinicSetupPage: React.FC = () => {
 
   // ── Final: Finish Setup — saves all collected data at once ─────────────────
   const handleFinishSetup = async () => {
+    if (!clinicId) return;
+
+    // Run field-level validation and show detailed errors before submitting
+    const emailErr = validateEmailDetailed(form.email);
+    const phoneErr = validatePHPhoneDetailed(form.phone);
+    const newErrors: Partial<Record<keyof FormState, string>> = {};
+    if (emailErr) newErrors.email = emailErr;
+    if (phoneErr) newErrors.phone = phoneErr;
+    if (!form.name.trim()) newErrors.name = 'Clinic name is required';
+    const locOk = (!!form.address.trim() && !!form.city.trim() && !!form.province.trim())
+               || !!form.custom_location.trim();
+    if (!locOk) newErrors.address = 'Please provide a city, province, and street address (or use the manual field)';
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error('Please fix the highlighted errors before saving.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     if (!step1Complete) {
       toast.error('Please complete Step 1 (Clinic Profile) first.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (!clinicId) return;
 
     setIsFinishing(true);
     try {
@@ -475,7 +515,7 @@ export const ClinicSetupPage: React.FC = () => {
                     <Phone className="w-3.5 h-3.5 text-gray-400" /> Phone <span className="text-red-500">*</span>
                   </label>
                   <input
-                    name="phone" value={form.phone} onChange={handleChange}
+                    name="phone" value={form.phone} onChange={handleChange} onBlur={handleBlur}
                     placeholder="(+63) 9XX XXX XXXX"
                     className={`w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${errors.phone ? 'border-red-400 bg-red-50' : 'border-[#E5E7EB] focus:border-blue-400'}`}
                   />
@@ -486,7 +526,7 @@ export const ClinicSetupPage: React.FC = () => {
                     <Mail className="w-3.5 h-3.5 text-gray-400" /> Clinic Email <span className="text-red-500">*</span>
                   </label>
                   <input
-                    name="email" type="email" value={form.email} onChange={handleChange}
+                    name="email" type="email" value={form.email} onChange={handleChange} onBlur={handleBlur}
                     placeholder="clinic@example.com"
                     className={`w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${errors.email ? 'border-red-400 bg-red-50' : 'border-[#E5E7EB] focus:border-blue-400'}`}
                   />

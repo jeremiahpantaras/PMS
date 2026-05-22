@@ -22,7 +22,7 @@ import type {
   BookingPayload,
 } from '../types/portal';
 import type { PatientFormData } from '../components/PatientDetailsForm';
-import { isValidPHPhone } from '@/utils/phoneFormatter';
+import { validateEmailDetailed, validatePHPhoneDetailed } from '@/utils/validation';
 
 // ── After branch is picked, 4-step inner flow ─────────────────────────────────
 type InnerStep = 'practitioner' | 'services' | 'datetime' | 'details';
@@ -139,15 +139,16 @@ export const PortalHome: React.FC = () => {
     if (!formData.first_name.trim() || !formData.last_name.trim()) {
       setFormError('First and last name are required.'); return;
     }
-    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (!formData.email.trim()) {
       setFormError('A valid email address is required.'); return;
     }
+    const emailErr = validateEmailDetailed(formData.email);
+    if (emailErr) { setFormError(emailErr); return; }
     if (!formData.phone.trim()) {
       setFormError('Phone number is required.'); return;
     }
-    if (!isValidPHPhone(formData.phone)) {
-      setFormError('Enter a valid Philippine mobile number (e.g. (+63) 9XX XXX XXXX).'); return;
-    }
+    const phoneErr = validatePHPhoneDetailed(formData.phone);
+    if (phoneErr) { setFormError(phoneErr); return; }
     if (!formData.date_of_birth) {
       setFormError('Date of birth is required.'); return;
     }

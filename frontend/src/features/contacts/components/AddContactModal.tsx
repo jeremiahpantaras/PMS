@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, AlertCircle, RefreshCw, Building2, Phone, Mail, MapPin, Briefcase } from 'lucide-react';
 import type { CreateContactData, Contact } from '@/types';
 import { PhLocationSelect } from '@/components/location/PhLocationSelect';
-import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone } from '@/utils/phoneFormatter';
+import { validateEmailDetailed, validatePHPhoneDetailed } from '@/utils/validation';
 
 interface AddContactModalProps {
   isOpen:          boolean;
@@ -124,13 +125,13 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
     const e: FormErrors = {};
     if (!formData.first_name.trim())  e.first_name = 'First name is required';
     if (!formData.last_name.trim())   e.last_name  = 'Last name is required';
-    if (formData.phone.trim() && !isValidPHPhone(formData.phone))
-      e.phone = 'Enter a valid Philippine mobile number';
+    if (formData.phone.trim()) {
+      const phoneErr = validatePHPhoneDetailed(formData.phone, false);
+      if (phoneErr) e.phone = phoneErr;
+    }
     const emailValue = formData.email ?? '';
-    if (!emailValue.trim()) {
-      e.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue))
-      e.email = 'Invalid email format';
+    const emailErr = validateEmailDetailed(emailValue);
+    if (emailErr) e.email = emailErr;
     if (!formData.address.trim())  e.address  = 'Address is required';
     if (!formData.city.trim())     e.city     = 'City is required';
     if (!formData.province.trim()) e.province = 'Province is required';

@@ -1,3 +1,5 @@
+import re
+import secrets
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,6 +40,8 @@ class AuthViewSet(viewsets.GenericViewSet):
             'send_admin_otp', 'verify_admin_otp',
             # New OTP-based forgot-password flow
             'forgot_password_send_otp', 'forgot_password_verify_otp', 'forgot_password_reset',
+            # Admin onboarding — set password without a prior session
+            'setup_onboarding_password',
         ]:
             permission_classes = [AllowAny]
         else:
@@ -154,8 +158,10 @@ class AuthViewSet(viewsets.GenericViewSet):
     # ── Registration: Step 3 — create account ─────────────────────────────────
     @action(detail=False, methods=['post'], url_path='register-admin', permission_classes=[AllowAny])
     def register_admin(self, request):
-        """Register admin — auto-generates password, emails credentials,
-        and creates a PortalLink for the new clinic.
+        """Register admin — creates clinic + user account and returns a
+        short-lived onboarding token.  The admin must exchange this token
+        for a JWT by calling setup-onboarding-password with their chosen
+        password.  No temporary password is emailed.
 
         Requires a valid ``verification_token`` issued by verify-admin-otp.
         """
@@ -174,7 +180,9 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         try:
             with transaction.atomic():
-                temp_password = PasswordService.generate_temporary_password()
+                # Internal placeholder password — never sent to the user.
+                # The real password is set via setup-onboarding-password.
+                internal_password = secrets.token_urlsafe(32)
 
                 # Clinic is created with minimal data — admin fills in the rest
                 # during the clinic profile setup step (including clinic email).
@@ -182,7 +190,7 @@ class AuthViewSet(viewsets.GenericViewSet):
                 clinic = Clinic.objects.create(
                     name=serializer.validated_data['company_name'],
                     phone=serializer.validated_data.get('phone', ''),
-                    email='',          # ✅ left blank — admin fills during setup
+                    email='',
                     address='',
                     city='',
                     province='',
@@ -193,7 +201,7 @@ class AuthViewSet(viewsets.GenericViewSet):
 
                 user = User.objects.create_user(
                     email=serializer.validated_data['email'],
-                    password=temp_password,
+                    password=internal_password,
                     first_name=serializer.validated_data['first_name'],
                     last_name=serializer.validated_data['last_name'],
                     phone=serializer.validated_data.get('phone', ''),
@@ -212,30 +220,131 @@ class AuthViewSet(viewsets.GenericViewSet):
                     f"(token: {portal_link.token})"
                 )
 
-                email_sent = EmailService.send_welcome_email(
-                    user_email=user.email,
-                    user_name=user.get_full_name(),
-                    password=temp_password,
-                    company_name=clinic.name
+                # ── Issue single-use onboarding token (30-min TTL) ───────────
+                onboarding_token = secrets.token_urlsafe(32)
+                cache.set(
+                    f'admin_onboarding:{onboarding_token}',
+                    user.id,
+                    timeout=1800,  # 30 minutes
                 )
 
-                if not email_sent:
-                    logger.warning(f"Email failed to send for {user.email}")
+                logger.info(
+                    "Admin onboarding account created for %s (clinic_id=%s, user_id=%s)",
+                    user.email, clinic.id, user.id,
+                )
 
                 return Response({
-                    'message': 'Account created successfully! Check your email for login credentials.',
-                    'email_sent': email_sent,
+                    'message': 'Account created. Please set your password to continue.',
+                    'onboarding_token': onboarding_token,
+                    'user_email': user.email,
                     'clinic': {'id': clinic.id, 'name': clinic.name},
                     'portal_token': portal_link.token,
                 }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Admin registration failed: {str(e)}", exc_info=True)
-            import traceback
-            traceback.print_exc()
             return Response(
-                {'detail': f'Registration failed: {str(e)}'},  # ✅ expose actual error in dev
+                {'detail': f'Registration failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # ── Registration: Step 4 — set password & activate ────────────────────────
+    @action(detail=False, methods=['post'], url_path='setup-onboarding-password', permission_classes=[AllowAny])
+    def setup_onboarding_password(self, request):
+        """
+        Complete admin onboarding by setting the user's chosen password.
+
+        Consumes the single-use ``onboarding_token`` issued by register-admin,
+        validates the new password, activates the account, and returns a JWT
+        pair so the admin is logged in immediately.
+
+        No authentication required — the onboarding_token is the proof of
+        identity (it is bound to a specific user_id in the cache).
+        """
+        onboarding_token = (request.data.get('onboarding_token') or '').strip()
+        email            = (request.data.get('email') or '').strip().lower()
+        new_password     = request.data.get('new_password') or ''
+
+        if not onboarding_token or not email or not new_password:
+            return Response(
+                {'detail': 'onboarding_token, email, and new_password are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Validate the onboarding token ─────────────────────────────────────
+        cache_key = f'admin_onboarding:{onboarding_token}'
+        user_id = cache.get(cache_key)
+        if not user_id:
+            return Response(
+                {'detail': 'Onboarding session has expired or is invalid. Please register again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(pk=user_id, email=email)
+        except User.DoesNotExist:
+            # Token found but email mismatch — consume token to prevent probing
+            cache.delete(cache_key)
+            return Response(
+                {'detail': 'Invalid onboarding session.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Validate password strength ─────────────────────────────────────────
+        strong_pw = re.compile(
+            r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\'\":\\|,.<>\/?]).{8,}$'
+        )
+        if not strong_pw.match(new_password):
+            return Response(
+                {
+                    'detail': (
+                        'Password must be at least 8 characters and include an uppercase letter, '
+                        'a lowercase letter, a number, and a special character.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                # Consume the onboarding token immediately (single-use)
+                cache.delete(cache_key)
+
+                user.set_password(new_password)
+                user.must_change_password = False
+                user.password_changed = True
+                user.last_password_change = timezone.now()
+                user.temp_password_expires_at = None
+                user.save(update_fields=[
+                    'password', 'must_change_password', 'password_changed',
+                    'last_password_change', 'temp_password_expires_at',
+                ])
+
+                refresh = RefreshToken.for_user(user)
+
+                logger.info(
+                    "Admin onboarding password set for %s (user_id=%s)",
+                    user.email, user.id,
+                )
+
+                return Response(
+                    {
+                        'detail': 'Password set successfully. Welcome!',
+                        'user': UserSerializer(user, context={'request': request}).data,
+                        'tokens': {
+                            'access':  str(refresh.access_token),
+                            'refresh': str(refresh),
+                        },
+                    },
+                    status=status.HTTP_200_OK,
+                )
+        except Exception as e:
+            logger.error(
+                "setup_onboarding_password failed for %s: %s", user.email, str(e), exc_info=True
+            )
+            return Response(
+                {'detail': 'Password setup failed. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
     
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])

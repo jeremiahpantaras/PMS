@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  validateEmail, 
+  validateEmailDetailed,
+  validatePHPhoneDetailed,
   validatePassword, 
   sanitizeInput 
 } from '@/utils/validation';
-import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone } from '@/utils/phoneFormatter';
 import { Eye, EyeOff, Lock, Mail, User, Phone } from 'lucide-react';
 
 /**
@@ -70,8 +71,9 @@ export const Register: React.FC = () => {
     // Email validation
     if (!formData.email) {
       errors.email = 'Email is required';
-    } else if (!validateEmail(formData.email)) {
-      errors.email = 'Invalid email format';
+    } else {
+      const emailErr = validateEmailDetailed(formData.email);
+      if (emailErr) errors.email = emailErr;
     }
 
     // Name validation
@@ -83,8 +85,9 @@ export const Register: React.FC = () => {
     }
 
     // Phone validation (optional)
-    if (formData.phone && !isValidPHPhone(formData.phone)) {
-      errors.phone = 'Enter a valid Philippine mobile number';
+    if (formData.phone) {
+      const phoneErr = validatePHPhoneDetailed(formData.phone, false);
+      if (phoneErr) errors.phone = phoneErr;
     }
 
     // Password validation

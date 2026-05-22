@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import type { User as UserType } from '@/types/auth';
 import type { UpdateProfileData } from '../services/profile.api';
-import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';\nimport { validatePHPhoneDetailed } from '@/utils/validation';
 
 interface ProfileInfoCardProps {
   user:           UserType;
@@ -102,7 +102,10 @@ export const ProfileInfoCard: React.FC<ProfileInfoCardProps> = ({
     const e: FormErrors = {};
     if (!form.first_name.trim()) e.first_name = 'First name is required';
     if (!form.last_name.trim())  e.last_name  = 'Last name is required';
-    if (form.phone && !isValidPHPhone(form.phone)) e.phone = 'Enter a valid Philippine mobile number';
+    if (form.phone) {
+      const phoneErr = validatePHPhoneDetailed(form.phone, false);
+      if (phoneErr) e.phone = phoneErr;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };

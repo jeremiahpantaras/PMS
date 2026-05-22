@@ -195,3 +195,24 @@ export const ResetPasswordRoute: React.FC<{ children: React.ReactNode }> = ({ ch
 
   return <>{children}</>;
 };
+
+// ── OnboardingPasswordRoute ────────────────────────────────────────────────────
+// Gate for /register/set-password — only accessible during the admin
+// registration onboarding flow.  Requires the onboarding session keys that
+// were written to sessionStorage by AdminRegister after register-admin succeeded.
+// Authenticated users are sent to their dashboard (onboarding already done).
+export const OnboardingPasswordRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated } = useAuthStore();
+
+  // Already authenticated → onboarding is not applicable
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Require the onboarding session token in sessionStorage
+  if (!sessionStorage.getItem('reg_onboarding_token')) {
+    return <Navigate to="/register" replace />;
+  }
+
+  return <>{children}</>;
+};
