@@ -6,7 +6,7 @@ import type { DutySchedule, DutyDay } from '@/features/clinics/clinic.api';
 import { TITLE_OPTIONS, GENDER_OPTIONS } from '../../types/staff.types';
 import { useDisciplineOptions } from '../../hooks/useDisciplineOptions';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';
-import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
+import { formatPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 import { validateEmailDetailed, validatePHPhoneDetailed } from '@/utils/validation';
 
 // ── Clinical Role Cards ──────────────────────────────────────────────────────

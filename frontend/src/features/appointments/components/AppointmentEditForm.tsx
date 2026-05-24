@@ -8,6 +8,8 @@ interface Practitioner {
   id:             number | string;
   name:           string;
   specialization: string | null;
+  role?:          string;
+  roles?:         string[];
 }
 
 interface AppointmentEditFormProps {

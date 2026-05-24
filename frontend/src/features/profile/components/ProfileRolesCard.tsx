@@ -25,9 +25,11 @@ const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = 
 ];
 
 const ROLE_COLORS: Record<UserRole, string> = {
-  ADMIN:         'bg-violet-100 text-violet-700 border-violet-200',
-  PRACTITIONER:  'bg-teal-100 text-teal-700 border-teal-200',
-  STAFF:         'bg-sky-100 text-sky-700 border-sky-200',
+  ADMIN:            'bg-violet-100 text-violet-700 border-violet-200',
+  ADMIN_ASSISTANT:  'bg-purple-100 text-purple-700 border-purple-200',
+  PRACTITIONER:     'bg-teal-100 text-teal-700 border-teal-200',
+  STAFF:            'bg-sky-100 text-sky-700 border-sky-200',
+  FINANCE:          'bg-amber-100 text-amber-700 border-amber-200',
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
