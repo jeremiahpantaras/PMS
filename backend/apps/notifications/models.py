@@ -149,6 +149,8 @@ class CommunicationLog(TimeStampedModel):
     Unified log for all automated patient communications.
     Tracks confirmations, reminders, DNA follow-ups, rebook follow-ups,
     inactive check-ins, and patient replies.
+    Extended for the Communication Records Hub with full delivery tracking,
+    open tracking, reply threads, and attachment support.
     """
 
     COMM_TYPE_CHOICES = [
@@ -159,6 +161,12 @@ class CommunicationLog(TimeStampedModel):
         ('REBOOK_FOLLOWUP',         'No-Rebook Follow-up'),
         ('INACTIVE_CHECKIN',        'Inactive Patient Check-in'),
         ('CANCELLATION_NOTICE',     'Cancellation Notice'),
+        ('CLINICAL_NOTE',           'Clinical Note Email'),
+        ('OTP_VERIFICATION',        'OTP Verification'),
+        ('PASSWORD_RESET',          'Password Reset'),
+        ('INVOICE_EMAIL',           'Invoice Email'),
+        ('RESCHEDULE_FOLLOWUP',     'Reschedule Follow-up'),
+        ('SYSTEM_NOTIFICATION',     'System Notification'),
     ]
 
     CHANNEL_CHOICES = [
@@ -167,10 +175,14 @@ class CommunicationLog(TimeStampedModel):
     ]
 
     STATUS_CHOICES = [
+        ('QUEUED',    'Queued'),
         ('SENT',      'Sent'),
-        ('FAILED',    'Failed'),
         ('DELIVERED', 'Delivered'),
+        ('OPENED',    'Opened'),
         ('REPLIED',   'Replied'),
+        ('FAILED',    'Failed'),
+        ('BOUNCED',   'Bounced'),
+        ('PENDING',   'Pending'),
     ]
 
     clinic = models.ForeignKey(
@@ -192,6 +204,14 @@ class CommunicationLog(TimeStampedModel):
         blank=True,
         related_name='communication_logs',
     )
+    practitioner = models.ForeignKey(
+        'clinics.Practitioner',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='communication_logs',
+        help_text='Practitioner associated with this communication (if any)',
+    )
 
     comm_type = models.CharField(max_length=30, choices=COMM_TYPE_CHOICES, db_index=True)
     channel   = models.CharField(max_length=5,  choices=CHANNEL_CHOICES)
@@ -200,9 +220,18 @@ class CommunicationLog(TimeStampedModel):
     recipient       = models.CharField(max_length=200, help_text='Email or phone number')
     subject         = models.CharField(max_length=500, blank=True)
     body_preview    = models.TextField(blank=True, help_text='First 500 chars of message body')
+    full_body       = models.TextField(blank=True, help_text='Complete message body for detail view')
     error_message   = models.TextField(blank=True)
     patient_reply   = models.CharField(max_length=10, blank=True, help_text='Y or N')
     replied_at      = models.DateTimeField(null=True, blank=True)
+
+    # Delivery tracking timestamps
+    delivered_at    = models.DateTimeField(null=True, blank=True)
+    opened_at       = models.DateTimeField(null=True, blank=True)
+    bounced_at      = models.DateTimeField(null=True, blank=True)
+
+    # External message tracking ID (e.g. email provider message ID)
+    message_id      = models.CharField(max_length=200, blank=True, db_index=True)
 
     class Meta:
         db_table = 'communication_logs'
@@ -211,7 +240,72 @@ class CommunicationLog(TimeStampedModel):
             models.Index(fields=['clinic', 'comm_type', 'created_at']),
             models.Index(fields=['patient', 'comm_type']),
             models.Index(fields=['appointment', 'comm_type']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['clinic', 'status']),
         ]
 
     def __str__(self):
         return f"[{self.comm_type}] {self.channel} → {self.recipient} ({self.status})"
+
+
+class CommunicationReply(TimeStampedModel):
+    """
+    Tracks reply threads on a communication log entry.
+    Supports patient replies and staff responses.
+    """
+
+    SENDER_TYPE_CHOICES = [
+        ('PATIENT', 'Patient'),
+        ('STAFF',   'Staff'),
+        ('SYSTEM',  'System'),
+    ]
+
+    communication_log = models.ForeignKey(
+        CommunicationLog,
+        on_delete=models.CASCADE,
+        related_name='replies',
+    )
+    sender_type = models.CharField(max_length=10, choices=SENDER_TYPE_CHOICES, default='PATIENT')
+    sender_name = models.CharField(max_length=200, blank=True)
+    message     = models.TextField()
+
+    class Meta:
+        db_table = 'communication_replies'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Reply by {self.sender_type} on log {self.communication_log_id}"
+
+
+class CommunicationAttachment(TimeStampedModel):
+    """
+    Tracks file attachments sent with a communication.
+    Supports PDF invoices, clinical notes, and uploaded files.
+    """
+
+    ATTACHMENT_TYPE_CHOICES = [
+        ('PDF',      'PDF Document'),
+        ('IMAGE',    'Image'),
+        ('INVOICE',  'Invoice PDF'),
+        ('CLINICAL', 'Clinical Note PDF'),
+        ('OTHER',    'Other'),
+    ]
+
+    communication_log   = models.ForeignKey(
+        CommunicationLog,
+        on_delete=models.CASCADE,
+        related_name='attachments',
+    )
+    file_name       = models.CharField(max_length=255)
+    file_url        = models.TextField(blank=True)
+    attachment_type = models.CharField(
+        max_length=10, choices=ATTACHMENT_TYPE_CHOICES, default='OTHER',
+    )
+    file_size_bytes = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'communication_attachments'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.file_name} (log {self.communication_log_id})"

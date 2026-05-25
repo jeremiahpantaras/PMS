@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout';
-import { ChevronLeft, ChevronRight, Filter, Building2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, Building2 } from 'lucide-react';
 import { Calendar } from './Calendar';
 import { ArrivalsList } from './components/ArrivalsList';
 import { EventViewModal } from './components/EventViewModal';
@@ -248,8 +248,13 @@ export const Diary: React.FC = () => {
 
   const handleDateChange = useCallback((date: Date) => {
     setCurrentDate(date);
-    if (view === 'month') setView('day');
-  }, [view]);
+    if (view === 'month') {
+      setView('day');
+      // Entering Day View from mini-calendar: clear practitioner filter so
+      // divided columns are the primary display on a specific branch.
+      if (selectedClinicBranch !== null) setSelectedPractitioner(null);
+    }
+  }, [view, selectedClinicBranch]);
 
   const handlePractitionerSelect = (practitionerId: number | string | null) => {
     setSelectedPractitioner(practitionerId);
@@ -441,6 +446,14 @@ export const Diary: React.FC = () => {
     [isAdmin, isPractitioner, isStaff, compareMode, isDuplicateComparePractitioner, view],
   );
 
+  // Day View + specific branch = multi-practitioner split column mode.
+  // Active when no practitioner filter is applied: selecting a practitioner
+  // exits split mode and renders a solo view for that practitioner only.
+  const isDayBranchSplit = useMemo(
+    () => view === 'day' && selectedClinicBranch !== null && !calendarCompareMode && practitionerOptions.length > 0 && !selectedPractitioner,
+    [view, selectedClinicBranch, calendarCompareMode, practitionerOptions, selectedPractitioner],
+  );
+
   const handleSelectOptionClose = () => {
     setShowSelectOptionModal(false);
     setPendingSlot(null);
@@ -600,25 +613,6 @@ export const Diary: React.FC = () => {
 
                   {/* Practitioner Filter / Compare Mode */}
                   <div className="flex items-center gap-2 flex-wrap">
-
-                    {/* ── Compare Mode Toggle (Admin + Practitioner + Staff, Day/Week only) ── */}
-                    {(isAdmin || isPractitioner || isStaff) && (view === 'day' || view === 'week') && (
-                      <div className="flex items-center rounded-lg overflow-hidden border border-gray-200 bg-gray-50 text-xs font-medium">
-                        <button
-                          onClick={() => handleSetCompareMode(false)}
-                          className={`px-3 py-1.5 transition-colors ${!compareMode ? 'bg-white text-care-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                          Single
-                        </button>
-                        <button
-                          onClick={() => handleSetCompareMode(true)}
-                          className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${compareMode ? 'bg-white text-care-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                          <Users className="w-3 h-3" />
-                          Compare
-                        </button>
-                      </div>
-                    )}
 
                     {!compareMode ? (
                       /* ── Single Practitioner Filter Dropdown ── */
@@ -843,13 +837,21 @@ export const Diary: React.FC = () => {
                     )}
 
                     {/* Clear single filter:
-                        - Not shown when practitioner is in own clinic viewing own schedule (that's the default)
-                        - Shown when a non-default practitioner is manually selected */}
+                        - Day View + specific branch: always show 'Show All' → restores divided columns
+                        - Other views: hide when practitioner is viewing their own default schedule */}
                     {!compareMode && selectedPractitioner !== null &&
-                      !((isPractitioner || isStaff) && isOwnAssignedClinic && selectedPractitioner === cachedOwnId) && (
+                      (
+                        // Day View + specific branch: always offer escape back to divided columns
+                        (view === 'day' && selectedClinicBranch !== null) ||
+                        // Week / Month: suppress when already on own default schedule
+                        !((isPractitioner || isStaff) && isOwnAssignedClinic && selectedPractitioner === cachedOwnId)
+                      ) && (
                       <button
                         onClick={() => {
-                          if ((isPractitioner || isStaff) && isOwnAssignedClinic && cachedOwnId) {
+                          if (view === 'day' && selectedClinicBranch !== null) {
+                            // Day View: always clear to null → restores divided practitioner columns
+                            setSelectedPractitioner(null);
+                          } else if ((isPractitioner || isStaff) && isOwnAssignedClinic && cachedOwnId) {
                             setSelectedPractitioner(cachedOwnId);
                           } else {
                             setSelectedPractitioner(null);
@@ -858,7 +860,10 @@ export const Diary: React.FC = () => {
                         }}
                         className="text-xs text-care-blue hover:text-trust-harbor font-medium"
                       >
-                        {(isPractitioner || isStaff) && isOwnAssignedClinic ? 'My Schedule' : 'Clear filter'}
+                        {view === 'day' && selectedClinicBranch !== null
+                          ? 'Show All'
+                          : ((isPractitioner || isStaff) && isOwnAssignedClinic ? 'My Schedule' : 'Clear filter')
+                        }
                       </button>
                     )}
                   </div>
@@ -872,6 +877,9 @@ export const Diary: React.FC = () => {
                       onClick={() => {
                         setView(v);
                         if (v === 'month') handleSetCompareMode(false);
+                        // Entering Day View: clear practitioner filter so divided
+                        // columns are the primary display on a specific branch.
+                        if (v === 'day' && selectedClinicBranch !== null) setSelectedPractitioner(null);
                       }}
                       className={`
                         px-4 py-2 text-sm font-medium rounded-md transition-all capitalize
@@ -904,7 +912,7 @@ export const Diary: React.FC = () => {
                 view={view}
                 currentDate={currentDate}
                 onDateChange={handleDateChange}
-                selectedPractitionerId={compareMode ? null : selectedPractitioner}
+                selectedPractitionerId={isDayBranchSplit || compareMode ? null : selectedPractitioner}
                 selectedClinicBranchId={selectedClinicBranch}
                 refreshKey={eventRefreshKey}
                 appointmentRefreshKey={appointmentRefreshKey}
@@ -932,7 +940,7 @@ export const Diary: React.FC = () => {
                     : undefined
                 }
                 multiPractitioners={
-                  view === 'day' && !calendarCompareMode && !selectedPractitioner
+                  isDayBranchSplit
                     ? practitionerOptions.map(p => ({
                         id: p.id,
                         name: p.name,

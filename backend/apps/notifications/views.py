@@ -5,10 +5,15 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 
-from .models import Notification, NotificationRead, EmailLog, SMSLog, CommunicationLog
+from .models import (
+    Notification, NotificationRead, EmailLog, SMSLog,
+    CommunicationLog, CommunicationReply, CommunicationAttachment,
+)
 from .serializers import (
     NotificationSerializer, EmailLogSerializer, SMSLogSerializer,
-    ClinicCommunicationSettingsSerializer, CommunicationLogSerializer,
+    ClinicCommunicationSettingsSerializer,
+    CommunicationLogSerializer, CommunicationLogDetailSerializer,
+    CommunicationReplySerializer, CommunicationAttachmentSerializer,
 )
 from apps.clinics.models import ClinicCommunicationSettings
 
@@ -206,17 +211,27 @@ class CommunicationLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Read-only log of all automated communications.
 
-    GET  /communication-logs/              — list (filtered by clinic)
-    GET  /communication-logs/{id}/         — detail
-    GET  /communication-logs/summary/      — aggregated stats
+    GET  /communication-logs/                        — list (filtered by clinic)
+    GET  /communication-logs/{id}/                   — detail (with full body + replies + attachments)
+    GET  /communication-logs/summary/                — aggregated stats
+    GET  /communication-logs/today_stats/            — today's dashboard statistics
+    GET  /communication-logs/{id}/replies/           — reply thread
+    GET  /communication-logs/{id}/attachments/       — attachments list
+    POST /communication-logs/{id}/resend/            — re-queue a failed communication
+    POST /communication-logs/{id}/confirm_appointment/  — patient replied YES
+    POST /communication-logs/{id}/reschedule_appointment/ — patient replied NO
     """
-    serializer_class   = CommunicationLogSerializer
     permission_classes = [IsAuthenticated]
     filter_backends    = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
-    filterset_fields   = ['comm_type', 'channel', 'status', 'patient']
-    ordering_fields    = ['created_at']
+    filterset_fields   = ['comm_type', 'channel', 'status', 'patient', 'practitioner']
+    ordering_fields    = ['created_at', 'delivered_at', 'opened_at']
     ordering           = ['-created_at']
-    search_fields      = ['recipient', 'subject', 'patient__first_name', 'patient__last_name']
+    search_fields      = ['recipient', 'subject', 'patient__first_name', 'patient__last_name', 'full_body']
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return CommunicationLogDetailSerializer
+        return CommunicationLogSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -227,9 +242,36 @@ class CommunicationLogViewSet(viewsets.ReadOnlyModelViewSet):
         branch_ids = list(
             main_clinic.get_all_branches().values_list('id', flat=True)
         )
-        return CommunicationLog.objects.filter(
+        qs = CommunicationLog.objects.filter(
             clinic_id__in=branch_ids
-        ).select_related('patient', 'appointment')
+        ).select_related('patient', 'appointment', 'practitioner', 'practitioner__user')
+
+        # Date range filter
+        date_from = self.request.query_params.get('date_from')
+        date_to   = self.request.query_params.get('date_to')
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        # Branch filter
+        branch_id = self.request.query_params.get('branch')
+        if branch_id:
+            qs = qs.filter(clinic_id=branch_id)
+
+        # RBAC: practitioners see only their own patients' communications
+        if user.role == 'PRACTITIONER':
+            try:
+                practitioner = user.practitioner_profile
+                qs = qs.filter(practitioner=practitioner)
+            except Exception:
+                qs = qs.none()
+
+        # RBAC: finance role sees only invoice-related communications
+        if user.role == 'FINANCE':
+            qs = qs.filter(comm_type='INVOICE_EMAIL')
+
+        return qs
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
@@ -239,8 +281,10 @@ class CommunicationLogViewSet(viewsets.ReadOnlyModelViewSet):
         qs = self.get_queryset()
         stats = qs.aggregate(
             total=Count('id'),
-            sent=Count('id', filter=Q(status='SENT')),
-            failed=Count('id', filter=Q(status='FAILED')),
+            sent=Count('id', filter=Q(status__in=['SENT', 'DELIVERED', 'OPENED', 'REPLIED'])),
+            delivered=Count('id', filter=Q(status='DELIVERED')),
+            opened=Count('id', filter=Q(status='OPENED')),
+            failed=Count('id', filter=Q(status__in=['FAILED', 'BOUNCED'])),
             replied=Count('id', filter=Q(status='REPLIED')),
         )
 
@@ -256,3 +300,132 @@ class CommunicationLogViewSet(viewsets.ReadOnlyModelViewSet):
             'by_type': by_type,
             'by_channel': by_channel,
         })
+
+    @action(detail=False, methods=['get'], url_path='today_stats')
+    def today_stats(self, request):
+        """Return today's dashboard statistics for the Records hub header."""
+        from django.db.models import Count, Q
+
+        qs = self.get_queryset()
+        today = timezone.now().date()
+        today_qs = qs.filter(created_at__date=today)
+
+        total_today = today_qs.count()
+        delivered   = today_qs.filter(status__in=['DELIVERED', 'OPENED', 'REPLIED']).count()
+        delivery_rate = round((delivered / total_today * 100) if total_today else 0, 1)
+
+        stats = today_qs.aggregate(
+            sent_today=Count('id'),
+            replies_today=Count('id', filter=Q(status='REPLIED')),
+            failed_today=Count('id', filter=Q(status__in=['FAILED', 'BOUNCED'])),
+            pending_today=Count('id', filter=Q(status__in=['QUEUED', 'PENDING'])),
+        )
+
+        return Response({
+            'emails_sent_today':   stats['sent_today'],
+            'delivery_rate':       delivery_rate,
+            'replies_received':    stats['replies_today'],
+            'failed_deliveries':   stats['failed_today'],
+            'pending_responses':   stats['pending_today'],
+        })
+
+    @action(detail=True, methods=['get'])
+    def replies(self, request, pk=None):
+        """List reply thread for a communication log entry."""
+        log = self.get_object()
+        serializer = CommunicationReplySerializer(
+            log.replies.all(), many=True, context={'request': request},
+        )
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def attachments(self, request, pk=None):
+        """List attachments for a communication log entry."""
+        log = self.get_object()
+        serializer = CommunicationAttachmentSerializer(
+            log.attachments.all(), many=True, context={'request': request},
+        )
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def resend(self, request, pk=None):
+        """Re-queue a failed/bounced communication for resending."""
+        log = self.get_object()
+
+        if log.status not in ('FAILED', 'BOUNCED'):
+            return Response(
+                {'detail': 'Only FAILED or BOUNCED communications can be resent.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Mark as queued and clear error — actual resend handled by tasks
+        log.status        = 'QUEUED'
+        log.error_message = ''
+        log.save(update_fields=['status', 'error_message', 'updated_at'])
+
+        # Add a system reply noting the resend action
+        CommunicationReply.objects.create(
+            communication_log=log,
+            sender_type='SYSTEM',
+            sender_name='System',
+            message=f'Communication re-queued for resending by {request.user.get_full_name()}',
+        )
+
+        serializer = self.get_serializer(log)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='confirm_appointment')
+    def confirm_appointment(self, request, pk=None):
+        """
+        Record a patient YES response — confirm the linked appointment.
+        """
+        log = self.get_object()
+
+        log.patient_reply = 'Y'
+        log.replied_at    = timezone.now()
+        log.status        = 'REPLIED'
+        log.save(update_fields=['patient_reply', 'replied_at', 'status', 'updated_at'])
+
+        CommunicationReply.objects.create(
+            communication_log=log,
+            sender_type='PATIENT',
+            sender_name=log.patient.get_full_name() if log.patient else 'Patient',
+            message='YES — Patient confirmed appointment.',
+        )
+
+        if log.appointment:
+            appt = log.appointment
+            if appt.status in ('SCHEDULED', 'CONFIRMED'):
+                appt.status = 'CONFIRMED'
+                appt.save(update_fields=['status', 'updated_at'])
+
+        serializer = self.get_serializer(log)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='reschedule_appointment')
+    def reschedule_appointment(self, request, pk=None):
+        """
+        Record a patient NO response — mark appointment for rescheduling.
+        """
+        log = self.get_object()
+
+        log.patient_reply = 'N'
+        log.replied_at    = timezone.now()
+        log.status        = 'REPLIED'
+        log.save(update_fields=['patient_reply', 'replied_at', 'status', 'updated_at'])
+
+        CommunicationReply.objects.create(
+            communication_log=log,
+            sender_type='PATIENT',
+            sender_name=log.patient.get_full_name() if log.patient else 'Patient',
+            message='NO — Patient requested reschedule.',
+        )
+
+        if log.appointment:
+            appt = log.appointment
+            if appt.status not in ('CANCELLED', 'COMPLETED'):
+                appt.status = 'CANCELLED'
+                appt.save(update_fields=['status', 'updated_at'])
+
+        serializer = self.get_serializer(log)
+        return Response(serializer.data)

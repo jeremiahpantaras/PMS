@@ -178,6 +178,7 @@ export const useProfile = (initialUser: User | null) => {
     isResettingPw,
     isUpdatingPw,
     refresh,
+    syncUser,
     saveProfile,
     saveAvatar,
     deleteAvatar,

@@ -324,14 +324,13 @@ export const authService = {
    * Returns updated user + fresh JWT tokens.
    */
   async changePasswordFirstLogin(
-    currentPassword: string,
     newPassword: string,
   ): Promise<{ detail: string; user: User; tokens: AuthTokens }> {
     try {
       const token = localStorage.getItem('access_token');
       const response = await authApi.post(
         '/auth/change-password-first-login/',
-        { current_password: currentPassword, new_password: newPassword },
+        { new_password: newPassword },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       return response.data;

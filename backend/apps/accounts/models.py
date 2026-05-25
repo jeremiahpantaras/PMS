@@ -220,6 +220,56 @@ ACCESS_LEVELS = {'none': 0, 'view': 1, 'edit': 2}
 REVERSE_ACCESS = {v: k for k, v in ACCESS_LEVELS.items()}
 
 
+# ── Role → PermissionGroup template lookup map ──────────────────────────────
+# Used by derive_permission_group_for_roles() to map each role to its
+# corresponding system PermissionGroup template key.
+_ROLE_TO_PG_TEMPLATE = {
+    'ADMIN':           'ADMIN_ASSISTANT',  # ADMIN users get Admin-Assistant level group
+    'ADMIN_ASSISTANT': 'ADMIN_ASSISTANT',
+    'PRACTITIONER':    'PRACTITIONER',
+    'STAFF':           'FRONTDESK',        # STAFF users get Frontdesk-level group
+    'FINANCE':         'FINANCE',
+}
+
+
+def derive_permission_group_for_roles(roles: list, clinic) -> 'PermissionGroup | None':
+    """
+    Return the clinic's system PermissionGroup that best matches the given roles.
+
+    Selection logic:
+    - Iterates ROLE_PRIORITY (ADMIN → ADMIN_ASSISTANT → PRACTITIONER → STAFF → FINANCE)
+    - First matching role in the list determines the template.
+    - Looks up the main clinic's system template group for that template key.
+    - Returns None if no suitable group is found (e.g. clinic not yet seeded).
+
+    Example:
+        roles=["ADMIN", "PRACTITIONER"] → ADMIN_ASSISTANT template group
+        roles=["STAFF", "PRACTITIONER"] → PRACTITIONER template group
+        roles=["FINANCE"]              → FINANCE template group
+    """
+    if not roles or not clinic:
+        return None
+
+    # Resolve to main clinic — system templates are always seeded on the main branch
+    main_clinic = clinic if getattr(clinic, 'is_main_branch', True) else getattr(clinic, 'parent_clinic', clinic)
+
+    for role in ROLE_PRIORITY:
+        if role not in roles:
+            continue
+        template = _ROLE_TO_PG_TEMPLATE.get(role)
+        if not template:
+            continue
+        group = PermissionGroup.objects.filter(
+            clinic=main_clinic,
+            role_template=template,
+            is_system_template=True,
+        ).first()
+        if group:
+            return group
+
+    return None
+
+
 def _union_permissions(roles: list) -> dict:
     """
     Return a {feature_key: access_level} dict that is the union (max level)
@@ -243,11 +293,13 @@ class PermissionGroup(TimeStampedModel):
     access levels. Acts as both a reusable template and actual assignment target.
     """
     TEMPLATE_CHOICES = [
-        ('OWNER',        'Owner'),
-        ('MANAGER',      'Manager'),
-        ('FRONTDESK',    'Frontdesk'),
-        ('PRACTITIONER', 'Practitioner'),
-        ('CUSTOM',       'Custom'),
+        ('OWNER',           'Owner'),
+        ('MANAGER',         'Manager'),
+        ('ADMIN_ASSISTANT',  'Admin Assistant'),
+        ('FRONTDESK',       'Frontdesk'),
+        ('PRACTITIONER',    'Practitioner'),
+        ('FINANCE',         'Finance'),
+        ('CUSTOM',          'Custom'),
     ]
 
     clinic = models.ForeignKey(

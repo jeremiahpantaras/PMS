@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Notification, NotificationRead, EmailLog, SMSLog, CommunicationLog
+from .models import (
+    Notification, NotificationRead, EmailLog, SMSLog,
+    CommunicationLog, CommunicationReply, CommunicationAttachment,
+)
 from apps.clinics.models import ClinicCommunicationSettings
 
 
@@ -114,11 +117,51 @@ class ClinicCommunicationSettingsSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class CommunicationReplySerializer(serializers.ModelSerializer):
+    sender_type_display = serializers.CharField(source='get_sender_type_display', read_only=True)
+
+    class Meta:
+        model  = CommunicationReply
+        fields = [
+            'id',
+            'communication_log',
+            'sender_type',
+            'sender_type_display',
+            'sender_name',
+            'message',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class CommunicationAttachmentSerializer(serializers.ModelSerializer):
+    attachment_type_display = serializers.CharField(
+        source='get_attachment_type_display', read_only=True,
+    )
+
+    class Meta:
+        model  = CommunicationAttachment
+        fields = [
+            'id',
+            'communication_log',
+            'file_name',
+            'file_url',
+            'attachment_type',
+            'attachment_type_display',
+            'file_size_bytes',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
 class CommunicationLogSerializer(serializers.ModelSerializer):
-    comm_type_display = serializers.CharField(source='get_comm_type_display', read_only=True)
-    channel_display   = serializers.CharField(source='get_channel_display', read_only=True)
-    status_display    = serializers.CharField(source='get_status_display', read_only=True)
-    patient_name      = serializers.SerializerMethodField()
+    comm_type_display    = serializers.CharField(source='get_comm_type_display', read_only=True)
+    channel_display      = serializers.CharField(source='get_channel_display',   read_only=True)
+    status_display       = serializers.CharField(source='get_status_display',    read_only=True)
+    patient_name         = serializers.SerializerMethodField()
+    practitioner_name    = serializers.SerializerMethodField()
+    reply_count          = serializers.SerializerMethodField()
+    attachment_count     = serializers.SerializerMethodField()
 
     class Meta:
         model  = CommunicationLog
@@ -128,6 +171,8 @@ class CommunicationLogSerializer(serializers.ModelSerializer):
             'patient',
             'patient_name',
             'appointment',
+            'practitioner',
+            'practitioner_name',
             'comm_type',
             'comm_type_display',
             'channel',
@@ -140,6 +185,12 @@ class CommunicationLogSerializer(serializers.ModelSerializer):
             'error_message',
             'patient_reply',
             'replied_at',
+            'delivered_at',
+            'opened_at',
+            'bounced_at',
+            'message_id',
+            'reply_count',
+            'attachment_count',
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']
@@ -148,3 +199,27 @@ class CommunicationLogSerializer(serializers.ModelSerializer):
         if obj.patient:
             return obj.patient.get_full_name()
         return ''
+
+    def get_practitioner_name(self, obj) -> str:
+        if obj.practitioner and obj.practitioner.user:
+            return obj.practitioner.user.get_full_name()
+        return ''
+
+    def get_reply_count(self, obj) -> int:
+        return obj.replies.count()
+
+    def get_attachment_count(self, obj) -> int:
+        return obj.attachments.count()
+
+
+class CommunicationLogDetailSerializer(CommunicationLogSerializer):
+    """Full detail serializer — includes full_body, replies, and attachments."""
+    replies     = CommunicationReplySerializer(many=True, read_only=True)
+    attachments = CommunicationAttachmentSerializer(many=True, read_only=True)
+
+    class Meta(CommunicationLogSerializer.Meta):
+        fields = CommunicationLogSerializer.Meta.fields + [
+            'full_body',
+            'replies',
+            'attachments',
+        ]

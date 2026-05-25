@@ -7,13 +7,11 @@ import { AccountSettingsCard }  from './components/AccountSettingsCard';
 import { ProfileRolesCard }     from './components/ProfileRolesCard';
 import { useProfile }           from './hooks/useProfile';
 import { useAuth }              from '@/hooks/useAuth';
-import { useAuthStore }         from '@/store/auth.store';
 import { Loader2 }              from 'lucide-react';
 import type { User }            from '@/types/auth';
 
 export const Profile: React.FC = () => {
   const { user: authUser } = useAuth();
-  const updateUser         = useAuthStore(s => s.updateUser);
   const [isEditing, setIsEditing] = useState(false);  // Track edit mode state
 
   const {
@@ -21,6 +19,7 @@ export const Profile: React.FC = () => {
     isSaving,
     isResettingPw: _isResettingPw,
     isUpdatingPw,
+    syncUser,
     saveProfile,
     saveAvatar,
     deleteAvatar,
@@ -40,7 +39,7 @@ export const Profile: React.FC = () => {
   };
 
   const handleRolesUpdate = (updatedUser: User) => {
-    updateUser(updatedUser);
+    syncUser(updatedUser);
   };
 
   // Whether the current viewer is an admin (can edit roles)

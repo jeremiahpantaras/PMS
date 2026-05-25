@@ -20,10 +20,11 @@ def create_default_permission_groups(sender, instance, created, **kwargs):
     from apps.accounts.models import PermissionGroup, FeaturePermission, DEFAULT_PERMISSIONS
 
     TEMPLATE_NAMES = {
-        'OWNER':        'Owner',
-        'MANAGER':      'Manager',
-        'FRONTDESK':    'Frontdesk',
-        'PRACTITIONER': 'Practitioner',
+        'OWNER':           'Owner',
+        'ADMIN_ASSISTANT': 'Admin Assistant',
+        'FRONTDESK':       'Frontdesk',
+        'PRACTITIONER':    'Practitioner',
+        'FINANCE':         'Finance',
     }
 
     for template_key, template_name in TEMPLATE_NAMES.items():

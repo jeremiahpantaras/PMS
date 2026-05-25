@@ -561,6 +561,121 @@ Please do not reply directly to this email."""
             return False
 
     @staticmethod
+    def send_email_change_notification(
+        user_email: str,
+        user_name: str,
+        temp_password: str,
+        company_name: str,
+    ) -> bool:
+        """
+        Send to the NEW email address when an admin changes a user's email.
+
+        Delivers temporary credentials so the user can immediately sign in
+        with their updated email.  The account is placed in must_change_password
+        state, so the first login forces a password change before any other
+        action is permitted.
+
+        Parameters
+        ----------
+        user_email    : new (destination) email address
+        user_name     : full display name
+        temp_password : system-generated temporary password (plain-text, single use)
+        company_name  : clinic / organisation name shown in the greeting
+        """
+        try:
+            subject = f'Your {company_name} account email has been updated'
+
+            body = f"""<h2 style="margin:0 0 8px;font-size:18px;color:#111827;">Hello {user_name},</h2>
+<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">
+  An administrator at <strong>{company_name}</strong> has updated the email address
+  linked to your Malasakit account. Your new login email is now
+  <strong>{user_email}</strong>.
+</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#f0f9ff;border:1px solid #d0e8f2;border-radius:6px;margin-bottom:20px;">
+<tr><td style="padding:16px 20px;">
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0369a1;margin:0 0 12px;">
+    Your New Login Credentials
+  </p>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">New Email</p>
+  <p style="font-size:14px;font-weight:600;color:#111827;margin:0 0 12px;">{user_email}</p>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Temporary Password</p>
+  <p style="font-size:22px;font-weight:700;color:#0ea5e9;letter-spacing:2px;margin:0;">{temp_password}</p>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;margin-bottom:16px;">
+<tr><td style="padding:14px 20px;">
+  <p style="font-size:13px;color:#92400e;font-weight:700;margin:0 0 6px;">&#9888;&#65039; Action Required</p>
+  <ul style="font-size:13px;color:#78350f;margin:0;padding-left:18px;line-height:1.8;">
+    <li>Your <strong>old email address can no longer be used</strong> to log in.</li>
+    <li>This temporary password is valid for your <strong>first login only</strong> and expires in <strong>48 hours</strong>.</li>
+    <li>You will be <strong>required to set a new permanent password</strong> immediately after signing in.</li>
+    <li>Never share this temporary password with anyone.</li>
+    <li>If you did not expect this change, contact your clinic administrator immediately.</li>
+  </ul>
+</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="margin-bottom:20px;">
+<tr><td align="center">
+  <a href="{settings.FRONTEND_URL}/login"
+     style="display:inline-block;background:#0ea5e9;color:#fff;font-size:14px;font-weight:600;
+            text-decoration:none;padding:12px 32px;border-radius:6px;">
+    Sign In &amp; Set Your Password
+  </a>
+</td></tr></table>
+<p style="font-size:14px;color:#4b5563;margin:0;">
+  Best regards,<br/><strong>The Malasakit EMR Solutions Team</strong>
+</p>"""
+
+            html_message = EmailService._build_html(
+                icon='✉️',
+                title='Email Address Updated',
+                accent='#0ea5e9',
+                body_html=body,
+            )
+
+            plain_message = f"""Your {company_name} Account Email Has Been Updated
+
+Hello {user_name},
+
+An administrator at {company_name} has updated the email address on your Malasakit account.
+
+New Login Email: {user_email}
+Temporary Password: {temp_password}
+
+⚠ IMPORTANT:
+  - Your OLD email address can no longer be used to log in.
+  - This temporary password expires in 48 hours.
+  - You MUST set a permanent password immediately after your first login.
+  - Never share this temporary password with anyone.
+  - If you did not expect this change, contact your clinic administrator immediately.
+
+Sign in: {settings.FRONTEND_URL}/login
+
+Best regards,
+Malasakit EMR Solutions Team
+
+---
+This email was generated automatically by Malasakit PMS.
+Please do not reply directly to this email."""
+
+            email_msg = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user_email],
+            )
+            email_msg.attach_alternative(html_message, 'text/html')
+            email_msg.send(fail_silently=False)
+
+            logger.info("✅ Email-change notification sent to %s", user_email)
+            return True
+
+        except Exception as e:
+            logger.error("❌ Email-change notification error for %s: %s", user_email, str(e))
+            return False
+
+    @staticmethod
     def send_forgot_password_otp_email(
         user_email: str,
         user_name: str,

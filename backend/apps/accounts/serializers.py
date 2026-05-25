@@ -2,7 +2,11 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 import logging
-from .models import User, Role, Permission, PermissionGroup, FeaturePermission, FEATURE_KEYS, ROLE_PRIORITY, _union_permissions
+from .models import (
+    User, Role, Permission, PermissionGroup, FeaturePermission,
+    FEATURE_KEYS, ROLE_PRIORITY, _union_permissions,
+    derive_permission_group_for_roles,
+)
 from apps.clinics.models import Practitioner
 from apps.common.validators import normalize_ph_phone, validate_ph_phone, validate_email_detailed
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -348,6 +352,15 @@ class UserSerializer(serializers.ModelSerializer):
         role  = validated_data.get('role', 'STAFF')
         if not roles:
             validated_data['roles'] = [role]
+        roles = validated_data['roles']
+
+        # Auto-derive permission_group from roles when not explicitly provided.
+        if not validated_data.get('permission_group'):
+            clinic = validated_data.get('clinic')
+            if clinic:
+                group = derive_permission_group_for_roles(roles, clinic)
+                if group:
+                    validated_data['permission_group'] = group
 
         # Pop fields that do not exist on the User model (Practitioner handles them)
         for field in ['duty_start_time', 'duty_end_time']:
@@ -389,6 +402,16 @@ class UserSerializer(serializers.ModelSerializer):
             if isinstance(incoming_roles, list) and incoming_roles
             else instance.get_effective_roles()
         )
+
+        # Auto-sync permission_group when roles change.
+        # Only overrides when roles are explicitly part of this update payload;
+        # a patch that only touches availability fields must not change the group.
+        if incoming_roles is not None:
+            clinic = instance.clinic
+            if clinic:
+                group = derive_permission_group_for_roles(effective_roles_after, clinic)
+                if group:
+                    instance.permission_group = group
 
         # Update User fields
         for attr, value in validated_data.items():

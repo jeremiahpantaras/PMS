@@ -1007,23 +1007,15 @@ class AuthViewSet(viewsets.GenericViewSet):
         import re
         user = request.user
 
-        current_password = request.data.get('current_password', '').strip()
-        new_password     = request.data.get('new_password', '').strip()
+        new_password = request.data.get('new_password', '').strip()
 
-        if not current_password or not new_password:
+        if not new_password:
             return Response(
-                {'detail': 'Both current_password and new_password are required.'},
+                {'detail': 'new_password is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Verify the current (temporary) password
-        if not user.check_password(current_password):
-            return Response(
-                {'detail': 'Current password is incorrect.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Reject reuse of the same password
+        # Reject reuse of the same password (JWT auth already proves identity)
         if user.check_password(new_password):
             return Response(
                 {'detail': 'New password must be different from your current password.'},
@@ -1213,6 +1205,15 @@ class UserViewSet(viewsets.ModelViewSet):
                 # gates all protected routes until the user completes the flow.
                 temp_expires = timezone.now() + timedelta(hours=48)
 
+                # Auto-derive the RBAC permission group from the user's roles.
+                # If the caller explicitly supplied a permission_group in the
+                # payload, respect it; otherwise derive from roles.
+                from apps.accounts.models import derive_permission_group_for_roles
+                permission_group = (
+                    serializer.validated_data.get('permission_group')
+                    or derive_permission_group_for_roles(roles, request.user.clinic)
+                )
+
                 user = User.objects.create_user(
                     email=serializer.validated_data['email'],
                     password=temp_password,
@@ -1224,7 +1225,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     position=serializer.validated_data.get('position', ''),
                     clinic=request.user.clinic,
                     clinic_branch=branch,
-                    permission_group=serializer.validated_data.get('permission_group'),
+                    permission_group=permission_group,
                     password_changed=False,
                     must_change_password=True,
                     temp_password_expires_at=temp_expires,
@@ -1323,6 +1324,8 @@ class UserViewSet(viewsets.ModelViewSet):
         Update staff / practitioner.
         ✅ Validates clinic_branch belongs to the same clinic family on update too.
         ✅ Creates Practitioner profile when role is changed TO 'PRACTITIONER'.
+        ✅ Detects email changes: resets password, notifies new address, forces
+           must_change_password on next login.
         """
         if not request.user.is_admin:
             return Response(
@@ -1332,6 +1335,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         partial     = kwargs.pop('partial', False)
         instance    = self.get_object()
+        old_email   = instance.email  # capture before any mutation
         branch_id   = request.data.get('clinic_branch')
 
         # Only validate branch when it is explicitly included in payload
@@ -1343,6 +1347,18 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=partial, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Email change detection ────────────────────────────────────────────
+        new_email = serializer.validated_data.get('email', old_email)
+        email_changed = new_email != old_email
+
+        if email_changed:
+            # Prevent hijacking an address already belonging to another user
+            if User.objects.filter(email__iexact=new_email).exclude(pk=instance.pk).exists():
+                return Response(
+                    {'email': 'This email address is already in use by another account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         old_role = instance.role
         new_role_requested = serializer.validated_data.get('role', old_role)
@@ -1380,6 +1396,34 @@ class UserViewSet(viewsets.ModelViewSet):
         instance.refresh_from_db()
         new_role  = instance.role
         new_roles = instance.get_effective_roles()
+
+        # ── Email change: reset credentials and notify new address ────────────
+        if email_changed:
+            from datetime import timedelta
+            temp_password = PasswordService.generate_temporary_password()
+            instance.set_password(temp_password)
+            instance.must_change_password     = True
+            instance.password_changed         = False
+            instance.temp_password_expires_at = timezone.now() + timedelta(hours=48)
+            instance.save(update_fields=[
+                'password', 'must_change_password',
+                'password_changed', 'temp_password_expires_at',
+            ])
+
+            company_name = (
+                request.user.clinic.name if request.user.clinic else 'Your Organization'
+            )
+            email_sent = EmailService.send_email_change_notification(
+                user_email=new_email,
+                user_name=instance.get_full_name(),
+                temp_password=temp_password,
+                company_name=company_name,
+            )
+
+            logger.info(
+                "Email address changed for user (id=%s): %s → %s by %s (email_sent=%s)",
+                instance.pk, old_email, new_email, request.user.email, email_sent,
+            )
 
         # ── Sync Practitioner profile when PRACTITIONER added/removed ────────
         practitioner_created = False

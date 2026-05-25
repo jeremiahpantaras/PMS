@@ -873,13 +873,22 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                         const msg = validateEmailDetailed(e.target.value);
                         setErrors(prev => ({ ...prev, email: msg || undefined }));
                       }}
-                      disabled={isEditMode}
                       placeholder="john.doe@example.com"
-                      className={`${inputCls(!!errors.email)} ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={inputCls(!!errors.email)}
                     />
-                    {isEditMode && (
+                    {isEditMode && editingStaff && formData.email.trim().toLowerCase() !== editingStaff.email.trim().toLowerCase() && (
+                      <div className="mt-1.5 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>
+                          Changing the email will reset this user's password and send new
+                          login credentials to <strong>{formData.email}</strong>. The old
+                          email address will no longer work for sign-in.
+                        </span>
+                      </div>
+                    )}
+                    {isEditMode && editingStaff && formData.email.trim().toLowerCase() === editingStaff.email.trim().toLowerCase() && (
                       <p className="mt-0.5 text-[10px] text-gray-400">
-                        Email cannot be changed after account creation.
+                        Updating the email will send new temporary credentials to the new address and require a password reset.
                       </p>
                     )}
                     <FieldError msg={errors.email} />

@@ -43,11 +43,9 @@ export const ChangePasswordPage: React.FC = () => {
   const navigate        = useNavigate();
   const { setAuth, user } = useAuthStore();
 
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword,     setNewPassword]     = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const [showCurrent, setShowCurrent]   = useState(false);
   const [showNew,     setShowNew]       = useState(false);
   const [showConfirm, setShowConfirm]   = useState(false);
 
@@ -56,7 +54,6 @@ export const ChangePasswordPage: React.FC = () => {
 
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
   const canSubmit =
-    currentPassword.length > 0 &&
     isStrongPassword(newPassword) &&
     passwordsMatch &&
     !isLoading;
@@ -70,7 +67,7 @@ export const ChangePasswordPage: React.FC = () => {
 
       setIsLoading(true);
       try {
-        const result = await authService.changePasswordFirstLogin(currentPassword, newPassword);
+        const result = await authService.changePasswordFirstLogin(newPassword);
 
         // Persist fresh user + tokens
         setAuth(result.user, result.tokens);
@@ -96,7 +93,7 @@ export const ChangePasswordPage: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [canSubmit, currentPassword, newPassword, setAuth, navigate],
+    [canSubmit, newPassword, setAuth, navigate],
   );
 
   return (
@@ -193,36 +190,6 @@ export const ChangePasswordPage: React.FC = () => {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {/* Current (temporary) password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Current Temporary Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Lock className="w-4 h-4 text-gray-400" />
-                </div>
-                <input
-                  type={showCurrent ? 'text' : 'password'}
-                  value={currentPassword}
-                  onChange={(e) => { setCurrentPassword(e.target.value); setServerError(''); }}
-                  placeholder="Enter your temporary password"
-                  autoComplete="current-password"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-300 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent
-                             placeholder:text-gray-400 bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                >
-                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
             {/* New password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
