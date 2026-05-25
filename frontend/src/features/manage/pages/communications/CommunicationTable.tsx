@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Mail, MessageSquare, Eye, RotateCcw, ChevronLeft, ChevronRight,
+  Mail, MessageSquare, Eye, ChevronLeft, ChevronRight,
   AlertCircle, CheckCircle2, Clock, Send, Ban, RefreshCw,
 } from 'lucide-react';
 import type { CommunicationLog, CommStatus } from '../../services/communications.api';
@@ -31,14 +31,6 @@ function StatusBadge({ status }: { status: CommStatus }) {
       {cfg.label}
     </span>
   );
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-PH', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
 }
 
 function formatShortDate(iso: string | null): string {
