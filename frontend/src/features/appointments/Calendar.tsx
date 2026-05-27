@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import { Globe } from 'lucide-react';
 import {
   format, startOfWeek, addDays,
   startOfMonth, endOfMonth, endOfWeek,
@@ -412,6 +413,14 @@ const CalendarComponent: React.FC<CalendarProps> = ({
 
 
 
+  // Helper: detect portal-originated appointments (primary: booking_source field;
+  // fallback: old heuristic for appointments created before the migration).
+  const isPortalBooking = (apt: Appointment): boolean =>
+    apt.booking_source === 'portal' ||
+    (apt.created_by === null && !!apt.notes?.startsWith('Created from portal booking'));
+
+  const PORTAL_MINT_HEX = '#0575E6';
+
   const getBlockColors = (apt: Appointment): BlockColors => {
     // Check if appointment has an invoice - use orange color
     if (apt.has_invoice) {
@@ -442,6 +451,21 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         },
         textColor:    '#ffffff',
         subTextColor: '#ede9fe',
+        label: apt.service_name ?? apt.chief_complaint ?? null,
+      };
+    }
+    // Check if portal booking — mint green overrides service/status colors
+    if (isPortalBooking(apt)) {
+      return {
+        useHex: true,
+        hex:    PORTAL_MINT_HEX,
+        bgStyle: {
+          backgroundColor: PORTAL_MINT_HEX,
+          borderColor:     '#5FEBB3',
+          boxShadow:       '0 1px 3px rgba(0,0,0,0.15)',
+        },
+        textColor:    '#FFFFFF',
+        subTextColor: '#FFFFFF',
         label: apt.service_name ?? apt.chief_complaint ?? null,
       };
     }
@@ -579,14 +603,19 @@ const CalendarComponent: React.FC<CalendarProps> = ({
 
   // ── Conflict detection for block appointments (must be after appointments is defined) ─────────────────────────────────
   const { getFirstConflict } = useBlockConflictDetection(appointments);
+  // When a drag-drop lands in a multi-prac column we capture the target
+  // practitioner before the async reschedule flow begins.
+  const dropTargetPractIdRef = useRef<number | null>(null);
+
   const [rescheduleTarget, setRescheduleTarget] = useState<{
     type: 'appointment' | 'block' | 'note';
     appointment?: Appointment;
     block?: BlockAppointment;
     note?: CalendarNote;
-    newDate:     Date;
-    newHour:     number;
-    newMinutes:  number;
+    newDate:              Date;
+    newHour:              number;
+    newMinutes:           number;
+    targetPractitionerId?: number | null; // set when dropped into a different practitioner column
   } | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
@@ -707,7 +736,9 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     newHour:     number,
     newMinutes:  number,
   ) => {
-    setRescheduleTarget({ type: 'appointment', appointment, newDate, newHour, newMinutes });
+    const targetPractitionerId = dropTargetPractIdRef.current;
+    dropTargetPractIdRef.current = null;
+    setRescheduleTarget({ type: 'appointment', appointment, newDate, newHour, newMinutes, targetPractitionerId });
   }, []);
 
   const handleBlockRescheduleRequest = useCallback((
@@ -829,10 +860,17 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         const endH         = Math.floor(endTotalMins / 60);
         const endM         = endTotalMins % 60;
 
+        const { targetPractitionerId } = rescheduleTarget;
+        const updatedPractitioner =
+          targetPractitionerId != null && targetPractitionerId !== appointment.practitioner
+            ? { practitioner: targetPractitionerId }
+            : {};
+
         const updated = await rescheduleAppointment(appointment.id, {
           date:       format(newDate, 'yyyy-MM-dd'),
           start_time: `${String(newHour).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`,
           end_time:   `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`,
+          ...updatedPractitioner,
         });
         updateAppointmentInState(updated);
         refetch(); // Refresh appointments to ensure all views update
@@ -1124,6 +1162,33 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       return;
     }
     openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
+  };
+
+  // Handles mouseUp on individual time slots inside a multi-prac column.
+  // Unlike handleColumnMouseUp, this properly routes drag-drops and captures
+  // the target practitioner for cross-column practitioner reassignment.
+  const handleColumnSlotMouseUp = (
+    date: Date,
+    slot: { hour: number; minutes: number },
+    practId: number | null,
+  ) => {
+    if (dragState.isDragging && dragState.draggedAppointment) {
+      dropTargetPractIdRef.current = practId;
+      onDropOnSlot(date, slot.hour, slot.minutes);
+      return;
+    }
+    if (blockDragState.isDragging && blockDragState.draggedBlock) {
+      dropTargetPractIdRef.current = practId;
+      onBlockDropOnSlot(date, slot.hour, slot.minutes);
+      return;
+    }
+    if (noteDragState.isDragging && noteDragState.draggedNote) {
+      dropTargetPractIdRef.current = practId;
+      onNoteDropOnSlot(date, slot.hour, slot.minutes);
+      return;
+    }
+    if (isResizing) return;
+    handleColumnMouseUp(date, practId);
   };
 
   const handleColumnMouseUp = (date: Date, practId: number | null) => {
@@ -1567,12 +1632,13 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               <span className={!col.useHex ? 'text-white/80' : ''}>{col.label}</span>
             </div>
           )}
-          {!compact && apt.created_by === null && apt.notes?.startsWith('Created from portal booking') && (
+          {!compact && isPortalBooking(apt) && (
             <div
-              className="text-xs truncate mt-1 italic"
+              className="flex items-center gap-0.5 mt-1"
               style={col.useHex ? { color: col.subTextColor } : {}}
             >
-              <span className={!col.useHex ? 'text-white/70' : 'text-gray-500'}>Online Booking</span>
+              <Globe className="w-2.5 h-2.5 flex-shrink-0" />
+              <span className={`text-[10px] font-medium italic ${!col.useHex ? 'text-white/70' : ''}`}>Online Booking</span>
             </div>
           )}
         </div>
@@ -1872,7 +1938,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         )}
         <div
           className="text-xs font-semibold truncate"
-          style={col.useHex ? { color: '#ffffff' } : {}}
+          style={col.useHex ? { color: col.textColor } : {}}
         >
           <span className={!col.useHex ? col.text : ''}>
             {formatTime12Hour(apt.start_time)} · {apt.patient_name}
@@ -2158,6 +2224,14 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       const colBAppts = dayAppts.filter(a =>
         comparePractitionerIdB != null ? a.practitioner === comparePractitionerIdB : true
       );
+      // Blocks scoped to a practitioner only appear in that practitioner's column;
+      // clinic-wide blocks (practitioner_id === null) appear in every column.
+      const colABlocks = dayBlocks.filter(b =>
+        b.practitioner_id === null || b.practitioner_id === comparePractitionerIdA
+      );
+      const colBBlocks = dayBlocks.filter(b =>
+        b.practitioner_id === null || b.practitioner_id === comparePractitionerIdB
+      );
 
       return (
         <div {...calendarWrapperProps} className="h-full flex flex-col">
@@ -2215,7 +2289,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                 <div className="border-r border-gray-200 relative" onMouseUp={() => handleMouseUp(currentDate)}>
                   {timeSlots.map((slot, i) => {
                     const slotMin = slot.hour * 60 + slot.minutes;
-                    const occupied = [...colAAppts, ...dayBlocks].some(ev => {
+                    const occupied = [...colAAppts, ...colABlocks].some(ev => {
                       const [sh, sm] = ev.start_time.split(':').map(Number);
                       const [eh, em] = ev.end_time.split(':').map(Number);
                       return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
@@ -2223,13 +2297,13 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                     return renderTimeSlotCompare(slot, currentDate, i, compareAvailabilityA, 'a', occupied);
                   })}
                   {colAAppts.map(apt => renderTimelineCard(apt, false, false))}
-                  {dayBlocks.map(block => renderBlockTimelineCard(block, false, false))}
+                  {colABlocks.map(block => renderBlockTimelineCard(block, false, false))}
                 </div>
                 {/* Practitioner B column */}
                 <div className="relative" onMouseUp={() => handleMouseUp(currentDate)}>
                   {timeSlots.map((slot, i) => {
                     const slotMin = slot.hour * 60 + slot.minutes;
-                    const occupied = [...colBAppts, ...dayBlocks].some(ev => {
+                    const occupied = [...colBAppts, ...colBBlocks].some(ev => {
                       const [sh, sm] = ev.start_time.split(':').map(Number);
                       const [eh, em] = ev.end_time.split(':').map(Number);
                       return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
@@ -2237,7 +2311,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                     return renderTimeSlotCompare(slot, currentDate, i, compareAvailabilityB, 'b', occupied);
                   })}
                   {colBAppts.map(apt => renderTimelineCard(apt, false, false))}
-                  {dayBlocks.map(block => renderBlockTimelineCard(block, false, false))}
+                  {colBBlocks.map(block => renderBlockTimelineCard(block, false, false))}
                 </div>
               </div>
             </div>
@@ -2291,7 +2365,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               data-slot-minute={slot.minutes}
               onMouseDown={() => handleMouseDown(date, slot)}
               onMouseEnter={() => handleMouseEnter(slot)}
-              onMouseUp={() => handleColumnMouseUp(date, practId)}
+              onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
               onDoubleClick={() => handleColumnDoubleClick(date, slot, practId)}
               className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500 ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
             >
@@ -2325,7 +2399,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             data-slot-minute={slot.minutes}
             onMouseDown={() => handleMouseDown(date, slot)}
             onMouseEnter={() => handleMouseEnter(slot)}
-            onMouseUp={() => handleColumnMouseUp(date, practId)}
+            onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
             onDoubleClick={() => handleColumnDoubleClick(date, slot, practId)}
             className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
           >
@@ -2403,7 +2477,17 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                 {multiPractitioners.map((p) => {
                   const practId  = typeof p.id === 'number' ? p.id : null;
                   const colAppts = practId != null ? dayAppts.filter(a => a.practitioner === practId) : [];
-                  const { aptStyles, blockStyles, noteStyles } = computeColumnLayout(colAppts, dayBlocks, dayNotes);
+                  // Notes with a practitioner assigned show only in that column;
+                  // notes with practitioner===null are clinic-wide and appear in every column.
+                  const colNotes = dayNotes.filter(
+                    n => n.practitioner === null || n.practitioner === undefined || n.practitioner === practId,
+                  );
+                  // Blocks scoped to a practitioner only appear in that practitioner's column;
+                  // clinic-wide blocks (practitioner_id === null) appear in every column.
+                  const colBlocks = dayBlocks.filter(b =>
+                    b.practitioner_id === null || b.practitioner_id === practId
+                  );
+                  const { aptStyles, blockStyles, noteStyles } = computeColumnLayout(colAppts, colBlocks, colNotes);
                   return (
                     <div
                       key={String(p.id)}
@@ -2412,7 +2496,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                     >
                       {timeSlots.map((slot, i) => {
                         const slotMin  = slot.hour * 60 + slot.minutes;
-                        const occupied = [...colAppts, ...dayBlocks, ...dayNotes].some(ev => {
+                        const occupied = [...colAppts, ...colBlocks, ...colNotes].some(ev => {
                           const [sh, sm] = ev.start_time.split(':').map(Number);
                           const [eh, em] = ev.end_time.split(':').map(Number);
                           return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
@@ -2420,8 +2504,8 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                         return renderColumnSlot(slot, currentDate, i, p.availability, String(p.id), occupied, practId);
                       })}
                       {colAppts.map(apt   => renderTimelineCard(apt, false, false, aptStyles.get(apt.id)))}
-                      {dayBlocks.map(block => renderBlockTimelineCard(block, false, false, blockStyles.get(block.id)))}
-                      {dayNotes.map(note   => renderNoteTimelineCard(note, false, false, noteStyles.get(note.id)))}
+                      {colBlocks.map(block => renderBlockTimelineCard(block, false, false, blockStyles.get(block.id)))}
+                      {colNotes.map(note   => renderNoteTimelineCard(note, false, false, noteStyles.get(note.id)))}
                     </div>
                   );
                 })}

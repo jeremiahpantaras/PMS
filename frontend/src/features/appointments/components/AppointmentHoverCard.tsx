@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   User, Stethoscope, Tag, FileText,
-  Building2, CalendarDays, ArrowRight
+  Building2, CalendarDays, ArrowRight, Globe
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { Appointment } from '@/types';
@@ -71,10 +71,15 @@ export const AppointmentHoverCard: React.FC<AppointmentHoverCardProps> = ({
 
   const statusColors = APPOINTMENT_STATUS_COLORS[apt.status] ?? APPOINTMENT_STATUS_COLORS['SCHEDULED'];
 
+  // ── Detect portal (online) booking ─────────────────────────────────────────
+  const isPortal = apt.booking_source === 'portal' ||
+    (apt.created_by === null && !!apt.notes?.startsWith('Created from portal booking'));
+
   // ── Override color when practitioner has arrived ──────────────────────────────
   const isArrived = apt.arrival_status === 'ARRIVED';
-  const cardBackground = isArrived ? '#8B5CF6' : (apt.service_color ?? null);  // Purple for arrived
-  const cardTextColor = isArrived ? '#fff' : undefined;
+  // Portal gets mint green header; arrived gets purple; otherwise service color.
+  const cardBackground = isArrived ? '#0575E6' : isPortal ? '#0575E6' : (apt.service_color ?? null);
+  const cardTextColor  = isArrived ? '#fff' : isPortal ? '#ffffff' : undefined;
 
   // Fetch upcoming appointments for this patient
   const { data: upcomingAppointments = [] } = useQuery({
@@ -121,16 +126,27 @@ export const AppointmentHoverCard: React.FC<AppointmentHoverCardProps> = ({
             </p>
           </div>
 
-          {/* Status badge */}
-          <span
-            className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border
-              ${apt.service_color
-                ? 'bg-white/20 text-white border-white/40'
-                : `${statusColors.bg} ${statusColors.text} ${statusColors.border}`
-              }`}
-          >
-            {STATUS_LABELS[apt.status] ?? apt.status}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            {/* Portal badge */}
+            {isPortal && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                <Globe className="w-2.5 h-2.5" />
+                Online
+              </span>
+            )}
+            {/* Status badge */}
+            <span
+              className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border
+                ${(apt.service_color && !isPortal)
+                  ? 'bg-white/20 text-white border-white/40'
+                  : isPortal
+                  ? 'bg-emerald-700/20 text-emerald-900 border-emerald-400/40'
+                  : `${statusColors.bg} ${statusColors.text} ${statusColors.border}`
+                }`}
+            >
+              {STATUS_LABELS[apt.status] ?? apt.status}
+            </span>
+          </div>
         </div>
       </div>
 

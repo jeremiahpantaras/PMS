@@ -168,9 +168,10 @@ export const getTodayArrivals = async (): Promise<Appointment[]> => {
 };
 
 export interface RescheduleAppointmentPayload {
-  date:       string;   // yyyy-MM-dd
-  start_time: string;   // HH:mm
-  end_time:   string;   // HH:mm
+  date:          string;   // yyyy-MM-dd
+  start_time:    string;   // HH:mm
+  end_time:      string;   // HH:mm
+  practitioner?: number | null;  // updated when appointment is moved between practitioner columns
 }
 
 export const rescheduleAppointment = async (

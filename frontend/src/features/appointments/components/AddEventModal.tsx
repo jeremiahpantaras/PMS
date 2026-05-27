@@ -20,6 +20,8 @@ interface AddEventModalProps {
   initialTime?: string;
   initialEndTime?: string;
   appointments?: Appointment[];
+  /** Practitioner this block is scoped to. Comes from the column the user clicked/dragged in. */
+  practitionerId?: number | null;
 }
 
 interface FormData {
@@ -41,6 +43,7 @@ export const AddEventModal: React.FC<AddEventModalProps> = ({
   initialTime,
   initialEndTime,
   appointments = [],
+  practitionerId = null,
 }) => {
   const { user: currentUser } = useAuthStore();
   const { branches } = useClinicBranches();
@@ -223,6 +226,8 @@ export const AddEventModal: React.FC<AddEventModalProps> = ({
         end_time: blockData.end_time,
         notes: blockData.notes,
         visibility_type: blockData.visibility_type,
+        // Scope to the practitioner whose column was clicked (null = clinic-wide)
+        practitioner: practitionerId ?? null,
       };
 
       // Only include visible_to_user_ids if visibility_type is SELECTED

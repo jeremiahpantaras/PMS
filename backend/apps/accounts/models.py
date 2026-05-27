@@ -540,7 +540,7 @@ class User(AbstractUser, TimeStampedModel, SoftDeleteModel):
             models.Index(fields=['role']),
             models.Index(fields=['clinic_branch']),   # ✅ NEW index
         ]
-    
+
     def save(self, *args, **kwargs):
         # Always persist email in lowercase to prevent case-sensitive duplicates.
         if self.email:

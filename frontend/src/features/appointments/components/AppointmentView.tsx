@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Calendar, Clock, User, FileText, Tag, MapPin,
@@ -6,6 +6,7 @@ import {
   RefreshCw, ChevronDown, Building2, Edit3, Trash2,
   Save, XCircle, Search, UserCircle, ClipboardList,
   ExternalLink, Repeat, List, Stethoscope, Repeat2,
+  Phone, Mail, Home, ShieldCheck, AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -21,16 +22,30 @@ import {
   getCaseNoteCount,
   getCaseNotes,
   listPatientCases,
+  createPatientCase,
+  updatePatientCase,
+  getLinkedCaseId,
+  setLinkedCaseId,
+  clearLinkedCase,
   type PatientCase,
+  type PatientCaseStatus,
 } from '@/features/patients/patientCases.storage';
+import { CaseModal, type CaseFormData } from '@/features/patients/CaseModal';
+import type { Practitioner } from '@/features/clinics/clinic.api';
 
 import { AppointmentEditForm }    from './AppointmentEditForm';
 import { CancelAppointmentModal } from './CancelAppointmentModal';
 import { AddRecurringAppointments } from './AddRecurringAppointments';
-import { createRecurringAppointments } from '../appointment.api';
+import { ServiceSelector }         from './ServiceSelector';
+import {
+  createRecurringAppointments,
+  editAppointment as apiEditAppointment,
+  rescheduleAppointment as apiRescheduleAppointment,
+} from '../appointment.api';
 import toast from 'react-hot-toast';
 import { useAppointmentEdit }     from '../hooks/useAppointmentEdit';
 import { usePractitioners }       from '@/features/clinics/hooks/usePractitioners';
+import { useAppointmentServices } from '../hooks/useAppointmentServices';
 import type { AppointmentEditPayload } from '../appointment.api';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -39,6 +54,25 @@ const fmt12 = (t: string): string => {
   const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
   return `${h12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 };
+
+const minsToLabel = (mins: number): string => {
+  if (mins <= 0) return '—';
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+};
+
+const TIME_SLOTS_15: { value: string; label: string }[] = (() => {
+  const slots: { value: string; label: string }[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      slots.push({ value, label: fmt12(value) });
+    }
+  }
+  return slots;
+})();
 
 const INVOICE_STATUS_STYLES: Record<string, string> = {
   DRAFT:          'bg-gray-100 text-gray-600 border-gray-200',
@@ -197,6 +231,544 @@ const ServicePicker: React.FC<{
     </div>
   );
 };
+
+// ── ClinicalCaseWorkspace (Column 2 of Client Tab) ───────────────────────────
+const CASE_STATUS_STYLES: Record<PatientCaseStatus, { label: string; dot: string; cls: string }> = {
+  OPEN:       { label: 'Open',       dot: 'bg-emerald-400', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  MONITORING: { label: 'Monitoring', dot: 'bg-amber-400',   cls: 'bg-amber-50 text-amber-700 border-amber-200'       },
+  DISCHARGED: { label: 'Discharged', dot: 'bg-purple-400',  cls: 'bg-purple-50 text-purple-700 border-purple-200'    },
+  CLOSED:     { label: 'Closed',     dot: 'bg-gray-400',    cls: 'bg-gray-100 text-gray-500 border-gray-200'         },
+};
+
+const ClinicalCaseWorkspace = React.forwardRef<
+  { save(): void },
+  {
+    appointment:          Appointment;
+    patientCases:         PatientCase[];
+    practitioners:        Practitioner[];
+    loadingPractitioners: boolean;
+    onCasesChanged:       () => void;
+    onDirtyChange:        (dirty: boolean) => void;
+  }
+>(({ appointment, patientCases, practitioners, loadingPractitioners, onCasesChanged, onDirtyChange }, ref) => {
+  const [selectedCaseId,  setSelectedCaseId]  = useState<string>(patientCases[0]?.id ?? '');
+  const [editPayer,       setEditPayer]        = useState<string>(patientCases[0]?.payer ?? '');
+  const [editStatus,      setEditStatus]       = useState<PatientCaseStatus>(patientCases[0]?.status ?? 'OPEN');
+  const [editAlertNotes,  setEditAlertNotes]   = useState<string>(patientCases[0]?.alertNotes ?? '');
+  const [saveError,       setSaveError]        = useState<string | null>(null);
+  const [savedOk,         setSavedOk]          = useState(false);
+  const [showCreateModal, setShowCreateModal]  = useState(false);
+  const [showEditModal,   setShowEditModal]    = useState(false);
+
+  const selectedCase = patientCases.find(c => c.id === selectedCaseId) ?? null;
+
+  // Sync editable fields when user switches cases; clear them when deselected
+  useEffect(() => {
+    if (selectedCase) {
+      setEditPayer(selectedCase.payer ?? '');
+      setEditStatus(selectedCase.status);
+      setEditAlertNotes(selectedCase.alertNotes ?? '');
+    } else {
+      setEditPayer('');
+      setEditStatus('OPEN');
+      setEditAlertNotes('');
+    }
+    setSaveError(null);
+    setSavedOk(false);
+  }, [selectedCaseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset to the appointment's linked case (or blank) when a different appointment is opened
+  useEffect(() => {
+    setSelectedCaseId(getLinkedCaseId(appointment.id) ?? '');
+    setSaveError(null);
+    setSavedOk(false);
+  }, [appointment.id]);
+
+  // Keep selectedCaseId valid after cases list changes (e.g. after create/delete).
+  // '' is a valid "no case" state — never auto-select a case the user didn't choose.
+  useEffect(() => {
+    if (selectedCaseId !== '' && !patientCases.some(c => c.id === selectedCaseId)) {
+      setSelectedCaseId('');
+      clearLinkedCase(appointment.id);
+    }
+  }, [patientCases]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isDirty = !!selectedCase && (
+    editPayer      !== (selectedCase.payer      ?? '') ||
+    editStatus     !== selectedCase.status             ||
+    editAlertNotes !== (selectedCase.alertNotes ?? '')
+  );
+
+  const handleSave = () => {
+    if (!selectedCase) return;
+    setSaveError(null);
+    try {
+      updatePatientCase(appointment.patient, selectedCase.id, {
+        payer:      (editPayer as PatientCase['payer']) || undefined,
+        status:     editStatus,
+        alertNotes: editAlertNotes || undefined,
+      });
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 3000);
+      onCasesChanged();
+    } catch {
+      setSaveError('Failed to save. Please try again.');
+    }
+  };
+
+  const handleCreateCase = (data: CaseFormData) => {
+    const created = createPatientCase(appointment.patient, {
+      title:                   data.title,
+      description:             data.description,
+      status:                  data.status,
+      primaryPractitionerId:   data.primaryPractitionerId   || undefined,
+      primaryPractitionerName: data.primaryPractitionerName || undefined,
+      referredBy:              data.referredBy              || undefined,
+      referralInfo:            data.referralInfo            || undefined,
+    });
+    setLinkedCaseId(appointment.id, created.id); // explicitly link to this appointment
+    toast.success('Case created');
+    setShowCreateModal(false);
+    setSelectedCaseId(created.id);
+    onCasesChanged();
+  };
+
+  const handleEditCase = (data: CaseFormData) => {
+    if (!selectedCase) return;
+    updatePatientCase(appointment.patient, selectedCase.id, {
+      title:                   data.title,
+      description:             data.description,
+      status:                  data.status,
+      primaryPractitionerId:   data.primaryPractitionerId   || undefined,
+      primaryPractitionerName: data.primaryPractitionerName || undefined,
+      referredBy:              data.referredBy              || undefined,
+      referralInfo:            data.referralInfo            || undefined,
+    });
+    setEditStatus(data.status);
+    toast.success('Case updated');
+    setShowEditModal(false);
+    onCasesChanged();
+  };
+
+  const _handleSaveRef = useRef(handleSave);
+  useEffect(() => { _handleSaveRef.current = handleSave; });
+  useImperativeHandle(ref, () => ({ save: () => _handleSaveRef.current() }), []);
+  useEffect(() => { onDirtyChange(isDirty); }, [isDirty]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fieldCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-gray-800';
+
+  return (
+    <>
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-4">
+        {/* Header */}
+        <div className="flex items-center gap-2">
+          <Stethoscope className="w-4 h-4 text-sky-600 shrink-0" />
+          <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Case Details</h3>
+        </div>
+
+        {/* Appointment practitioner row */}
+        <div className="pb-3 border-b border-gray-100">
+          <p className="text-xs text-gray-500 mb-0.5">Primary Practitioner</p>
+          <p className="text-sm font-medium text-gray-900">
+            {appointment.practitioner_name || <span className="text-gray-400 italic font-normal">Unassigned</span>}
+          </p>
+        </div>
+
+        {/* Case selector */}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Active Case</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedCaseId}
+              onChange={e => {
+                if (e.target.value === '__create__') {
+                  setShowCreateModal(true);
+                } else {
+                  const newId = e.target.value;
+                  setSelectedCaseId(newId);
+                  if (newId) {
+                    setLinkedCaseId(appointment.id, newId);
+                  } else {
+                    clearLinkedCase(appointment.id);
+                  }
+                }
+              }}
+              className={`${fieldCls} flex-1 min-w-0`}
+            >
+              <option value="">— Select or Create Case —</option>
+              {patientCases.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+              <option value="__create__">+ Create New Case</option>
+            </select>
+            {selectedCase && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                title="Edit this case"
+                className="p-2 text-gray-400 hover:text-sky-600 hover:bg-sky-50 border border-gray-200 rounded-lg transition-colors shrink-0"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {selectedCase && (
+          <>
+            {/* Read-only case metadata card */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">Status</p>
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-semibold border ${CASE_STATUS_STYLES[selectedCase.status].cls}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${CASE_STATUS_STYLES[selectedCase.status].dot}`} />
+                  {CASE_STATUS_STYLES[selectedCase.status].label}
+                </span>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">Opened</p>
+                <p className="font-medium text-gray-900">{format(new Date(selectedCase.createdAt), 'MMM d, yyyy')}</p>
+              </div>
+              {selectedCase.primaryPractitionerName && (
+                <div className="col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">Case Practitioner</p>
+                  <p className="font-medium text-gray-900">{selectedCase.primaryPractitionerName}</p>
+                </div>
+              )}
+              {selectedCase.referredBy && (
+                <div className="col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">Referred By</p>
+                  <p className="font-medium text-gray-900">{selectedCase.referredBy}</p>
+                </div>
+              )}
+              {selectedCase.description && (
+                <div className="col-span-2">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">Description</p>
+                  <p className="text-gray-700 leading-relaxed">{selectedCase.description}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Editable: Status */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Case Status</label>
+              <select value={editStatus} onChange={e => setEditStatus(e.target.value as PatientCaseStatus)} className={fieldCls}>
+                <option value="OPEN">Open</option>
+                <option value="MONITORING">Monitoring</option>
+                <option value="DISCHARGED">Discharged</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </div>
+
+            {/* Editable: Payer */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Payer</label>
+              <select value={editPayer} onChange={e => setEditPayer(e.target.value)} className={fieldCls}>
+                <option value="">— Select payer —</option>
+                <option value="PRIVATE">Private Pay</option>
+                <option value="HMO">HMO</option>
+                <option value="INSURANCE">Insurance</option>
+                <option value="CORPORATE">Corporate</option>
+              </select>
+            </div>
+
+            {/* Editable: Alert Notes */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
+                Alert Notes
+                <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 leading-none">CASE-WIDE</span>
+              </label>
+              <textarea
+                value={editAlertNotes}
+                onChange={e => setEditAlertNotes(e.target.value)}
+                rows={3}
+                className={`${fieldCls} resize-none`}
+                placeholder="Persistent alerts visible across all sessions for this case…"
+              />
+            </div>
+
+            {saveError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />{saveError}
+              </div>
+            )}
+
+            {savedOk && !isDirty && (
+              <span className="text-xs text-green-600 font-medium">✓ Saved</span>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Create Case Modal */}
+      <CaseModal
+        key="create-case"
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        mode="create"
+        initialValues={{
+          primaryPractitionerId:   appointment.practitioner ? String(appointment.practitioner) : '',
+          primaryPractitionerName: appointment.practitioner_name ?? '',
+        }}
+        lockPractitioner
+        onSave={handleCreateCase}
+        practitioners={practitioners}
+        loadingPractitioners={loadingPractitioners}
+      />
+
+      {/* Edit Case Modal */}
+      <CaseModal
+        key={selectedCaseId ? `edit-${selectedCaseId}` : 'edit-case'}
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        mode="edit"
+        initialValues={selectedCase ?? undefined}
+        onSave={handleEditCase}
+        practitioners={practitioners}
+        loadingPractitioners={loadingPractitioners}
+      />
+    </>
+  );
+});
+
+// ── InlineAppointmentCard (Column 3 of Client Tab) ────────────────────────────
+const InlineAppointmentCard = React.forwardRef<
+  { save(): Promise<void> },
+  {
+    appointment:          Appointment;
+    practitioners:        { id: number | string; name: string; specialization: string | null; role?: string; roles?: string[] }[];
+    loadingPractitioners: boolean;
+    isTerminal:           boolean;
+    onSaved:              (updated: Appointment) => void;
+    queryClient:          ReturnType<typeof useQueryClient>;
+    onDirtyChange:        (dirty: boolean) => void;
+  }
+>(({ appointment, practitioners, loadingPractitioners, isTerminal, onSaved, queryClient, onDirtyChange }, ref) => {
+  const { services, loading: loadingServices } = useAppointmentServices();
+  const [editService,      setEditService]      = useState<number | ''>(appointment.service ?? '');
+  const [editPractitioner, setEditPractitioner] = useState<number | ''>(appointment.practitioner ?? '');
+  const [editStartTime,    setEditStartTime]    = useState(appointment.start_time.slice(0, 5));
+  const [editEndTime,      setEditEndTime]      = useState(appointment.end_time.slice(0, 5));
+  const [editNotes,        setEditNotes]        = useState(appointment.notes || '');
+  const [saveError,        setSaveError]        = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditService(appointment.service ?? '');
+    setEditPractitioner(appointment.practitioner ?? '');
+    setEditStartTime(appointment.start_time.slice(0, 5));
+    setEditEndTime(appointment.end_time.slice(0, 5));
+    setEditNotes(appointment.notes || '');
+    setSaveError(null);
+  }, [appointment.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+  const computeDuration = (start: string, end: string): number => {
+    const [sH, sM] = start.split(':').map(Number);
+    const [eH, eM] = end.split(':').map(Number);
+    return Math.max((eH * 60 + eM) - (sH * 60 + sM), 0);
+  };
+
+  const handleServiceChange = (serviceId: number | '') => {
+    setEditService(serviceId);
+    if (serviceId !== '') {
+      const svc = services.find(s => s.id === Number(serviceId));
+      if (svc?.duration_minutes) {
+        const [sH, sM] = editStartTime.split(':').map(Number);
+        const totalMins = sH * 60 + sM + svc.duration_minutes;
+        const eH = Math.floor(totalMins / 60) % 24;
+        const eM = totalMins % 60;
+        setEditEndTime(`${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}`);
+      }
+    }
+  };
+
+  const handleStartTimeChange = (newStart: string) => {
+    const oldDuration = computeDuration(editStartTime, editEndTime);
+    setEditStartTime(newStart);
+    if (oldDuration > 0) {
+      const [sH, sM] = newStart.split(':').map(Number);
+      const totalMins = sH * 60 + sM + oldDuration;
+      const eH = Math.floor(totalMins / 60) % 24;
+      const eM = totalMins % 60;
+      setEditEndTime(`${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}`);
+    }
+  };
+
+  const isDirty =
+    String(editService)      !== String(appointment.service      ?? '') ||
+    String(editPractitioner) !== String(appointment.practitioner ?? '') ||
+    editStartTime            !== appointment.start_time.slice(0, 5)     ||
+    editEndTime              !== appointment.end_time.slice(0, 5)       ||
+    editNotes                !== (appointment.notes || '');
+
+  const handleSave = async () => {
+    setSaveError(null);
+    try {
+      let updated = appointment;
+
+      const timeChanged =
+        editStartTime !== appointment.start_time.slice(0, 5) ||
+        editEndTime   !== appointment.end_time.slice(0, 5);
+
+      if (timeChanged) {
+        updated = await apiRescheduleAppointment(appointment.id, {
+          date:       appointment.date,
+          start_time: editStartTime,
+          end_time:   editEndTime,
+        });
+      }
+
+      const editPayload: AppointmentEditPayload = {};
+      if (String(editService) !== String(appointment.service ?? ''))
+        editPayload.service = editService === '' ? null : Number(editService);
+      if (String(editPractitioner) !== String(appointment.practitioner ?? ''))
+        editPayload.practitioner = editPractitioner === '' ? null : Number(editPractitioner);
+      if (editNotes !== (appointment.notes || ''))
+        editPayload.notes = editNotes;
+
+      if (Object.keys(editPayload).length > 0) {
+        updated = await apiEditAppointment(appointment.id, editPayload);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['diary-appointments'] });
+      onSaved(updated);
+      toast.success('Appointment updated.');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string; non_field_errors?: string[] } } };
+      const msg =
+        e?.response?.data?.detail ||
+        e?.response?.data?.non_field_errors?.[0] ||
+        'Failed to save changes.';
+      setSaveError(msg);
+      toast.error(msg);
+    }
+  };
+
+  const _apptSaveRef = useRef(handleSave);
+  useEffect(() => { _apptSaveRef.current = handleSave; });
+  useImperativeHandle(ref, () => ({ save: () => _apptSaveRef.current() }), []);
+  useEffect(() => { onDirtyChange(isDirty); }, [isDirty]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const duration = computeDuration(editStartTime, editEndTime);
+  const fieldCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-gray-800 disabled:bg-gray-50 disabled:text-gray-400';
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Calendar className="w-4 h-4 text-sky-600 shrink-0" />
+        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Appointment Details</h3>
+      </div>
+
+      {isTerminal && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          This appointment is {appointment.status.toLowerCase()} — details are read-only.
+        </div>
+      )}
+
+      <div className="pb-3 border-b border-gray-100">
+        <p className="text-xs text-gray-500 mb-0.5">Date</p>
+        <p className="text-sm font-semibold text-gray-900">{format(new Date(appointment.date), 'EEEE, MMM d, yyyy')}</p>
+      </div>
+
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">Time</label>
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <p className="text-[10px] text-gray-400 mb-1">Start</p>
+            <select
+              value={editStartTime}
+              onChange={e => handleStartTimeChange(e.target.value)}
+              disabled={isTerminal}
+              className={fieldCls}
+            >
+              {TIME_SLOTS_15.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <span className="text-gray-300 mt-4 text-lg">–</span>
+          <div className="flex-1">
+            <p className="text-[10px] text-gray-400 mb-1">End</p>
+            <select
+              value={editEndTime}
+              onChange={e => setEditEndTime(e.target.value)}
+              disabled={isTerminal}
+              className={fieldCls}
+            >
+              {TIME_SLOTS_15.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {duration > 0 && (
+          <p className="text-[10px] text-sky-600 font-medium mt-1.5">Duration: {minsToLabel(duration)}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">Consultation Type</label>
+        <ServiceSelector
+          services={services}
+          value={editService}
+          onChange={handleServiceChange}
+          disabled={isTerminal}
+          loading={loadingServices}
+          compact
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">Practitioner</label>
+        {loadingPractitioners ? (
+          <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+            <div className="w-3.5 h-3.5 border-2 border-sky-300 border-t-sky-600 rounded-full animate-spin" />
+            Loading practitioners…
+          </div>
+        ) : (
+          <select
+            value={editPractitioner}
+            onChange={e => setEditPractitioner(e.target.value === '' ? '' : Number(e.target.value))}
+            disabled={isTerminal}
+            className={fieldCls}
+          >
+            <option value="">Unassigned</option>
+            {practitioners
+              .filter(p => (p.roles ?? []).includes('PRACTITIONER') || p.role === 'PRACTITIONER')
+              .map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.specialization && ` — ${p.specialization}`}
+                </option>
+              ))}
+          </select>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">
+          Appointment Notes{' '}
+          <span className="text-[10px] font-semibold text-sky-600 bg-sky-50 border border-sky-200 rounded px-1 py-0.5">THIS SESSION ONLY</span>
+        </label>
+        <textarea
+          value={editNotes}
+          onChange={e => setEditNotes(e.target.value)}
+          rows={3}
+          disabled={isTerminal}
+          className={`${fieldCls} resize-none`}
+          placeholder="Notes specific to this appointment…"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">Only affects this appointment session.</p>
+      </div>
+
+      {saveError && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />{saveError}
+        </div>
+      )}
+    </div>
+  );
+});
 
 // ── Invoice Tab ───────────────────────────────────────────────────────────────
 const InvoiceTab: React.FC<{ appointment: Appointment }> = ({ appointment }) => {
@@ -572,6 +1144,12 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
   const [showCancelModal,       setShowCancelModal]       = useState(false);
   const [showAppointmentDropdown, setShowAppointmentDropdown] = useState(false);
   const [showRecurringModal,     setShowRecurringModal]     = useState(false);
+  const [casesVersion,           setCasesVersion]           = useState(0);
+  const caseWorkspaceRef = useRef<{ save(): void } | null>(null);
+  const inlineApptRef    = useRef<{ save(): Promise<void> } | null>(null);
+  const [caseDirty,      setCaseDirty]   = useState(false);
+  const [apptDirty,      setApptDirty]   = useState(false);
+  const [isSavingAll,    setIsSavingAll] = useState(false);
   const appointmentDropdownRef = useRef<HTMLDivElement>(null);
 
   // Query client for invalidation
@@ -660,6 +1238,11 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
     }
   }, [isOpen, cancelEdit]);
 
+  // casesVersion increments trigger re-renders, which re-reads localStorage below.
+  const patientCases = casesVersion >= 0 && appointment
+    ? listPatientCases(appointment.patient)
+    : [];
+
   if (!isOpen || !appointment) return null;
 
   const statusColors  = APPOINTMENT_STATUS_COLORS[appointment.status];
@@ -676,9 +1259,7 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
   const isCompleted   = appointment.status === 'COMPLETED';
   const isTerminal    = isCancelled || isCompleted;
 
-  const patientCases = listPatientCases(appointment.patient);
-
-  const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = {};
+const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = {};
   patientCases.forEach((caseItem: PatientCase) => {
     const notes = getCaseNotes(appointment.patient, caseItem.id, patientNotes);
     const noteCount = getCaseNoteCount(appointment.patient, caseItem.id, patientNotes);
@@ -691,9 +1272,6 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
       lastUpdated: latestNoteDate || caseItem.createdAt,
     };
   });
-
-  const primaryCase: PatientCase | null = patientCases[0] ?? null;
-  const primaryCaseMetrics = primaryCase ? caseMetrics[primaryCase.id] : null;
 
   const formatDuration = (minutes: number): string => {
     if (minutes < 60) return `${minutes} min`;
@@ -708,6 +1286,22 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
       setAppointment(updated);
       lastAppointmentIdRef.current = updated.id;
       onUpdated?.(updated);
+    }
+  };
+
+  const handleInlineApptSaved = (updated: Appointment) => {
+    setAppointment(updated);
+    lastAppointmentIdRef.current = updated.id;
+    onUpdated?.(updated);
+  };
+
+  const handleSaveAll = async () => {
+    setIsSavingAll(true);
+    try {
+      if (caseDirty) caseWorkspaceRef.current?.save();
+      if (apptDirty && !isTerminal) await inlineApptRef.current?.save();
+    } finally {
+      setIsSavingAll(false);
     }
   };
 
@@ -897,21 +1491,24 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
                       </div>
                     ) : patient ? (
                       <div className="space-y-2.5">
-                        {/* Full Name */}
-                        <div>
-                          <p className="text-xs text-gray-500 mb-0.5">Full Name</p>
-                          <p className="text-sm font-medium text-gray-900">{patient.full_name}</p>
-                        </div>
-
-                        <div className="pt-1 border-t border-gray-100">
-                          <p className="text-xs text-gray-500 mb-0.5">Patient ID</p>
-                          <p className="text-sm font-medium text-gray-900 font-mono">{patient.patient_number}</p>
+                        {/* Name + Patient ID header */}
+                        <div className="flex items-start gap-3 pb-3 border-b border-gray-100">
+                          <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center shrink-0 text-sky-700 font-bold text-sm select-none">
+                            {`${patient.first_name?.[0] ?? ''}${patient.last_name?.[0] ?? ''}`.toUpperCase() || '?'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-gray-900 leading-tight">{patient.full_name}</p>
+                            <p className="text-xs text-gray-400 font-mono mt-0.5"># {patient.patient_number}</p>
+                          </div>
                         </div>
 
                         {/* Email */}
                         {patient.email && (
                           <div className="pt-1 border-t border-gray-100">
-                            <p className="text-xs text-gray-500 mb-0.5">Email</p>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Mail className="w-3 h-3 text-gray-400" />
+                              <p className="text-xs text-gray-500">Email</p>
+                            </div>
                             <p className="text-sm font-medium text-gray-900 truncate">{patient.email}</p>
                           </div>
                         )}
@@ -919,7 +1516,10 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
                         {/* Phone */}
                         {patient.phone && (
                           <div className="pt-1 border-t border-gray-100">
-                            <p className="text-xs text-gray-500 mb-0.5">Phone</p>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Phone className="w-3 h-3 text-gray-400" />
+                              <p className="text-xs text-gray-500">Phone</p>
+                            </div>
                             <p className="text-sm font-medium text-gray-900">{patient.phone}</p>
                           </div>
                         )}
@@ -945,7 +1545,10 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
                         {/* Address */}
                         {patient.address && (
                           <div className="pt-1 border-t border-gray-100">
-                            <p className="text-xs text-gray-500 mb-0.5">Address</p>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Home className="w-3 h-3 text-gray-400" />
+                              <p className="text-xs text-gray-500">Address</p>
+                            </div>
                             <p className="text-sm font-medium text-gray-900 line-clamp-2">
                               {patient.city && patient.province
                                 ? `${patient.address}, ${patient.city}, ${patient.province}`
@@ -956,7 +1559,10 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
 
                         {patient.philhealth_number && (
                           <div className="pt-1 border-t border-gray-100">
-                            <p className="text-xs text-gray-500 mb-0.5">PhilHealth</p>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <ShieldCheck className="w-3 h-3 text-gray-400" />
+                              <p className="text-xs text-gray-500">PhilHealth</p>
+                            </div>
                             <p className="text-sm font-medium text-gray-900">{patient.philhealth_number}</p>
                           </div>
                         )}
@@ -970,7 +1576,10 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
 
                         {patient.allergies && (
                           <div className="pt-1 border-t border-gray-100">
-                            <p className="text-xs text-gray-500 mb-0.5">Allergies</p>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <AlertTriangle className="w-3 h-3 text-amber-400" />
+                              <p className="text-xs text-gray-500">Allergies</p>
+                            </div>
                             <p className="text-sm font-medium text-gray-900 line-clamp-3">{patient.allergies}</p>
                           </div>
                         )}
@@ -1001,139 +1610,42 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
                     )}
                   </div>
 
-                  {/* ── Column 2: Appointment Details ── */}
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Calendar className="w-4 h-4 text-sky-600 shrink-0" />
-                      <h3 className="text-lg font-semibold text-gray-900">Appointment Details</h3>
-                    </div>
+                  {/* ── Column 2: Case Details ── */}
+                  <ClinicalCaseWorkspace
+                    ref={caseWorkspaceRef}
+                    appointment={appointment}
+                    patientCases={patientCases}
+                    practitioners={practitioners}
+                    loadingPractitioners={loadingPractitioners}
+                    onCasesChanged={() => setCasesVersion(v => v + 1)}
+                    onDirtyChange={setCaseDirty}
+                  />
 
-                    <div className="space-y-2.5">
-                      {/* Date */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-0.5">Date</p>
-                        <p className="text-sm font-medium text-gray-900">{format(new Date(appointment.date), 'MMM d, yyyy')}</p>
-                      </div>
-
-                      {/* Time */}
-                      <div className="pt-1 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-0.5">Time</p>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <p className="text-sm font-medium text-gray-900">{fmt12(appointment.start_time)} – {fmt12(appointment.end_time)}</p>
-                        </div>
-                      </div>
-
-                      {/* Duration */}
-                      <div className="pt-1 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-0.5">Duration</p>
-                        <p className="text-sm font-medium text-gray-900">{formatDuration((() => { const [sH,sM] = appointment.start_time.split(':').map(Number); const [eH,eM] = appointment.end_time.split(':').map(Number); return Math.max((eH*60+eM)-(sH*60+sM), 15); })())}</p>
-                      </div>
-
-                      {/* Service / Type */}
-                      <div className="pt-1 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-0.5">Service</p>
-                        {appointment.service_color ? (
-                          <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold text-white"
-                            style={{ backgroundColor: appointment.service_color }}
-                          >
-                            {typeLabel}
-                          </span>
-                        ) : (
-                          <p className="text-sm font-medium text-gray-900">{typeLabel}</p>
-                        )}
-                      </div>
-
-                      {/* Practitioner */}
-                      <div className="pt-1 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-0.5">Practitioner</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {appointment.practitioner_name || <span className="text-gray-400 font-normal italic">Unassigned</span>}
-                        </p>
-                      </div>
-
-                      {/* Location / Clinic */}
-                      {appointment.location_name && (
-                        <div className="pt-1 border-t border-gray-100">
-                          <p className="text-xs text-gray-500 mb-0.5">Location</p>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <p className="text-sm font-medium text-gray-900">{appointment.location_name}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="pt-1 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-0.5">Arrival Status</p>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                          appointment.arrival_status === 'ARRIVED'
-                            ? 'bg-green-50 text-green-700 border-green-200'
-                            : appointment.arrival_status === 'DNA'
-                              ? 'bg-red-50 text-red-700 border-red-200'
-                              : 'bg-gray-50 text-gray-700 border-gray-200'
-                        }`}>
-                          {appointment.arrival_status === 'ARRIVED'
-                            ? 'Arrived'
-                            : appointment.arrival_status === 'DNA'
-                              ? 'Did Not Arrive'
-                              : 'No Status'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── Column 3: Case Details ── */}
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Stethoscope className="w-4 h-4 text-sky-600 shrink-0" />
-                      <h3 className="text-lg font-semibold text-gray-900">Case Details</h3>
-                    </div>
-
-                    {primaryCase ? (
-                      <div className="space-y-2.5">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-0.5">Case Name</p>
-                          <p className="text-sm font-medium text-gray-900">{primaryCase.title}</p>
-                        </div>
-
-                        <div className="pt-1 border-t border-gray-100">
-                          <p className="text-xs text-gray-500 mb-0.5">Case Description</p>
-                          <p className="text-sm font-medium text-gray-900 line-clamp-3">
-                            {primaryCase.description || 'No description'}
-                          </p>
-                        </div>
-
-                        <div className="pt-1 border-t border-gray-100">
-                          <p className="text-xs text-gray-500 mb-0.5">Linked Clinical Notes</p>
-                          <p className="text-sm font-medium text-gray-900">{primaryCaseMetrics?.noteCount ?? 0}</p>
-                        </div>
-
-                        <div className="pt-1 border-t border-gray-100">
-                          <p className="text-xs text-gray-500 mb-0.5">Latest Clinical Note</p>
-                          <p className="text-sm font-medium text-gray-900">
-                            {primaryCaseMetrics?.lastUpdated
-                              ? format(new Date(primaryCaseMetrics.lastUpdated), 'MMM d, yyyy')
-                              : '—'}
-                          </p>
-                        </div>
-
-                        <div className="pt-1 border-t border-gray-100">
-                          <p className="text-xs text-gray-500 mb-0.5">Status</p>
-                          <p className="text-sm font-medium text-gray-900">{primaryCase.status}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center mb-3">
-                          <FileText className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <p className="text-sm font-medium text-gray-600 mb-1">No case assigned</p>
-                        <p className="text-xs text-gray-400">No case found in patient case records.</p>
-                      </div>
-                    )}
-                  </div>
+                  {/* ── Column 3: Appointment Details ── */}
+                  <InlineAppointmentCard
+                    ref={inlineApptRef}
+                    appointment={appointment}
+                    practitioners={practitioners}
+                    loadingPractitioners={loadingPractitioners}
+                    isTerminal={isTerminal}
+                    onSaved={handleInlineApptSaved}
+                    queryClient={queryClient}
+                    onDirtyChange={setApptDirty}
+                  />
                 </div>
+
+                {(caseDirty || (apptDirty && !isTerminal)) && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={handleSaveAll}
+                      disabled={isSavingAll}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-sky-600 text-white text-sm font-semibold rounded-xl hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    >
+                      {isSavingAll ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {isSavingAll ? 'Saving…' : 'Save Changes'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

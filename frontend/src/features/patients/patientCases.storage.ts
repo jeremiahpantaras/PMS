@@ -13,6 +13,8 @@ export interface PatientCase {
   primaryPractitionerName?: string;
   referredBy?: string;
   referralInfo?: string;
+  payer?: 'PRIVATE' | 'HMO' | 'INSURANCE' | 'CORPORATE';
+  alertNotes?: string;
 }
 
 type NoteCaseLinkMap = Record<string, string>;
@@ -89,7 +91,7 @@ export const createPatientCase = (
 export const updatePatientCase = (
   patientId: number,
   caseId: string,
-  updates: Partial<Pick<PatientCase, 'title' | 'description' | 'status' | 'primaryPractitionerId' | 'primaryPractitionerName' | 'referredBy' | 'referralInfo'>>
+  updates: Partial<Pick<PatientCase, 'title' | 'description' | 'status' | 'primaryPractitionerId' | 'primaryPractitionerName' | 'referredBy' | 'referralInfo' | 'payer' | 'alertNotes'>>
 ): PatientCase | null => {
   const allCases = readFromStorage<PatientCase[]>(CASE_STORAGE_KEY, []);
   const index = allCases.findIndex((caseItem) => caseItem.patientId === patientId && caseItem.id === caseId);
@@ -106,6 +108,8 @@ export const updatePatientCase = (
     primaryPractitionerName: updates.primaryPractitionerName !== undefined ? updates.primaryPractitionerName : existing.primaryPractitionerName,
     referredBy: updates.referredBy !== undefined ? updates.referredBy?.trim() : existing.referredBy,
     referralInfo: updates.referralInfo !== undefined ? updates.referralInfo?.trim() : existing.referralInfo,
+    payer: updates.payer !== undefined ? updates.payer : existing.payer,
+    alertNotes: updates.alertNotes !== undefined ? updates.alertNotes?.trim() : existing.alertNotes,
   };
 
   allCases[index] = updated;
@@ -172,4 +176,26 @@ export const getUnassignedNotes = (patientId: number, notes: ClinicalNote[]): Cl
 
 export const getCaseNoteCount = (patientId: number, caseId: string, notes: ClinicalNote[]): number => {
   return getCaseNotes(patientId, caseId, notes).length;
+};
+
+// ── Appointment ↔ Case link ──────────────────────────────────────────────────
+// Stores which case the user explicitly selected for a given appointment.
+// Key: appointment ID (string), Value: case ID.
+const APPT_CASE_LINK_KEY = 'pms_appointment_case_links_v1';
+
+export const getLinkedCaseId = (appointmentId: number): string | null => {
+  const links = readFromStorage<Record<string, string>>(APPT_CASE_LINK_KEY, {});
+  return links[String(appointmentId)] ?? null;
+};
+
+export const setLinkedCaseId = (appointmentId: number, caseId: string): void => {
+  const links = readFromStorage<Record<string, string>>(APPT_CASE_LINK_KEY, {});
+  links[String(appointmentId)] = caseId;
+  writeToStorage(APPT_CASE_LINK_KEY, links);
+};
+
+export const clearLinkedCase = (appointmentId: number): void => {
+  const links = readFromStorage<Record<string, string>>(APPT_CASE_LINK_KEY, {});
+  delete links[String(appointmentId)];
+  writeToStorage(APPT_CASE_LINK_KEY, links);
 };

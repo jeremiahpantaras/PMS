@@ -22,9 +22,11 @@ interface CaseModalProps {
   onSave: (data: CaseFormData) => void;
   practitioners: Practitioner[];
   loadingPractitioners: boolean;
+  /** When true, the Primary Practitioner field is shown read-only (auto-filled from the appointment). */
+  lockPractitioner?: boolean;
 }
 
-export const CaseModal = ({ isOpen, onClose, mode, initialValues, onSave, practitioners, loadingPractitioners }: CaseModalProps) => {
+export const CaseModal = ({ isOpen, onClose, mode, initialValues, onSave, practitioners, loadingPractitioners, lockPractitioner }: CaseModalProps) => {
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [status, setStatus] = useState<PatientCaseStatus>(initialValues?.status ?? 'OPEN');
   const [primaryPractitionerId, setPrimaryPractitionerId] = useState(initialValues?.primaryPractitionerId ?? '');
@@ -92,7 +94,11 @@ export const CaseModal = ({ isOpen, onClose, mode, initialValues, onSave, practi
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Primary Practitioner</label>
-              {loadingPractitioners ? (
+              {lockPractitioner ? (
+                <div className="px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">
+                  {primaryPractitionerName || <span className="text-gray-400 italic">Unassigned</span>}
+                </div>
+              ) : loadingPractitioners ? (
                 <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 border border-gray-200 rounded-lg">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Loading practitioners...

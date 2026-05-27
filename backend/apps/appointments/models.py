@@ -155,6 +155,22 @@ class Appointment(TimeStampedModel, SoftDeleteModel):
         help_text='Shared ID linking appointments in the same recurring series.',
     )
 
+    # ── Booking source ────────────────────────────────────────────────────────
+    BOOKING_SOURCE_CHOICES = [
+        ('portal',       'Patient Portal'),
+        ('staff',        'Staff'),
+        ('admin',        'Admin'),
+        ('practitioner', 'Practitioner'),
+    ]
+
+    booking_source = models.CharField(
+        max_length=20,
+        choices=BOOKING_SOURCE_CHOICES,
+        default='staff',
+        blank=True,
+        help_text='How this appointment was originally booked',
+    )
+
     class Meta:
         db_table = 'appointments'
         ordering = ['-date', '-start_time']
@@ -307,6 +323,18 @@ class BlockAppointment(TimeStampedModel, SoftDeleteModel):
         help_text='Optional notes about the blocked event'
     )
 
+    # ── Practitioner assignment (optional) ──────────────────────────────────────
+    # When set, the block is scoped to this practitioner's column in Day View.
+    # When null, the block is treated as clinic-wide (shown in every column).
+    practitioner = models.ForeignKey(
+        'clinics.Practitioner',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='block_appointments',
+        help_text='Practitioner this block belongs to. Null = clinic-wide block visible in all columns.',
+    )
+
     created_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
@@ -346,6 +374,7 @@ class BlockAppointment(TimeStampedModel, SoftDeleteModel):
         indexes = [
             models.Index(fields=['clinic', 'date']),
             models.Index(fields=['date']),
+            models.Index(fields=['practitioner', 'date']),
         ]
 
     def __str__(self):
@@ -446,6 +475,15 @@ class CalendarNote(TimeStampedModel):
     end_time = models.TimeField(help_text='End time of the note')
 
     message = models.TextField(help_text='Note content displayed on the calendar')
+
+    practitioner = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='calendar_notes_practitioner',
+        help_text='Practitioner this note is scoped to (null = clinic-wide)',
+    )
 
     created_by = models.ForeignKey(
         'accounts.User',

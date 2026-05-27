@@ -145,6 +145,7 @@ def _confirm_portal_booking(booking, confirmed_by_user):
             duration_minutes=duration,
             chief_complaint=booking.notes or '',
             notes=f'Created from portal booking #{booking.reference_number}',
+            booking_source='portal',
             # confirmed_by_user may be None for auto-confirms
             created_by=confirmed_by_user,
             updated_by=confirmed_by_user,

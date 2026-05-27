@@ -212,6 +212,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         else:
             serializer.save(updated_by=request.user)
 
+        # Refresh from DB so related objects (service, practitioner) reflect
+        # the newly-committed FK values — not the stale in-memory cache.
+        appointment.refresh_from_db()
+
         full_serializer = AppointmentSerializer(appointment, context={'request': request})
 
         # ── Broadcast real-time calendar event ───────────────────────────
@@ -1439,6 +1443,16 @@ class CalendarNoteViewSet(viewsets.ModelViewSet):
                     qs = qs.filter(clinic_id=branch_id)
                 else:
                     return CalendarNote.objects.none()
+            except (ValueError, TypeError):
+                pass
+
+        practitioner_param = self.request.query_params.get('practitioner')
+        if practitioner_param:
+            try:
+                practitioner_id = int(practitioner_param)
+                qs = qs.filter(
+                    Q(practitioner_id=practitioner_id) | Q(practitioner__isnull=True)
+                )
             except (ValueError, TypeError):
                 pass
 

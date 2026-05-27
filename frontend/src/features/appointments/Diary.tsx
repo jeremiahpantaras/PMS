@@ -1002,6 +1002,7 @@ export const Diary: React.FC = () => {
                   initialTime={pendingSlot ? `${startH}:${startM}` : undefined}
                   initialEndTime={pendingSlot ? `${endH}:${endMm}` : undefined}
                   appointments={calendarAppointments}
+                  practitionerId={pendingSlot?.practitionerId ?? null}
                 />
               );
             })()}
@@ -1028,6 +1029,7 @@ export const Diary: React.FC = () => {
                   initialDate={pendingSlot?.date}
                   initialTime={pendingSlot ? `${startH}:${startM}` : undefined}
                   initialEndTime={pendingSlot ? `${endH}:${endMm}` : undefined}
+                  practitionerId={pendingSlot?.practitionerId ?? null}
                 />
               );
             })()}

@@ -42,6 +42,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_name',
             'updated_by', 'updated_by_name',
             'cancelled_by', 'cancellation_reason', 'cancelled_at',
+            'booking_source',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
@@ -124,28 +125,59 @@ class AppointmentSerializer(serializers.ModelSerializer):
 # ── NEW: Restricted edit serializer ──────────────────────────────────────────
 class AppointmentEditSerializer(serializers.ModelSerializer):
     """
-    Allows editing only the 5 permitted fields.
+    Allows editing only the permitted fields on an existing appointment.
     updated_by is set in the view, not from the request body.
+
+    Writable: practitioner, service, chief_complaint, notes,
+              patient_notes, arrival_status.
+    Read-only extras returned in response: service_name, service_color,
+    service_duration, practitioner_name, updated_by_name, updated_at.
     """
     practitioner_name = serializers.SerializerMethodField(read_only=True)
     updated_by_name   = serializers.SerializerMethodField(read_only=True)
     updated_at        = serializers.DateTimeField(read_only=True)
 
+    # ── Service read-only derived fields (returned after save) ─────────────
+    service_name     = serializers.CharField(
+        source='service.name', read_only=True, allow_null=True
+    )
+    service_color    = serializers.CharField(
+        source='service.color_hex', read_only=True, allow_null=True
+    )
+    service_duration = serializers.IntegerField(
+        source='service.duration_minutes', read_only=True, allow_null=True
+    )
+
     class Meta:
         model  = Appointment
         fields = [
             'id',
+            # ── writable ──────────────────────────────────────────────────
             'practitioner',
-            'practitioner_name',
+            'service',
             'chief_complaint',
             'notes',
             'patient_notes',
             'arrival_status',
+            # ── read-only derived ─────────────────────────────────────────
+            'practitioner_name',
+            'service_name',
+            'service_color',
+            'service_duration',
             'updated_by',
             'updated_by_name',
             'updated_at',
         ]
-        read_only_fields = ['id', 'updated_by', 'updated_by_name', 'updated_at']
+        read_only_fields = [
+            'id',
+            'practitioner_name',
+            'service_name',
+            'service_color',
+            'service_duration',
+            'updated_by',
+            'updated_by_name',
+            'updated_at',
+        ]
 
     def get_practitioner_name(self, obj):
         if obj.practitioner and obj.practitioner.user:
@@ -288,6 +320,7 @@ class BlockAppointmentSerializer(serializers.ModelSerializer):
             'clinic_name',
             'clinic_branch_id',
             'clinic_branch_name',
+            'practitioner_id',
             'event_name',
             'event_type',
             'date',
@@ -349,6 +382,7 @@ class BlockAppointmentCreateSerializer(serializers.ModelSerializer):
         model = BlockAppointment
         fields = [
             'clinic',
+            'practitioner',
             'event_name',
             'date',
             'start_time',
@@ -456,6 +490,7 @@ class CalendarNoteSerializer(serializers.ModelSerializer):
             'id', 'clinic',
             'date', 'start_time', 'end_time',
             'message',
+            'practitioner',
             'created_by', 'created_by_name',
             'modified_by', 'modified_by_name',
             'created_at', 'updated_at',

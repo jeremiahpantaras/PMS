@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Calendar, Clock, Timer, User, FileText,
-  AlertCircle, UserPlus, Stethoscope, Layers, Building2, Lock,
+  AlertCircle, UserPlus, Stethoscope, Building2, Lock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getPatients, createPatient } from '@/features/patients/patient.api';
 import { PatientModal } from '@/features/patients/components/PatientModal';
 import { createAppointment } from '../appointment.api';
+import { ServiceSelector } from './ServiceSelector';
 import { usePractitioners } from '@/features/clinics/hooks/usePractitioners';
 import { useAppointmentServices } from '../hooks/useAppointmentServices';
 import { useClinicBranches } from '@/features/clinics/hooks/useClinicBranches';   // ← ADD
@@ -295,13 +296,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               {/* ── Service ── */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Service / Appointment Type <span className="text-red-500">*</span>
+                  Service / Consultation Type <span className="text-red-500">*</span>
                 </label>
-                {loadingServices ? (
-                  <div className="flex items-center justify-center py-6">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-sky-600 border-t-transparent" />
-                  </div>
-                ) : services.length === 0 ? (
+                {services.length === 0 && !loadingServices ? (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -312,28 +309,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <div className="relative">
-                      <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <select name="service" value={formData.service} onChange={handleSelectChange} className={`${inputBase} pl-9 ${errors.service ? inputError : ''}`}>
-                        <option value="">— Select a service —</option>
-                        {services.map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}{s.duration_minutes ? ` (${s.duration_minutes} min)` : ''}
-                            {parseFloat(s.price) > 0 ? ` · ₱${parseFloat(s.price).toLocaleString()}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {errors.service && <p className="mt-1 text-xs text-red-600">{errors.service}</p>}
-                    {selectedService && (
-                      <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: selectedService.color_hex || '#0D9488' }}>
-                        <span className="w-2 h-2 rounded-full bg-white/70" />
-                        {selectedService.name}&nbsp;·&nbsp;{selectedService.duration_minutes} min
-                        {parseFloat(selectedService.price) > 0 && ` · ₱${parseFloat(selectedService.price).toLocaleString()}`}
-                      </div>
-                    )}
-                  </>
+                  <ServiceSelector
+                    services={services}
+                    value={formData.service}
+                    onChange={(id) => {
+                      setFormData(prev => ({ ...prev, service: id }));
+                      if (errors.service) setErrors(prev => ({ ...prev, service: '' }));
+                    }}
+                    loading={loadingServices}
+                    error={errors.service}
+                  />
                 )}
               </div>
 

@@ -15,6 +15,7 @@ interface AddNoteModalProps {
   initialDate?: Date;
   initialTime?: string;
   initialEndTime?: string;
+  practitionerId?: number | null;
 }
 
 const calculateEndTime = (startTime: string, durationMins: number): string => {
@@ -31,6 +32,7 @@ export const AddNoteModal: React.FC<AddNoteModalProps> = ({
   initialDate,
   initialTime,
   initialEndTime,
+  practitionerId,
 }) => {
   const { user } = useAuthStore();
   const { branches } = useClinicBranches();
@@ -89,6 +91,7 @@ export const AddNoteModal: React.FC<AddNoteModalProps> = ({
         start_time:  start,
         end_time:    end,
         message:     message.trim(),
+        ...(practitionerId != null ? { practitioner: practitionerId } : {}),
       });
       toast.success('Note added to calendar.');
       onCreated?.(note);

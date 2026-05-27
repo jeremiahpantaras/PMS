@@ -39,6 +39,7 @@ export interface Appointment {
   cancelled_by:         number | null;
   cancellation_reason:  string;
   cancelled_at:         string | null;
+  booking_source:       string;
   created_at:           string;
   updated_at:           string;
 }
@@ -91,6 +92,7 @@ export interface BlockAppointment {
   clinic_name: string | null;
   clinic_branch_id: number | null; // The branch this block belongs to
   clinic_branch_name: string | null; // Display name of the branch
+  practitioner_id: number | null; // Practitioner this block is scoped to (null = clinic-wide)
   event_name: string;
   event_type: string;
   date: string;
@@ -110,6 +112,8 @@ export interface BlockAppointment {
 
 export interface CreateBlockAppointmentData {
   clinic: number;
+  /** Practitioner FK — matches the DRF field name. Null = clinic-wide block. */
+  practitioner?: number | null;
   event_name: string;
   date: string;
   start_time: string;
@@ -128,6 +132,7 @@ export interface CalendarNote {
   start_time: string;
   end_time: string;
   message: string;
+  practitioner: number | null;
   created_by: number | null;
   created_by_name: string | null;
   modified_by: number | null;
@@ -142,6 +147,7 @@ export interface CreateCalendarNoteData {
   start_time: string;
   end_time: string;
   message: string;
+  practitioner?: number | null;
 }
 
 export const APPOINTMENT_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
