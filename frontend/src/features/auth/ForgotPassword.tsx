@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services/authService';
 import { Mail, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
-import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import MalasakitColoredLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 import toast from 'react-hot-toast';
 
 /**

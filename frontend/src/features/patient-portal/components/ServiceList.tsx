@@ -58,8 +58,8 @@ export const ServiceList: React.FC<ServiceListProps> = ({
   if (categories.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 bg-sky-50 rounded-2xl flex items-center justify-center mb-4">
-          <Stethoscope className="w-8 h-8 text-sky-300" />
+        <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mb-4">
+          <Stethoscope className="w-8 h-8 text-[#5CDB95]" />
         </div>
         <p className="text-base font-semibold text-gray-600">
           No services available
@@ -81,9 +81,9 @@ export const ServiceList: React.FC<ServiceListProps> = ({
           Choose the type of appointment you&apos;d like to book.
         </p>
         {disciplineLabel && (
-          <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-sky-50 border border-sky-200 rounded-full">
-            <Stethoscope className="w-3 h-3 text-sky-500" />
-            <span className="text-xs font-medium text-sky-700">{disciplineLabel} services</span>
+          <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full">
+            <Stethoscope className="w-3 h-3 text-[#5CDB95]" />
+            <span className="text-xs font-medium text-[#0575E6]">{disciplineLabel} services</span>
           </div>
         )}
       </div>

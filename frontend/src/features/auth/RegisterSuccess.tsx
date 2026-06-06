@@ -2,7 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { CheckCircle, Mail, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
 import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
-import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import MalasakitColoredLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 
 interface LocationState {
   email: string;

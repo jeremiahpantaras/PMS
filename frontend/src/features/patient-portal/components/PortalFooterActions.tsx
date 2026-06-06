@@ -39,7 +39,7 @@ export const PortalFooterActions: React.FC<PortalFooterActionsProps> = ({
         <button
           onClick={onSubmit}
           disabled={submitting}
-          className="inline-flex items-center gap-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+          className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold rounded-xl"
         >
           {submitting ? (
             <><Loader2 className="w-4 h-4 animate-spin" />Submitting...</>
@@ -59,7 +59,7 @@ export const PortalFooterActions: React.FC<PortalFooterActionsProps> = ({
         <button
           onClick={onContinue}
           disabled={!canContinue}
-          className="inline-flex items-center gap-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+          className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold rounded-xl"
         >
           Continue
           <ArrowRight className="w-4 h-4" />

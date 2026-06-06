@@ -82,7 +82,7 @@ export const PractitionerStep: React.FC<PractitionerStepProps> = ({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or specialty..."
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0575E6]"
         />
       </div>
 
@@ -95,8 +95,8 @@ export const PractitionerStep: React.FC<PractitionerStepProps> = ({
               onClick={() => setActiveFilter(activeFilter === disc ? null : disc)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 activeFilter === disc
-                  ? 'bg-sky-500 text-white border-sky-500'
-                  : 'bg-white text-gray-600 border-gray-300 hover:border-sky-400'
+                  ? 'bg-primary-gradient text-white border-transparent'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-[#0575E6]'
               }`}
             >
               {getDisciplineLabel(disc)}
@@ -117,7 +117,7 @@ export const PractitionerStep: React.FC<PractitionerStepProps> = ({
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="mt-2 text-xs text-sky-500 hover:underline"
+              className="mt-2 text-xs text-[#0575E6] hover:underline"
             >
               Clear search
             </button>
@@ -155,8 +155,8 @@ export const PractitionerStep: React.FC<PractitionerStepProps> = ({
                         onClick={() => onSelect(p)}
                         className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-center shadow-sm ${
                           isSelected
-                            ? 'border-sky-500 bg-sky-50 shadow-md'
-                            : 'border-gray-200 bg-white hover:border-sky-300 hover:shadow-md'
+                            ? 'border-[#5CDB95] bg-green-50 shadow-md'
+                            : 'border-gray-200 bg-white hover:border-[#5CDB95] hover:shadow-md'
                         }`}
                       >
                         {/* Avatar */}
@@ -170,19 +170,19 @@ export const PractitionerStep: React.FC<PractitionerStepProps> = ({
 
                         {/* Info block */}
                         <div className="w-full space-y-1">
-                          <p className={`text-sm font-bold leading-tight ${isSelected ? 'text-sky-800' : 'text-gray-900'}`}>
+                          <p className={`text-sm font-bold leading-tight ${isSelected ? 'text-[#0575E6]' : 'text-gray-900'}`}>
                             {p.title ? `${p.title}. ${p.full_name}` : p.full_name}
                           </p>
 
                           {(p.occupation || p.position) && (
-                            <p className={`text-xs font-semibold ${isSelected ? 'text-sky-600' : 'text-gray-600'}`}>
+                            <p className={`text-xs font-semibold ${isSelected ? 'text-[#0575E6]' : 'text-gray-600'}`}>
                               {p.occupation || p.position}
                             </p>
                           )}
 
                           {disciplineLabel && (
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium leading-snug ${
-                              isSelected ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-500'
+                              isSelected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                             }`}>
                               {disciplineLabel}
                             </span>
@@ -212,7 +212,7 @@ export const PractitionerStep: React.FC<PractitionerStepProps> = ({
 
                         {/* CTA button */}
                         <div className={`w-full py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                          isSelected ? 'bg-sky-500 text-white' : 'bg-gray-800 text-white'
+                          isSelected ? 'bg-primary-gradient text-white' : 'bg-gray-800 text-white'
                         }`}>
                           {isSelected ? 'Selected ✓' : 'Select'}
                         </div>

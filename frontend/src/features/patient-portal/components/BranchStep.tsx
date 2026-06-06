@@ -51,7 +51,7 @@ export const BranchStep: React.FC<BranchStepProps> = ({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, city or province…"
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white
-              focus:outline-none focus:ring-2 focus:ring-teal-500"
+              focus:outline-none focus:ring-2 focus:ring-[#0575E6]"
           />
         </div>
       )}
@@ -78,7 +78,7 @@ export const BranchStep: React.FC<BranchStepProps> = ({
               <p className="text-sm font-medium text-gray-500">No locations match &quot;{search}&quot;</p>
               <button
                 onClick={() => setSearch('')}
-                className="mt-2 text-xs text-teal-600 hover:underline"
+                className="mt-2 text-xs text-[#0575E6] hover:underline"
               >
                 Clear search
               </button>
@@ -102,8 +102,8 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                 className={`
                   relative flex flex-col gap-4 rounded-2xl border-2 transition-all overflow-hidden
                   ${isSelected
-                    ? 'border-teal-500 bg-teal-50 shadow-lg'
-                    : 'border-gray-200 bg-white hover:border-teal-300 hover:shadow-md'
+                    ? 'border-green-500 bg-green-50 shadow-lg'
+                    : 'border-gray-200 bg-white hover:border-green-300 hover:shadow-md'
                   }
                 `}
               >
@@ -115,7 +115,7 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                   {/* Selected checkmark */}
                   {isSelected && (
                     <div className="absolute top-4 right-4">
-                      <CheckCircle className="w-5 h-5 text-teal-500" />
+                      <CheckCircle className="w-5 h-5 text-green-500" />
                     </div>
                   )}
 
@@ -123,15 +123,13 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                   <div className="flex items-start gap-4">
                     <div className={`
                       w-12 h-12 rounded-xl flex items-center justify-center shrink-0 mt-0.5
-                      ${isSelected
-                        ? 'bg-teal-500'
-                        : branch.is_main_branch
-                          ? 'bg-teal-600'
-                          : 'bg-teal-100'
+                      ${isSelected || branch.is_main_branch
+                        ? 'bg-primary-gradient'
+                        : 'bg-green-100'
                       }
                     `}>
                       <Building2 className={`w-6 h-6 ${
-                        isSelected || branch.is_main_branch ? 'text-white' : 'text-teal-600'
+                        isSelected || branch.is_main_branch ? 'text-white' : 'text-green-600'
                       }`} />
                     </div>
 
@@ -142,7 +140,7 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                         </p>
                         {branch.is_main_branch && (
                           <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full
-                            text-[10px] font-semibold bg-teal-100 text-teal-700 shrink-0">
+                            text-[10px] font-semibold bg-green-100 text-green-700 shrink-0">
                             <Star className="w-2.5 h-2.5" />
                             Main
                           </span>
@@ -160,19 +158,19 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                   <div className="space-y-2">
                     {branch.address && (
                       <div className="flex items-start gap-2.5 text-sm text-gray-500">
-                        <MapPin className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
+                        <MapPin className="w-4 h-4 text-[#0575E6] shrink-0 mt-0.5" />
                         <span className="leading-snug line-clamp-2">{branch.address}</span>
                       </div>
                     )}
                     {branch.phone && (
                       <div className="flex items-center gap-2.5 text-sm text-gray-500">
-                        <Phone className="w-4 h-4 text-teal-400 shrink-0" />
+                        <Phone className="w-4 h-4 text-[#0575E6] shrink-0" />
                         <span>{branch.phone}</span>
                       </div>
                     )}
                     {branch.email && (
                       <div className="flex items-center gap-2.5 text-sm text-gray-500">
-                        <Mail className="w-4 h-4 text-teal-400 shrink-0" />
+                        <Mail className="w-4 h-4 text-[#0575E6] shrink-0" />
                         <span className="truncate">{branch.email}</span>
                       </div>
                     )}
@@ -187,9 +185,9 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                     className={`
                       flex-1 py-2 rounded-xl text-sm font-semibold text-center transition-colors
                       ${isSelected
-                        ? 'bg-teal-500 text-white'
+                        ? 'bg-primary-gradient text-white'
                         : branch.is_main_branch
-                          ? 'bg-teal-600 text-white hover:bg-teal-700'
+                          ? 'bg-primary-gradient text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }
                     `}
@@ -203,7 +201,7 @@ export const BranchStep: React.FC<BranchStepProps> = ({
                       onClick={(e) => { e.stopPropagation(); setMapModalBranch(branch); }}
                       title="View pinned location on map"
                       className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold
-                        bg-sky-50 text-sky-600 border border-sky-200 hover:bg-sky-100 transition-colors shrink-0"
+                        bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors shrink-0"
                     >
                       <Map className="w-4 h-4" />
                       <span className="hidden sm:inline">Map</span>

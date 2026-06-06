@@ -1,4 +1,4 @@
-import malasakitLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import malasakitLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 
 /**
  * Reusable branding footer for all printed/exported documents.

@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { authService } from '@/services/authService';
 import MalasakitWhiteLogo   from '@/assets/malasakit/Primary Logo - White.svg';
-import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import MalasakitColoredLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 
 // ── Password strength rules ───────────────────────────────────────────────────
 

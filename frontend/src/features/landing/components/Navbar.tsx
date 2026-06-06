@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X, ChevronDown } from 'lucide-react';
-import MESLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import MESLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 
 export const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);

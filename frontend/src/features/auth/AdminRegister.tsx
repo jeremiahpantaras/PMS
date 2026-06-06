@@ -12,7 +12,7 @@ import {
 import { formatPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 import { Mail, User, Building2, Phone, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import MalasakitWhiteLogo from '@/assets/malasakit/Primary Logo - White.svg';
-import MalasakitColoredLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import MalasakitColoredLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 import type { AdminRegisterData, AuthError } from '@/types/auth';
 import toast from 'react-hot-toast';
 import { OTPVerificationModal } from './components/OTPVerificationModal';

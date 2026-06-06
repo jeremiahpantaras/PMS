@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import MalasakitLogo from '@/assets/malasakit/Primary Logo - Colored.svg';
+import MalasakitLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import { PhLocationSelect } from '@/components/location/PhLocationSelect';

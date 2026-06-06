@@ -16,7 +16,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service, isSelected, o
     <div
       onClick={onSelect}
       className={`flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors ${
-        isSelected ? 'bg-sky-50' : 'hover:bg-gray-50'
+        isSelected ? 'bg-green-50' : 'hover:bg-gray-50'
       }`}
     >
       {/* Thumbnail */}
@@ -38,7 +38,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service, isSelected, o
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className={`font-semibold text-sm ${isSelected ? 'text-sky-700' : 'text-gray-900'}`}>
+        <p className={`font-semibold text-sm ${isSelected ? 'text-[#0575E6]' : 'text-gray-900'}`}>
           {service.name}
         </p>
         {service.description && (
@@ -57,7 +57,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service, isSelected, o
           onClick={(e) => { e.stopPropagation(); onSelect(); }}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
             isSelected
-              ? 'bg-sky-500 text-white'
+              ? 'bg-primary-gradient text-white'
               : 'bg-gray-800 text-white hover:bg-gray-700'
           }`}
         >

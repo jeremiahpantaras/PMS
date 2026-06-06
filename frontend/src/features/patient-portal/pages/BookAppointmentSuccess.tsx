@@ -49,13 +49,22 @@ export const BookAppointmentSuccess: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md overflow-hidden">
 
+        {/* Brand Logo */}
+        <div className="bg-white px-6 pt-6 pb-4 flex justify-center">
+          <img
+            src="/assets/malasakit/Primary Logo - Colored.svg"
+            alt="Malasakit Logo"
+            className="h-10 w-auto object-contain"
+          />
+        </div>
+
         {/* Header */}
-        <div className="bg-sky-500 px-6 py-8 text-center">
+        <div className="bg-primary-gradient px-6 py-8 text-center">
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
             <CheckCircle className="w-9 h-9 text-white" />
           </div>
           <h1 className="text-xl font-bold text-white">Booking Confirmed!</h1>
-          <p className="text-sky-100 text-sm mt-1">
+          <p className="text-white/80 text-sm mt-1">
             Your appointment has been successfully booked.
           </p>
         </div>
@@ -109,8 +118,8 @@ export const BookAppointmentSuccess: React.FC = () => {
         </div>
 
         {/* Notice */}
-        <div className="mx-6 mb-5 bg-sky-50 border border-sky-200 rounded-xl p-3">
-          <p className="text-xs text-sky-700 text-center">
+        <div className="mx-6 mb-5 bg-green-50 border border-green-200 rounded-xl p-3">
+          <p className="text-xs text-green-700 text-center">
             A confirmation email has been sent to <strong>{confirmation.patient_email}</strong>.
             Please arrive a few minutes early for your appointment.
           </p>
@@ -120,7 +129,7 @@ export const BookAppointmentSuccess: React.FC = () => {
         <div className="px-6 pb-6">
           <button
             onClick={closePage}
-            className="block w-full text-center py-2.5 bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="btn-primary block w-full text-center py-2.5 text-sm font-semibold rounded-xl"
           >
             Close Page ({countdown}s)
           </button>

@@ -50,7 +50,7 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
               className="w-12 h-12 rounded-xl object-cover border border-gray-200"
             />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-teal-600 flex items-center justify-center text-white font-bold text-lg">
+            <div className="w-12 h-12 rounded-xl bg-primary-gradient flex items-center justify-center text-white font-bold text-lg">
               {portal.clinic_name.charAt(0)}
             </div>
           )}
@@ -65,19 +65,19 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
         <div className="space-y-1.5">
           {portal.clinic_phone && (
             <div className="flex items-center gap-2 text-xs text-gray-500">
-              <Phone className="w-3 h-3 flex-shrink-0 text-teal-500" />
+              <Phone className="w-3 h-3 flex-shrink-0 text-[#0575E6]" />
               {portal.clinic_phone}
             </div>
           )}
           {portal.clinic_email && (
             <div className="flex items-center gap-2 text-xs text-gray-500">
-              <Mail className="w-3 h-3 flex-shrink-0 text-teal-500" />
+              <Mail className="w-3 h-3 flex-shrink-0 text-[#0575E6]" />
               {portal.clinic_email}
             </div>
           )}
           {portal.clinic_address && (
             <div className="flex items-center gap-2 text-xs text-gray-500">
-              <MapPin className="w-3 h-3 flex-shrink-0 text-teal-500" />
+              <MapPin className="w-3 h-3 flex-shrink-0 text-[#0575E6]" />
               {portal.clinic_address}
             </div>
           )}
@@ -86,29 +86,29 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
 
       {/* Selected branch banner */}
       {selectedBranch && (
-        <div className="mx-4 mt-4 bg-teal-600 rounded-xl p-4">
+        <div className="mx-4 mt-4 bg-primary-gradient rounded-xl p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-xs text-teal-200 font-medium uppercase tracking-wide mb-0.5">
+              <p className="text-xs text-white/70 font-medium uppercase tracking-wide mb-0.5">
                 Selected Location
               </p>
               <p className="text-sm font-bold text-white leading-tight truncate">
                 {selectedBranch.name}
               </p>
               {(selectedBranch.city || selectedBranch.province) && (
-                <p className="text-xs text-teal-200 mt-0.5">
+                <p className="text-xs text-white/70 mt-0.5">
                   {[selectedBranch.city, selectedBranch.province].filter(Boolean).join(', ')}
                 </p>
               )}
               {selectedBranch.address && (
-                <p className="text-xs text-teal-200 mt-0.5 truncate">
+                <p className="text-xs text-white/70 mt-0.5 truncate">
                   {selectedBranch.address}
                 </p>
               )}
             </div>
             <button
               onClick={onChangeBranch}
-              className="flex-shrink-0 flex items-center gap-1 text-xs font-medium text-teal-100 hover:text-white bg-teal-700 hover:bg-teal-800 px-2 py-1 rounded-lg transition-colors"
+              className="flex-shrink-0 flex items-center gap-1 text-xs font-medium text-white bg-white/20 hover:bg-white/30 px-2 py-1 rounded-lg transition-colors"
             >
               <RefreshCw className="w-3 h-3" />
               Change
@@ -130,7 +130,7 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
               <div key={step.number} className="flex items-center gap-3">
                 <div className={`
                   w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
-                  ${isDone || isCurrent ? 'bg-teal-600' : 'bg-gray-100'}
+                  ${isDone || isCurrent ? 'bg-primary-gradient' : 'bg-gray-100'}
                 `}>
                   {isDone ? (
                     <CheckCircle className="w-4 h-4 text-white" />
@@ -142,7 +142,7 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
                 </div>
                 <span className={`text-sm ${
                   isCurrent ? 'font-semibold text-gray-900'
-                  : isDone  ? 'text-teal-700 font-medium'
+                  : isDone  ? 'text-[#5CDB95] font-medium'
                   : 'text-gray-400'
                 }`}>
                   {step.label}
@@ -161,36 +161,36 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
         <div className="space-y-3">
 
           {selectedPractitioner && (
-            <div className="bg-teal-50 rounded-xl p-3">
-              <p className="text-xs text-teal-500 font-medium">Practitioner</p>
-              <p className="text-sm font-semibold text-teal-800 mt-0.5">
+            <div className="bg-green-50 rounded-xl p-3">
+              <p className="text-xs text-[#0575E6] font-medium">Practitioner</p>
+              <p className="text-sm font-semibold text-gray-900 mt-0.5">
                 {selectedPractitioner.id === null ? 'Any Available' : selectedPractitioner.full_name}
               </p>
               {selectedPractitioner.specialization && (
-                <p className="text-xs text-teal-600">{selectedPractitioner.specialization}</p>
+                <p className="text-xs text-gray-500">{selectedPractitioner.specialization}</p>
               )}
             </div>
           )}
 
           {selectedService && (
-            <div className="bg-teal-50 rounded-xl p-3">
-              <p className="text-xs text-teal-500 font-medium">Service</p>
-              <p className="text-sm font-semibold text-teal-800 mt-0.5">{selectedService.name}</p>
-              <p className="text-xs text-teal-600">
+            <div className="bg-green-50 rounded-xl p-3">
+              <p className="text-xs text-[#0575E6] font-medium">Service</p>
+              <p className="text-sm font-semibold text-gray-900 mt-0.5">{selectedService.name}</p>
+              <p className="text-xs text-gray-500">
                 {selectedService.duration_minutes} min · ₱{parseFloat(selectedService.price).toLocaleString('en-PH')}
               </p>
             </div>
           )}
 
           {selectedDate && selectedSlot && (
-            <div className="bg-teal-50 rounded-xl p-3">
-              <p className="text-xs text-teal-500 font-medium">Date &amp; Time</p>
-              <p className="text-sm font-semibold text-teal-800 mt-0.5">
+            <div className="bg-green-50 rounded-xl p-3">
+              <p className="text-xs text-[#0575E6] font-medium">Date &amp; Time</p>
+              <p className="text-sm font-semibold text-gray-900 mt-0.5">
                 {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
                   weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
                 })}
               </p>
-              <p className="text-xs text-teal-600">{fmt12(selectedSlot)}</p>
+              <p className="text-xs text-gray-500">{fmt12(selectedSlot)}</p>
             </div>
           )}
 

@@ -232,7 +232,7 @@ export const PortalHome: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500" />
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-transparent border-t-[#0575E6] border-r-[#5CDB95]" />
       </div>
     );
   }
@@ -261,7 +261,7 @@ export const PortalHome: React.FC = () => {
               className="w-10 h-10 rounded-xl object-cover border border-gray-200 shrink-0"
             />
           ) : (
-            <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-base shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-primary-gradient flex items-center justify-center text-white font-bold text-base shrink-0">
               {portal.clinic_name.charAt(0)}
             </div>
           )}
@@ -320,7 +320,7 @@ export const PortalHome: React.FC = () => {
                 className="w-8 h-8 rounded-lg object-cover border border-gray-200 shrink-0"
               />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-primary-gradient flex items-center justify-center text-white font-bold text-sm shrink-0">
                 {portal.clinic_name.charAt(0)}
               </div>
             )}
@@ -355,7 +355,7 @@ export const PortalHome: React.FC = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search services..."
-                className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6]"
               />
             </div>
           )}
@@ -439,16 +439,16 @@ export const PortalHome: React.FC = () => {
                 <React.Fragment key={step.number}>
                   <div className="flex flex-col items-center gap-0.5">
                     <div className={`w-2 h-2 rounded-full transition-all ${
-                      isActive ? 'bg-sky-500 scale-125' : isDone ? 'bg-sky-300' : 'bg-gray-200'
+                      isActive ? 'bg-[#0575E6] scale-125' : isDone ? 'bg-[#5CDB95]' : 'bg-gray-200'
                     }`} />
                     <span className={`text-[9px] leading-none whitespace-nowrap ${
-                      isActive ? 'font-bold text-sky-600' : isDone ? 'font-medium text-sky-400' : 'font-medium text-gray-300'
+                      isActive ? 'font-bold text-[#0575E6]' : isDone ? 'font-medium text-[#5CDB95]' : 'font-medium text-gray-300'
                     }`}>
                       {step.label}
                     </span>
                   </div>
                   {i < arr.length - 1 && (
-                    <div className={`flex-1 h-px mx-2 transition-colors ${isDone ? 'bg-sky-300' : 'bg-gray-200'}`} />
+                    <div className={`flex-1 h-px mx-2 transition-colors ${isDone ? 'bg-[#5CDB95]' : 'bg-gray-200'}`} />
                   )}
                 </React.Fragment>
               );

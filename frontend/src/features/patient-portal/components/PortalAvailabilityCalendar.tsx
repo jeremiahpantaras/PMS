@@ -172,9 +172,9 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
     <div className="bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden w-full">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-sky-50 border-b border-sky-100">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-green-50 border-b border-green-100">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold text-sky-600 uppercase tracking-wider">
+          <p className="text-[10px] font-bold text-[#0575E6] uppercase tracking-wider">
             Pick Date &amp; Time
           </p>
           <p className="text-xs font-bold text-gray-800 truncate">{service.name}</p>
@@ -183,7 +183,7 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
           )}
         </div>
         {/* Clinic hours badge */}
-        <div className="hidden sm:flex items-center gap-1 text-[10px] text-sky-600 font-medium bg-sky-100 rounded-full px-2 py-0.5 mr-2 whitespace-nowrap">
+        <div className="hidden sm:flex items-center gap-1 text-[10px] text-[#0575E6] font-medium bg-green-100 rounded-full px-2 py-0.5 mr-2 whitespace-nowrap">
           <Clock className="w-2.5 h-2.5" />
           {practitionerAvailability?.duty_schedule
             ? 'Split-shift schedule'
@@ -194,7 +194,7 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
         </div>
         <button
           onClick={onClose}
-          className="ml-2 p-1 rounded-md hover:bg-sky-100 text-gray-400 transition-colors shrink-0"
+          className="ml-2 p-1 rounded-md hover:bg-green-100 text-gray-400 transition-colors shrink-0"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -250,9 +250,9 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
                       ${isDateUnavailable(date)
                         ? 'text-gray-300 cursor-not-allowed bg-gray-50'
                         : isSelected
-                          ? 'bg-sky-500 text-white shadow-sm'
+                          ? 'bg-primary-gradient text-white shadow-sm'
                           : isToday
-                            ? 'bg-sky-100 text-sky-700 font-bold hover:bg-sky-200'
+                            ? 'bg-green-100 text-green-700 font-bold hover:bg-green-200'
                             : 'text-gray-700 hover:bg-gray-100'
                       }
                     `}
@@ -286,7 +286,7 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
             {/* Loading */}
             {loadingSlots && (
               <div className="flex justify-center py-4">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-500" />
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-transparent border-t-[#0575E6] border-r-[#5CDB95]" />
               </div>
             )}
 
@@ -311,8 +311,8 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
                       className={`
                         px-3 py-2 text-xs font-semibold rounded-xl border transition-all
                         ${selectedSlot === slot
-                          ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-sky-400 hover:bg-sky-50'
+                          ? 'bg-primary-gradient text-white border-transparent shadow-sm'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-[#0575E6] hover:bg-green-50'
                         }
                       `}
                     >
@@ -352,8 +352,8 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
                       className={`
                         px-3 py-2 text-xs font-semibold rounded-xl border transition-all
                         ${selectedSlot === slot
-                          ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-sky-400 hover:bg-sky-50'
+                          ? 'bg-primary-gradient text-white border-transparent shadow-sm'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-[#0575E6] hover:bg-green-50'
                         }
                       `}
                     >
@@ -378,7 +378,7 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
           <div className="pt-2 border-t border-gray-100">
             <button
               onClick={() => onConfirm(selectedDate, selectedSlot)}
-              className="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
+              className="btn-primary w-full py-3 text-sm font-semibold rounded-xl shadow-sm"
             >
               Confirm — {format(new Date(selectedDate + 'T00:00:00'), 'MMM d')} at {fmt12(selectedSlot)}
             </button>

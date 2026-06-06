@@ -60,7 +60,7 @@ export const TermsAndConditionsModal: React.FC<TermsAndConditionsModalProps> = (
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg"
+            className="btn-primary px-4 py-2 text-sm font-medium rounded-lg"
           >
             Close
           </button>

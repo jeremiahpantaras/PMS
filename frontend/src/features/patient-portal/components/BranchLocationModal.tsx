@@ -76,8 +76,8 @@ export const BranchLocationModal: React.FC<Props> = ({ branch, isOpen, onClose }
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center shrink-0">
-              <MapPin className="w-5 h-5 text-teal-600" />
+            <div className="w-9 h-9 rounded-xl bg-primary-gradient flex items-center justify-center shrink-0">
+              <MapPin className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-gray-900 leading-tight truncate">{branch.name}</p>
@@ -161,7 +161,7 @@ export const BranchLocationModal: React.FC<Props> = ({ branch, isOpen, onClose }
               <button
                 onClick={handleSavePNG}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 rounded-xl transition-colors"
+                className="btn-primary flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl disabled:opacity-60"
               >
                 {saving
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>

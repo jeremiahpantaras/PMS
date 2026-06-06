@@ -181,7 +181,7 @@ export const ConsentFormModal: React.FC<ConsentFormModalProps> = ({
             type="button"
             onClick={handleAgree}
             disabled={!hasSignature}
-            className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Agree & Save Signature
           </button>
