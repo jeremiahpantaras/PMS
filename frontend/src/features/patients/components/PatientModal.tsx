@@ -148,9 +148,6 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     if (!formData.date_of_birth)       newErrors.date_of_birth = 'Date of birth is required.';
     if (!formData.phone.trim())        newErrors.phone        = 'Phone number is required.';
     else if (!isValidPHPhone(formData.phone)) newErrors.phone = 'Enter a valid Philippine mobile number.';
-    if (!formData.address.trim())      newErrors.address      = 'Address is required.';
-    if (!formData.city.trim())         newErrors.city         = 'City is required.';
-    if (!formData.province.trim())     newErrors.province     = 'Province is required.';
 
     // Email is always required.
     const emailError = validateEmail(formData.email ?? '');
@@ -351,7 +348,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                   </div>
 
                   <div>
-                    <label className={labelBase}>Street Address <span className="text-red-500">*</span></label>
+                    <label className={labelBase}>Street Address <span className="text-gray-400 font-normal">(Optional)</span></label>
                     <textarea
                       name="address" value={formData.address} onChange={handleChange}
                       rows={2} placeholder="Unit/Floor, Building, Street, Barangay…"
@@ -368,7 +365,6 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                       onCityChange={handleCityChange}
                       provinceError={errors.province}
                       cityError={errors.city}
-                      required
                     />
                   </div>
 

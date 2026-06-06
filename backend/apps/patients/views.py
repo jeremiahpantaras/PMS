@@ -627,6 +627,28 @@ class PortalLinkViewSet(viewsets.ModelViewSet):
         )
         return Response(serializer.data)
 
+    # ── POST /api/portal-links/<id>/regenerate/ ───────────────────────────────
+    @action(detail=True, methods=['post'], url_path='regenerate')
+    def regenerate(self, request, pk=None):
+        """
+        Rotate the portal token.  The old token is immediately invalidated —
+        any previously distributed QR codes / links will stop working.
+        A fresh, cryptographically-random token is generated and saved.
+
+        Architecture note: PortalLink.regenerate_token() already exists on the
+        model; this action simply exposes it via the REST API.
+        Future hooks (e.g. QR analytics reset, campaign token support) belong
+        in the model method, not here.
+        """
+        instance = self.get_object()
+        instance.regenerate_token()          # updates token + saves in-place
+        serializer = self.get_serializer(instance, context={'request': request})
+        logger.info(
+            "Portal link token regenerated for clinic '%s' by %s",
+            instance.clinic.name, request.user.email,
+        )
+        return Response(serializer.data)
+
 
 # ─── Portal Booking management (admin) ───────────────────────────────────────
 

@@ -27,9 +27,9 @@ class Patient(TimeStampedModel, SoftDeleteModel):
 
     email       = models.EmailField()  # required — enforced at serializer and model level
     phone       = models.CharField(max_length=15, validators=[validate_ph_phone])
-    address     = models.TextField()
-    city        = models.CharField(max_length=100)
-    province    = models.CharField(max_length=100)
+    address     = models.TextField(blank=True)
+    city        = models.CharField(max_length=100, blank=True)
+    province    = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=10, blank=True)
 
     # Emergency contact is required only for minor patients (< 18 years old);
