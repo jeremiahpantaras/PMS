@@ -2,8 +2,9 @@ export interface Contact {
   id: number;
   clinic: number;
   contact_number: string;
-  contact_type: 'DOCTOR' | 'PRACTITIONER' | 'CLINIC' | 'LABORATORY' | 'PHARMACY' | 'OTHER';
+  contact_type: 'DOCTOR' | 'PRACTITIONER' | 'CLINIC' | 'LABORATORY' | 'PHARMACY' | 'SUPPLIER' | 'OTHER';
   contact_type_display: string;
+  custom_contact_type?: string;
   
   // Personal/Organization Info
   first_name: string;
@@ -42,7 +43,8 @@ export interface Contact {
 
 export interface CreateContactData {
   clinic: number;
-  contact_type: 'DOCTOR' | 'PRACTITIONER' | 'CLINIC' | 'LABORATORY' | 'PHARMACY' | 'OTHER';
+  contact_type: 'DOCTOR' | 'PRACTITIONER' | 'CLINIC' | 'LABORATORY' | 'PHARMACY' | 'SUPPLIER' | 'OTHER';
+  custom_contact_type?: string;
   first_name: string;
   last_name: string;
   middle_name?: string;

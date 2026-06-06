@@ -15,14 +15,15 @@ interface AddContactModalProps {
 type ContactType = 'DOCTOR' | 'PRACTITIONER' | 'CLINIC' | 'LABORATORY' | 'PHARMACY' | 'OTHER';
 
 interface FormErrors {
-  first_name?:    string;
-  last_name?:     string;
-  phone?:         string;
-  email?:         string;
-  address?:       string;
-  city?:          string;
-  province?:      string;
-  general?:       string;
+  first_name?:         string;
+  last_name?:          string;
+  phone?:              string;
+  email?:              string;
+  address?:            string;
+  city?:               string;
+  province?:           string;
+  custom_contact_type?: string;
+  general?:            string;
 }
 
 const CONTACT_TYPES: { value: ContactType; label: string }[] = [
@@ -35,25 +36,26 @@ const CONTACT_TYPES: { value: ContactType; label: string }[] = [
 ];
 
 const EMPTY_FORM: CreateContactData = {
-  clinic:            0,
-  contact_type:      'DOCTOR',
-  first_name:        '',
-  last_name:         '',
-  middle_name:       '',
-  organization_name: '',
-  specialty:         '',
-  license_number:    '',
-  email:             '',
-  phone:             '',
-  alternative_phone: '',
-  address:           '',
-  city:              '',
-  province:          '',
-  postal_code:       '',
-  notes:             '',
-  website:           '',
-  is_active:         true,
-  is_preferred:      false,
+  clinic:              0,
+  contact_type:        'DOCTOR',
+  custom_contact_type: '',
+  first_name:          '',
+  last_name:           '',
+  middle_name:         '',
+  organization_name:   '',
+  specialty:           '',
+  license_number:      '',
+  email:               '',
+  phone:               '',
+  alternative_phone:   '',
+  address:             '',
+  city:                '',
+  province:            '',
+  postal_code:         '',
+  notes:               '',
+  website:             '',
+  is_active:           true,
+  is_preferred:        false,
 };
 
 /* ── Reusable helpers ──────────────────────────────────── */
@@ -95,25 +97,26 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
   useEffect(() => {
     if (editingContact) {
       setFormData({
-        clinic:            editingContact.clinic,
-        contact_type:      editingContact.contact_type,
-        first_name:        editingContact.first_name,
-        last_name:         editingContact.last_name,
-        middle_name:       editingContact.middle_name       ?? '',
-        organization_name: editingContact.organization_name ?? '',
-        specialty:         editingContact.specialty         ?? '',
-        license_number:    editingContact.license_number    ?? '',
-        email:             editingContact.email             ?? '',
-        phone:             editingContact.phone ? formatPHPhone(editingContact.phone) : '',
-        alternative_phone: editingContact.alternative_phone ? formatPHPhone(editingContact.alternative_phone) : '',
-        address:           editingContact.address,
-        city:              editingContact.city,
-        province:          editingContact.province,
-        postal_code:       editingContact.postal_code       ?? '',
-        notes:             editingContact.notes             ?? '',
-        website:           editingContact.website           ?? '',
-        is_active:         editingContact.is_active,
-        is_preferred:      editingContact.is_preferred,
+        clinic:              editingContact.clinic,
+        contact_type:        editingContact.contact_type,
+        custom_contact_type: editingContact.custom_contact_type ?? '',
+        first_name:          editingContact.first_name,
+        last_name:           editingContact.last_name,
+        middle_name:         editingContact.middle_name       ?? '',
+        organization_name:   editingContact.organization_name ?? '',
+        specialty:           editingContact.specialty         ?? '',
+        license_number:      editingContact.license_number    ?? '',
+        email:               editingContact.email             ?? '',
+        phone:               editingContact.phone ? formatPHPhone(editingContact.phone) : '',
+        alternative_phone:   editingContact.alternative_phone ? formatPHPhone(editingContact.alternative_phone) : '',
+        address:             editingContact.address,
+        city:                editingContact.city,
+        province:            editingContact.province,
+        postal_code:         editingContact.postal_code       ?? '',
+        notes:               editingContact.notes             ?? '',
+        website:             editingContact.website           ?? '',
+        is_active:           editingContact.is_active,
+        is_preferred:        editingContact.is_preferred,
       });
     } else {
       setFormData(EMPTY_FORM);
@@ -125,16 +128,17 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
     const e: FormErrors = {};
     if (!formData.first_name.trim())  e.first_name = 'First name is required';
     if (!formData.last_name.trim())   e.last_name  = 'Last name is required';
-    if (formData.phone.trim()) {
+    if (formData.contact_type === 'OTHER' && !formData.custom_contact_type?.trim())
+      e.custom_contact_type = 'Please enter a contact type.';
+    if (!formData.phone.trim()) {
+      e.phone = 'Phone number is required';
+    } else {
       const phoneErr = validatePHPhoneDetailed(formData.phone, false);
       if (phoneErr) e.phone = phoneErr;
     }
     const emailValue = formData.email ?? '';
     const emailErr = validateEmailDetailed(emailValue);
     if (emailErr) e.email = emailErr;
-    if (!formData.address.trim())  {}  // address is optional
-    if (!formData.city.trim())     {}  // city is optional
-    if (!formData.province.trim()) {}  // province is optional
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -242,7 +246,10 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
                     <Label required>Contact Type</Label>
                     <select
                       value={formData.contact_type}
-                      onChange={e => set('contact_type', e.target.value as ContactType)}
+                      onChange={e => {
+                        set('contact_type', e.target.value as ContactType);
+                        if (e.target.value !== 'OTHER') set('custom_contact_type', '');
+                      }}
                       className={selectCls}
                     >
                       {CONTACT_TYPES.map(o => (
@@ -250,6 +257,21 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
                       ))}
                     </select>
                   </div>
+
+                  {/* Custom Contact Type — shown only when OTHER is selected */}
+                  {formData.contact_type === 'OTHER' && (
+                    <div>
+                      <Label required>Specify Contact Type</Label>
+                      <input
+                        type="text"
+                        value={formData.custom_contact_type ?? ''}
+                        onChange={e => set('custom_contact_type', e.target.value)}
+                        placeholder="Enter custom contact type"
+                        className={inputCls(!!errors.custom_contact_type)}
+                      />
+                      <FieldError msg={errors.custom_contact_type} />
+                    </div>
+                  )}
 
                   {/* First Name */}
                   <div>
@@ -409,10 +431,10 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
 
                   {/* Phone */}
                   <div>
-                    <Label>
+                    <Label required>
                       <span className="flex items-center gap-1">
                         <Phone className="w-3 h-3 text-sky-400" />
-                        Phone Number <span className="text-gray-400 font-normal">(optional)</span>
+                        Phone Number
                       </span>
                     </Label>
                     <input

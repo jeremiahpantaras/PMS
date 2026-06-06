@@ -18,35 +18,37 @@ interface EditContactModalProps {
 type ContactType = 'DOCTOR' | 'PRACTITIONER' | 'CLINIC' | 'LABORATORY' | 'PHARMACY' | 'OTHER';
 
 interface FormErrors {
-  first_name?: string;
-  last_name?:  string;
-  phone?:      string;
-  email?:      string;
-  address?:    string;
-  city?:       string;
-  province?:   string;
-  general?:    string;
+  first_name?:          string;
+  last_name?:           string;
+  phone?:               string;
+  email?:               string;
+  address?:             string;
+  city?:                string;
+  province?:            string;
+  custom_contact_type?: string;
+  general?:             string;
 }
 
 interface FormData {
-  contact_type:      ContactType;
-  first_name:        string;
-  last_name:         string;
-  middle_name:       string;
-  organization_name: string;
-  specialty:         string;
-  license_number:    string;
-  email:             string;
-  phone:             string;
-  alternative_phone: string;
-  address:           string;
-  city:              string;
-  province:          string;
-  postal_code:       string;
-  notes:             string;
-  website:           string;
-  is_active:         boolean;
-  is_preferred:      boolean;
+  contact_type:         ContactType;
+  custom_contact_type:  string;
+  first_name:           string;
+  last_name:            string;
+  middle_name:          string;
+  organization_name:    string;
+  specialty:            string;
+  license_number:       string;
+  email:                string;
+  phone:                string;
+  alternative_phone:    string;
+  address:              string;
+  city:                 string;
+  province:             string;
+  postal_code:          string;
+  notes:                string;
+  website:              string;
+  is_active:            boolean;
+  is_preferred:         boolean;
 }
 
 const CONTACT_TYPES: { value: ContactType; label: string }[] = [
@@ -90,24 +92,25 @@ const SectionTitle: React.FC<{
 
 /* ── Build form state from contact ─────────────────────── */
 const buildForm = (c: Contact): FormData => ({
-  contact_type:      (c.contact_type as ContactType) ?? 'OTHER',
-  first_name:        c.first_name        ?? '',
-  last_name:         c.last_name         ?? '',
-  middle_name:       c.middle_name       ?? '',
-  organization_name: c.organization_name ?? '',
-  specialty:         c.specialty         ?? '',
-  license_number:    c.license_number    ?? '',
-  email:             c.email             ?? '',
-  phone:             c.phone ? formatPHPhone(c.phone) : '',
-  alternative_phone: c.alternative_phone ? formatPHPhone(c.alternative_phone) : '',
-  address:           c.address           ?? '',
-  city:              c.city              ?? '',
-  province:          c.province          ?? '',
-  postal_code:       c.postal_code       ?? '',
-  notes:             c.notes             ?? '',
-  website:           c.website           ?? '',
-  is_active:         c.is_active,
-  is_preferred:      c.is_preferred,
+  contact_type:        (c.contact_type as ContactType) ?? 'OTHER',
+  custom_contact_type: c.custom_contact_type ?? '',
+  first_name:          c.first_name        ?? '',
+  last_name:           c.last_name         ?? '',
+  middle_name:         c.middle_name       ?? '',
+  organization_name:   c.organization_name ?? '',
+  specialty:           c.specialty         ?? '',
+  license_number:      c.license_number    ?? '',
+  email:               c.email             ?? '',
+  phone:               c.phone ? formatPHPhone(c.phone) : '',
+  alternative_phone:   c.alternative_phone ? formatPHPhone(c.alternative_phone) : '',
+  address:             c.address           ?? '',
+  city:                c.city              ?? '',
+  province:            c.province          ?? '',
+  postal_code:         c.postal_code       ?? '',
+  notes:               c.notes             ?? '',
+  website:             c.website           ?? '',
+  is_active:           c.is_active,
+  is_preferred:        c.is_preferred,
 });
 
 /* ── Component ──────────────────────────────────────────── */
@@ -138,6 +141,8 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
 
     if (!formData.first_name.trim()) e.first_name = 'First name is required';
     if (!formData.last_name.trim())  e.last_name  = 'Last name is required';
+    if (formData.contact_type === 'OTHER' && !formData.custom_contact_type.trim())
+      e.custom_contact_type = 'Please enter a contact type.';
 
     if (formData.phone.trim()) {
       const phoneErr = validatePHPhoneDetailed(formData.phone, false);
@@ -147,10 +152,6 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
     const emailValue = formData.email ?? '';
     const emailErr = validateEmailDetailed(emailValue);
     if (emailErr) e.email = emailErr;
-
-    if (!formData.address.trim())  {}  // address is optional
-    if (!formData.city.trim())     {}  // city is optional
-    if (!formData.province.trim()) {}  // province is optional
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -255,7 +256,10 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
                     <Label required>Contact Type</Label>
                     <select
                       value={formData.contact_type}
-                      onChange={e => set('contact_type', e.target.value as ContactType)}
+                      onChange={e => {
+                        set('contact_type', e.target.value as ContactType);
+                        if (e.target.value !== 'OTHER') set('custom_contact_type', '');
+                      }}
                       className={selectCls}
                     >
                       {CONTACT_TYPES.map(o => (
@@ -263,6 +267,21 @@ export const EditContactModal: React.FC<EditContactModalProps> = ({
                       ))}
                     </select>
                   </div>
+
+                  {/* Custom Contact Type — shown only when OTHER is selected */}
+                  {formData.contact_type === 'OTHER' && (
+                    <div>
+                      <Label required>Specify Contact Type</Label>
+                      <input
+                        type="text"
+                        value={formData.custom_contact_type}
+                        onChange={e => set('custom_contact_type', e.target.value)}
+                        placeholder="Enter custom contact type"
+                        className={inputCls(!!errors.custom_contact_type)}
+                      />
+                      <FieldError msg={errors.custom_contact_type} />
+                    </div>
+                  )}
 
                   {/* First Name */}
                   <div>

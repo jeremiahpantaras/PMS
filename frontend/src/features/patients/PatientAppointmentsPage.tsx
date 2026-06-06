@@ -20,6 +20,98 @@ import {
 } from './patientProfile.utils.tsx';
 import type { Appointment } from '@/types';
 
+// ─── Time Formatter ──────────────────────────────────────────────────────────
+/** Converts a "HH:MM" or "HH:MM:SS" string to 12-hour format, e.g. "2:30 PM" */
+const formatTime12h = (time: string): string => {
+  if (!time) return time;
+  const [hourStr, minuteStr] = time.split(':');
+  const hour = parseInt(hourStr, 10);
+  const minute = minuteStr ?? '00';
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minute} ${period}`;
+};
+
+// ─── Status Card Style Config ────────────────────────────────────────────────
+// Pure presentation mapping — no business logic.
+
+interface CardStatusStyle {
+  borderLeft: string;
+  background: string;
+  badgeBg: string;
+  badgeColor: string;
+}
+
+const ARRIVAL_STATUS_CARD_STYLES: Record<string, CardStatusStyle> = {
+  ARRIVED: {
+    borderLeft: '4px solid #7C3AED',
+    background: '#F5F3FF',
+    badgeBg: '#EDE9FE',
+    badgeColor: '#6D28D9',
+  },
+  DNA: {
+    borderLeft: '4px solid #DC2626',
+    background: '#FEF2F2',
+    badgeBg: '#FEE2E2',
+    badgeColor: '#B91C1C',
+  },
+};
+
+const APPOINTMENT_STATUS_CARD_STYLES: Record<string, CardStatusStyle> = {
+  COMPLETED: {
+    borderLeft: '4px solid #16A34A',
+    background: '#F0FDF4',
+    badgeBg: '#DCFCE7',
+    badgeColor: '#15803D',
+  },
+  CONFIRMED: {
+    borderLeft: '4px solid #2563EB',
+    background: '#EFF6FF',
+    badgeBg: '#DBEAFE',
+    badgeColor: '#1D4ED8',
+  },
+  CANCELLED: {
+    borderLeft: '4px solid #6B7280',
+    background: '#F9FAFB',
+    badgeBg: '#F3F4F6',
+    badgeColor: '#374151',
+  },
+  NO_SHOW: {
+    borderLeft: '4px solid #6B7280',
+    background: '#F9FAFB',
+    badgeBg: '#F3F4F6',
+    badgeColor: '#374151',
+  },
+  IN_PROGRESS: {
+    borderLeft: '4px solid #EAB308',
+    background: '#FEFCE8',
+    badgeBg: '#FEF9C3',
+    badgeColor: '#A16207',
+  },
+  CHECKED_IN: {
+    borderLeft: '4px solid #EA580C',
+    background: '#FFF7ED',
+    badgeBg: '#FFEDD5',
+    badgeColor: '#C2410C',
+  },
+};
+
+/**
+ * Returns card style based on arrival_status first, then falls back
+ * to appointment.status, then returns null (no tint = NO_STATUS default).
+ */
+const getCardStatusStyle = (appointment: Appointment, hasClinicalNote: boolean): CardStatusStyle | null => {
+  // arrival_status takes highest priority for visual identity
+  if (appointment.arrival_status === 'ARRIVED') return ARRIVAL_STATUS_CARD_STYLES.ARRIVED;
+  if (appointment.arrival_status === 'DNA')     return ARRIVAL_STATUS_CARD_STYLES.DNA;
+
+  // Clinical note = completed visit
+  if (hasClinicalNote) return APPOINTMENT_STATUS_CARD_STYLES.COMPLETED;
+
+  // Fallback to appointment.status
+  return APPOINTMENT_STATUS_CARD_STYLES[appointment.status] ?? null;
+};
+
 type AppointmentFilter = 'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED' | 'UNFINISHED';
 const APPOINTMENTS_PER_PAGE = 8;
 
@@ -49,6 +141,23 @@ const AppointmentRow = ({
   onClick,
 }: AppointmentRowProps) => {
   const statusConfig = getSimplifiedAppointmentStatus(appointment, hasClinicalNote);
+  const cardStyle   = getCardStatusStyle(appointment, hasClinicalNote);
+
+  // Build the card's inline styles — applied on top of Tailwind base classes
+  const cardInlineStyle: React.CSSProperties = {
+    paddingLeft: isSelectableForCancellation ? '2.5rem' : '1rem',
+    ...(cardStyle && !isSelected
+      ? {
+          borderLeft: cardStyle.borderLeft,
+          background: cardStyle.background,
+        }
+      : {}),
+  };
+
+  // Badge inline style — overrides the color pair from statusConfig when we have a cardStyle
+  const badgeInlineStyle: React.CSSProperties = cardStyle
+    ? { background: cardStyle.badgeBg, color: cardStyle.badgeColor }
+    : {};
 
   return (
     <div className="relative">
@@ -72,12 +181,16 @@ const AppointmentRow = ({
       <button
         type="button"
         onClick={() => onClick(appointment)}
-        className={`w-full text-left flex items-center gap-4 px-4 py-3 rounded-lg border border-gray-200 hover:border-sky-300 hover:bg-sky-50/40 transition-all group ${
+        className={`w-full text-left flex items-center gap-4 px-4 py-3 rounded-lg border hover:border-sky-300 hover:brightness-95 transition-all group ${
           isSelectableForCancellation
-            ? (isSelected ? 'bg-sky-50 border-sky-300' : 'bg-white')
-            : 'bg-gray-50 opacity-60'
+            ? isSelected
+              ? 'bg-sky-50 border-sky-300'
+              : cardStyle
+                ? 'border-transparent'
+                : 'bg-white border-gray-200'
+            : 'border-gray-200 opacity-60'
         }`}
-        style={{ paddingLeft: isSelectableForCancellation ? '2.5rem' : '1rem' }}
+        style={cardInlineStyle}
       >
         <div className="shrink-0 w-11 text-center">
           <p className="text-[10px] font-bold text-gray-400 uppercase leading-none">
@@ -94,15 +207,20 @@ const AppointmentRow = ({
             <p className="text-sm font-semibold text-gray-900 truncate">
               {APPOINTMENT_TYPE_LABELS[appointment.appointment_type] || appointment.appointment_type}
             </p>
-            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${statusConfig.color}`}>
-              {statusConfig.icon}
+            <span
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+              style={cardStyle ? badgeInlineStyle : undefined}
+            >
+              {/* When no cardStyle override, fall back to statusConfig Tailwind classes */}
+              {!cardStyle && <span className={`inline-flex items-center gap-1 ${statusConfig.color}`}>{statusConfig.icon}</span>}
+              {cardStyle && statusConfig.icon}
               {statusConfig.label}
             </span>
           </div>
 
           <p className="text-xs text-gray-500 mt-0.5 truncate">
             <Clock className="w-3 h-3 inline mr-1" />
-            {appointment.start_time} – {appointment.end_time}
+            {formatTime12h(appointment.start_time)} – {formatTime12h(appointment.end_time)}
             {appointment.practitioner_name && <> • {appointment.practitioner_name}</>}
           </p>
 

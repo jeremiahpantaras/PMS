@@ -29,6 +29,17 @@ const formatDateTime = (dateString: string) => {
   });
 };
 
+/** Converts a "HH:MM" or "HH:MM:SS" string to 12-hour format, e.g. "2:30 PM" */
+const formatTime12h = (time: string): string => {
+  if (!time) return time;
+  const [hourStr, minuteStr] = time.split(':');
+  const hour = parseInt(hourStr, 10);
+  const minute = minuteStr ?? '00';
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minute} ${period}`;
+};
+
 const APPOINTMENT_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
   SCHEDULED:   { label: 'Scheduled',   color: 'text-blue-700',   bgColor: 'bg-blue-50',   icon: <Clock className="w-3.5 h-3.5" /> },
   CONFIRMED:   { label: 'Confirmed',   color: 'text-sky-700',    bgColor: 'bg-sky-50',    icon: <CheckCircle className="w-3.5 h-3.5" /> },
@@ -238,7 +249,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
                   <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {appointment.start_time} – {appointment.end_time}
+                      {formatTime12h(appointment.start_time)} – {formatTime12h(appointment.end_time)}
                     </span>
                     {appointment.practitioner_name && (
                       <span className="flex items-center gap-1">
@@ -297,7 +308,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
                   <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                     {[
                       { label: 'Date', value: formatDate(appointment.date) },
-                      { label: 'Time', value: `${appointment.start_time} – ${appointment.end_time} (${appointment.duration_minutes} min)` },
+                      { label: 'Time', value: `${formatTime12h(appointment.start_time)} – ${formatTime12h(appointment.end_time)} (${appointment.duration_minutes} min)` },
                       { label: 'Type', value: appointmentTypeLabel },
                     ].map(({ label, value }) => (
                       <div key={label}>

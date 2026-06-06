@@ -2,44 +2,58 @@ import React from 'react';
 import {
   X, Star, Phone, Mail, MapPin, Briefcase,
   Building2, Globe, Hash, Archive, CheckCircle, Edit,
-  Send,
+  Send, UserPlus, FileText,
 } from 'lucide-react';
 import type { Contact } from '@/types';
 
 interface ViewContactModalProps {
-  isOpen:   boolean;
-  onClose:  () => void;
-  contact:  Contact | null;
-  onEdit:   (contact: Contact) => void;
-  onTogglePreferred?: (contact: Contact) => void;
-  onToggleActive?:    (contact: Contact) => void;
+  isOpen:              boolean;
+  onClose:             () => void;
+  contact:             Contact | null;
+  onEdit:              (contact: Contact) => void;
+  onTogglePreferred?:  (contact: Contact) => void;
+  onToggleActive?:     (contact: Contact) => void;
   onSendEmail?:        (contact: Contact) => void;
 }
 
 const TYPE_COLORS: Record<string, string> = {
   DOCTOR:       'bg-blue-100   text-blue-700',
   PRACTITIONER: 'bg-green-100  text-green-700',
-  CLINIC:       'bg-sky-100 text-sky-700',
+  CLINIC:       'bg-sky-100    text-sky-700',
   LABORATORY:   'bg-yellow-100 text-yellow-700',
   PHARMACY:     'bg-pink-100   text-pink-700',
   SUPPLIER:     'bg-orange-100 text-orange-700',
   OTHER:        'bg-gray-100   text-gray-700',
 };
 
+/** Always renders — shows "None" when value is empty/null */
 const InfoRow: React.FC<{ icon: React.ReactNode; label: string; value?: string | null }> = ({
   icon, label, value,
 }) => {
-  if (!value) return null;
+  const isEmpty = !value || !value.trim();
   return (
     <div className="flex items-start gap-2.5">
-      <span className="mt-0.5 flex-shrink-0 text-sky-400">{icon}</span>
+      <span className={`mt-0.5 flex-shrink-0 ${isEmpty ? 'text-gray-300' : 'text-sky-400'}`}>
+        {icon}
+      </span>
       <div>
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-        <p className="text-sm text-gray-800 font-medium">{value}</p>
+        <p className={`text-sm font-medium ${isEmpty ? 'text-gray-300 italic' : 'text-gray-800'}`}>
+          {isEmpty ? 'None' : value}
+        </p>
       </div>
     </div>
   );
 };
+
+const SectionTitle: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({
+  icon, children,
+}) => (
+  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
+    {icon}
+    {children}
+  </p>
+);
 
 export const ViewContactModal: React.FC<ViewContactModalProps> = ({
   isOpen, onClose, contact, onEdit, onTogglePreferred, onToggleActive, onSendEmail,
@@ -48,6 +62,7 @@ export const ViewContactModal: React.FC<ViewContactModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
+      {/* Backdrop */}
       <div
         className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
@@ -55,7 +70,7 @@ export const ViewContactModal: React.FC<ViewContactModalProps> = ({
 
       <div className="flex min-h-full items-center justify-center p-4">
         <div
-          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
           onClick={e => e.stopPropagation()}
         >
           {/* Top accent */}
@@ -85,6 +100,11 @@ export const ViewContactModal: React.FC<ViewContactModalProps> = ({
                       : <><Archive className="w-3 h-3" />Archived</>
                     }
                   </span>
+                  {contact.is_preferred && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-yellow-600">
+                      <Star className="w-3 h-3 fill-yellow-500" />Preferred
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -97,7 +117,7 @@ export const ViewContactModal: React.FC<ViewContactModalProps> = ({
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
             {/* Contact Number */}
             <div className="flex items-center gap-2 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2">
@@ -107,57 +127,134 @@ export const ViewContactModal: React.FC<ViewContactModalProps> = ({
               </span>
             </div>
 
-            {/* Professional */}
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                <Briefcase className="w-3 h-3" /> Professional
-              </p>
+            {/* Two-column layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+
+              {/* ── LEFT — Personal Information ── */}
               <div className="space-y-3">
-                <InfoRow icon={<Building2 className="w-3.5 h-3.5" />}  label="Organization"    value={contact.organization_name} />
-                <InfoRow icon={<Briefcase  className="w-3.5 h-3.5" />} label="Specialty"       value={contact.specialty}         />
-                <InfoRow icon={<Hash       className="w-3.5 h-3.5" />} label="License Number"  value={contact.license_number}    />
-                <InfoRow icon={<Globe      className="w-3.5 h-3.5" />} label="Website"         value={contact.website}           />
+                <SectionTitle icon={<UserPlus className="w-3 h-3" />}>
+                  Personal Information
+                </SectionTitle>
+                <InfoRow
+                  icon={<UserPlus className="w-3.5 h-3.5" />}
+                  label="First Name"
+                  value={contact.first_name}
+                />
+                <InfoRow
+                  icon={<UserPlus className="w-3.5 h-3.5" />}
+                  label="Middle Name"
+                  value={contact.middle_name}
+                />
+                <InfoRow
+                  icon={<UserPlus className="w-3.5 h-3.5" />}
+                  label="Last Name"
+                  value={contact.last_name}
+                />
+                <InfoRow
+                  icon={<Building2 className="w-3.5 h-3.5" />}
+                  label="Organization / Clinic Name"
+                  value={contact.organization_name}
+                />
+              </div>
+
+              {/* ── RIGHT — Professional Details ── */}
+              <div className="space-y-3">
+                <SectionTitle icon={<Briefcase className="w-3 h-3" />}>
+                  Professional Details
+                </SectionTitle>
+                <InfoRow
+                  icon={<Briefcase className="w-3.5 h-3.5" />}
+                  label="Specialty"
+                  value={contact.specialty}
+                />
+                <InfoRow
+                  icon={<Hash className="w-3.5 h-3.5" />}
+                  label="License Number"
+                  value={contact.license_number}
+                />
+                <InfoRow
+                  icon={<Globe className="w-3.5 h-3.5" />}
+                  label="Website"
+                  value={contact.website}
+                />
               </div>
             </div>
 
-            {/* Contact Details */}
+            {/* ── Contact Details (full width) ── */}
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                <Phone className="w-3 h-3" /> Contact Details
-              </p>
-              <div className="space-y-3">
-                <InfoRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone"             value={contact.phone}             />
-                <InfoRow icon={<Phone className="w-3.5 h-3.5" />} label="Alternative Phone" value={contact.alternative_phone} />
-                <InfoRow icon={<Mail  className="w-3.5 h-3.5" />} label="Email"             value={contact.email}             />
+              <SectionTitle icon={<Phone className="w-3 h-3" />}>
+                Contact Details
+              </SectionTitle>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                <InfoRow
+                  icon={<Phone className="w-3.5 h-3.5" />}
+                  label="Phone Number"
+                  value={contact.phone}
+                />
+                <InfoRow
+                  icon={<Phone className="w-3.5 h-3.5" />}
+                  label="Alternative Phone"
+                  value={contact.alternative_phone}
+                />
+                <InfoRow
+                  icon={<Mail className="w-3.5 h-3.5" />}
+                  label="Email Address"
+                  value={contact.email}
+                />
               </div>
             </div>
 
-            {/* Address */}
+            {/* ── Address (full width) ── */}
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                <MapPin className="w-3 h-3" /> Address
-              </p>
-              <div className="space-y-3">
-                <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="Street"      value={contact.address}     />
-                <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="City"        value={contact.city}        />
-                <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="Province"    value={contact.province}    />
-                <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="Postal Code" value={contact.postal_code} />
+              <SectionTitle icon={<MapPin className="w-3 h-3" />}>
+                Address
+              </SectionTitle>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                <div className="md:col-span-2">
+                  <InfoRow
+                    icon={<MapPin className="w-3.5 h-3.5" />}
+                    label="Street Address"
+                    value={contact.address}
+                  />
+                </div>
+                <InfoRow
+                  icon={<MapPin className="w-3.5 h-3.5" />}
+                  label="Province"
+                  value={contact.province}
+                />
+                <InfoRow
+                  icon={<MapPin className="w-3.5 h-3.5" />}
+                  label="City / Municipality"
+                  value={contact.city}
+                />
+                <InfoRow
+                  icon={<MapPin className="w-3.5 h-3.5" />}
+                  label="Postal Code"
+                  value={contact.postal_code}
+                />
               </div>
             </div>
 
-            {/* Notes */}
-            {contact.notes && (
-              <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Notes</p>
-                <p className="text-sm text-gray-700 leading-relaxed">{contact.notes}</p>
+            {/* ── Notes ── */}
+            <div>
+              <SectionTitle icon={<FileText className="w-3 h-3" />}>
+                Notes
+              </SectionTitle>
+              <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 min-h-[48px]">
+                {contact.notes ? (
+                  <p className="text-sm text-gray-700 leading-relaxed">{contact.notes}</p>
+                ) : (
+                  <p className="text-sm text-gray-300 italic">None</p>
+                )}
               </div>
-            )}
+            </div>
+
           </div>
 
           {/* Footer */}
           <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/80">
             <div className="grid grid-cols-2 gap-3">
-              {/* Left side - Action buttons */}
+              {/* Left side — Action buttons */}
               <div className="flex flex-wrap gap-2">
                 {onToggleActive && (
                   <button
@@ -201,7 +298,7 @@ export const ViewContactModal: React.FC<ViewContactModalProps> = ({
                 )}
               </div>
 
-              {/* Right side - Edit button */}
+              {/* Right side — Edit button */}
               <button
                 type="button"
                 onClick={() => onEdit(contact)}

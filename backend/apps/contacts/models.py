@@ -23,6 +23,7 @@ class Contact(TimeStampedModel):
     # Contact Information
     contact_number = models.CharField(max_length=20, unique=True, editable=False)
     contact_type = models.CharField(max_length=20, choices=CONTACT_TYPE_CHOICES, default='OTHER')
+    custom_contact_type = models.CharField(max_length=100, blank=True, default='')
     
     # Personal/Organization Info
     first_name = models.CharField(max_length=100)
@@ -61,8 +62,15 @@ class Contact(TimeStampedModel):
             models.Index(fields=['contact_type']),
         ]
 
+    @property
+    def display_contact_type(self):
+        """Returns custom_contact_type when type is OTHER, otherwise the human label."""
+        if self.contact_type == 'OTHER' and self.custom_contact_type:
+            return self.custom_contact_type
+        return self.get_contact_type_display()
+
     def __str__(self):
-        return f"{self.full_name} - {self.get_contact_type_display()}"
+        return f"{self.full_name} - {self.display_contact_type}"
 
     @property
     def full_name(self):

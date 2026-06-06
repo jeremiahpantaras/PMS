@@ -403,16 +403,22 @@ class PortalLinkPublicSerializer(serializers.ModelSerializer):
 
 
 class PortalLinkAdminSerializer(serializers.ModelSerializer):
-    portal_url = serializers.SerializerMethodField()
+    portal_url   = serializers.SerializerMethodField()
+    # Clinic display data — used by the branded QR PNG export card
+    clinic_name    = serializers.CharField(source='clinic.name',    read_only=True)
+    clinic_city    = serializers.CharField(source='clinic.city',    read_only=True)
+    clinic_address = serializers.CharField(source='clinic.address', read_only=True)
 
     class Meta:
         model  = PortalLink
         fields = [
             'id', 'clinic', 'token', 'heading',
             'description', 'is_active', 'portal_url',
+            'clinic_name', 'clinic_city', 'clinic_address',
             'created_at',
         ]
-        read_only_fields = ['id', 'clinic', 'token', 'created_at']
+        read_only_fields = ['id', 'clinic', 'token', 'created_at',
+                            'clinic_name', 'clinic_city', 'clinic_address']
 
     def get_portal_url(self, obj) -> str:
         request = self.context.get('request')

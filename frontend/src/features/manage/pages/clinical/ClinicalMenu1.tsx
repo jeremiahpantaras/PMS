@@ -7,17 +7,65 @@ import {
 import toast from 'react-hot-toast';
 import { axiosInstance as apiClient } from '@/lib/axios';
 
+// ── Bundled logo (Vite resolves this at build time) ──────────────────────────
+import malasakitLogo from '@/assets/malasakit/Primary Logo - Colored.png';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PortalLink {
-  id:          number;
-  clinic:      number;
-  token:       string;
-  heading:     string;
-  description: string;
-  is_active:   boolean;
-  portal_url:  string;
-  created_at:  string;
+  id:             number;
+  clinic:         number;
+  token:          string;
+  heading:        string;
+  description:    string;
+  is_active:      boolean;
+  portal_url:     string;
+  clinic_name:    string;
+  clinic_city:    string;
+  clinic_address: string;
+  created_at:     string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Load an image URL into an HTMLImageElement (handles CORS gracefully). */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => resolve(img);
+    img.onerror = reject;
+    img.src     = src;
+  });
+}
+
+/**
+ * Draw wrapped text on a canvas context.
+ * Returns the y-position after the last line drawn.
+ */
+function drawWrappedText(
+  ctx:       CanvasRenderingContext2D,
+  text:      string,
+  x:         number,
+  y:         number,
+  maxWidth:  number,
+  lineHeight:number,
+): number {
+  const words = text.split(' ');
+  let line = '';
+  let curY  = y;
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, curY);
+      line = word;
+      curY += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, curY);
+  return curY + lineHeight;
 }
 
 // ─── Confirmation modal ───────────────────────────────────────────────────────
@@ -30,16 +78,8 @@ interface RegenerateModalProps {
 
 const RegenerateModal: React.FC<RegenerateModalProps> = ({ onCancel, onConfirm, loading }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-    {/* Backdrop */}
-    <div
-      className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-      onClick={onCancel}
-    />
-
-    {/* Dialog */}
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5">
-
-      {/* Close button */}
       <button
         onClick={onCancel}
         disabled={loading}
@@ -47,8 +87,6 @@ const RegenerateModal: React.FC<RegenerateModalProps> = ({ onCancel, onConfirm, 
       >
         <X className="w-4 h-4" />
       </button>
-
-      {/* Icon + heading */}
       <div className="flex items-start gap-4">
         <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
           <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -62,8 +100,6 @@ const RegenerateModal: React.FC<RegenerateModalProps> = ({ onCancel, onConfirm, 
           </p>
         </div>
       </div>
-
-      {/* Actions */}
       <div className="flex gap-2 justify-end pt-1">
         <button
           onClick={onCancel}
@@ -92,18 +128,18 @@ const RegenerateModal: React.FC<RegenerateModalProps> = ({ onCancel, onConfirm, 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export const ClinicalMenu1: React.FC = () => {
-  const [portalLink,  setPortalLink]  = useState<PortalLink | null>(null);
-  const [loading,     setLoading]     = useState(true);
-  const [creating,    setCreating]    = useState(false);
-  const [copied,      setCopied]      = useState(false);
-  const [showModal,   setShowModal]   = useState(false);
-  const [regenerating,setRegenerating]= useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [portalLink,   setPortalLink]   = useState<PortalLink | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [creating,     setCreating]     = useState(false);
+  const [copied,       setCopied]       = useState(false);
+  const [showModal,    setShowModal]    = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [downloading,  setDownloading]  = useState(false);
 
-  // QR wrapper ref — used to snapshot the SVG for PNG download
+  // QR wrapper ref — used to extract the SVG for PNG export
   const qrWrapperRef = useRef<HTMLDivElement>(null);
 
-  // ── Derived booking URL (always relative to frontend origin) ─────────────
+  // ── Derived booking URL ──────────────────────────────────────────────────
   const bookingUrl = portalLink
     ? `${window.location.origin}/portal/${portalLink.token}`
     : null;
@@ -120,9 +156,7 @@ export const ClinicalMenu1: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchPortalLink();
-  }, [fetchPortalLink]);
+  useEffect(() => { fetchPortalLink(); }, [fetchPortalLink]);
 
   // ── Create portal link (first-time) ─────────────────────────────────────
   const handleCreate = async () => {
@@ -188,51 +222,171 @@ export const ClinicalMenu1: React.FC = () => {
     }
   };
 
-  // ── Download QR as PNG ───────────────────────────────────────────────────
+  // ── Download branded QR card as PNG ─────────────────────────────────────
+  //
+  // Layout (1080 × 1350 px — portrait, social + print friendly):
+  //
+  //   ┌───────────────────────────┐
+  //   │        TOP PADDING        │
+  //   │       [ QR CODE ]         │  ~78% card width
+  //   │                           │
+  //   │     Clinic Name           │  semi-bold, dark
+  //   │     City / Address        │  regular, medium gray
+  //   │                           │
+  //   │  [Malasakit Logo]         │  centered
+  //   │  QR Generated by…         │  small caption
+  //   └───────────────────────────┘
+  //
   const handleDownload = async () => {
-    if (!qrWrapperRef.current || !portalLink) return;
+    if (!qrWrapperRef.current || !portalLink || !bookingUrl) return;
     setDownloading(true);
+
     try {
-      // Locate the <svg> rendered by QRCodeSVG
+      // ── 1. Card dimensions (portrait, Instagram 4:5) ──────────────────
+      const W = 1080;
+      const H = 1350;
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+
+      // ── 2. Background — clean white with very subtle warm tint ────────
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, W, H);
+
+      // ── 3. Render QR code onto an offscreen canvas via SVG ────────────
       const svgEl = qrWrapperRef.current.querySelector('svg');
       if (!svgEl) throw new Error('QR SVG not found');
 
-      const SCALE  = 4;                           // 4× for print quality
-      const SIZE   = 256;                         // logical size used in the SVG
-      const CANVAS_SIZE = SIZE * SCALE;           // 1024 px → crisp on paper
+      const QR_DISPLAY = Math.round(W * 0.74);   // 74% of card width ≈ 800px
+      const QR_X       = (W - QR_DISPLAY) / 2;
+      const QR_Y       = 100;                     // top padding
 
-      const canvas  = document.createElement('canvas');
-      canvas.width  = CANVAS_SIZE;
-      canvas.height = CANVAS_SIZE;
-      const ctx     = canvas.getContext('2d')!;
+      // Stamp a white rounded background behind the QR
+      const QR_PAD = 24;
+      ctx.save();
+      ctx.beginPath();
+      const rx = QR_X - QR_PAD;
+      const ry = QR_Y - QR_PAD;
+      const rw = QR_DISPLAY + QR_PAD * 2;
+      const rh = QR_DISPLAY + QR_PAD * 2;
+      const radius = 24;
+      ctx.moveTo(rx + radius, ry);
+      ctx.lineTo(rx + rw - radius, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
+      ctx.lineTo(rx + rw, ry + rh - radius);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
+      ctx.lineTo(rx + radius, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
+      ctx.lineTo(rx, ry + radius);
+      ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowColor   = 'rgba(0,0,0,0.06)';
+      ctx.shadowBlur    = 30;
+      ctx.shadowOffsetY = 8;
+      ctx.fill();
+      ctx.restore();
 
-      // White background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+      // Rasterize SVG at the target QR size
+      const svgData = new XMLSerializer().serializeToString(svgEl);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl  = URL.createObjectURL(svgBlob);
+      const qrImg   = await loadImage(svgUrl);
+      URL.revokeObjectURL(svgUrl);
+      ctx.drawImage(qrImg, QR_X, QR_Y, QR_DISPLAY, QR_DISPLAY);
 
-      // Serialize SVG → data URL → Image
-      const svgData  = new XMLSerializer().serializeToString(svgEl);
-      const svgBlob  = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const svgUrl   = URL.createObjectURL(svgBlob);
-      const img      = new Image();
+      // ── 4. Divider line ───────────────────────────────────────────────
+      const textStartY = QR_Y + QR_DISPLAY + 60;
 
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
-          URL.revokeObjectURL(svgUrl);
-          resolve();
-        };
-        img.onerror = reject;
-        img.src     = svgUrl;
-      });
+      ctx.save();
+      ctx.strokeStyle = '#F3F4F6';
+      ctx.lineWidth   = 1.5;
+      const divX = W * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(divX, textStartY - 30);
+      ctx.lineTo(W - divX, textStartY - 30);
+      ctx.stroke();
+      ctx.restore();
 
-      // Trigger download
+      // ── 5. Clinic name ────────────────────────────────────────────────
+      const clinicName = portalLink.clinic_name || portalLink.heading || 'Your Clinic';
+      ctx.save();
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle    = '#111827';  // gray-900
+      ctx.font         = '600 52px -apple-system, "Inter", "Helvetica Neue", Arial, sans-serif';
+      let curY = drawWrappedText(ctx, clinicName, W / 2, textStartY, W * 0.78, 64);
+      ctx.restore();
+
+      // ── 6. Branch / city line ─────────────────────────────────────────
+      const locationLine = (() => {
+        const city = (portalLink.clinic_city || '').trim();
+        const addr = (portalLink.clinic_address || '').trim();
+        // Prefer city; fall back to first segment of address; fall back to 'Main Branch'
+        if (city) return city;
+        if (addr) return addr.split(',')[0].trim();
+        return 'Main Branch';
+      })();
+
+      ctx.save();
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle    = '#6B7280';  // gray-500
+      ctx.font         = '400 38px -apple-system, "Inter", "Helvetica Neue", Arial, sans-serif';
+      curY = drawWrappedText(ctx, locationLine, W / 2, curY + 12, W * 0.70, 50);
+      ctx.restore();
+
+      // ── 7. Footer divider ─────────────────────────────────────────────
+      const footerAreaTop = H - 260;
+
+      ctx.save();
+      ctx.strokeStyle = '#F3F4F6';
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(divX, footerAreaTop);
+      ctx.lineTo(W - divX, footerAreaTop);
+      ctx.stroke();
+      ctx.restore();
+
+      // ── 8. Malasakit logo ─────────────────────────────────────────────
+      try {
+        const logoImg = await loadImage(malasakitLogo);
+        // Scale logo to a comfortable width, preserving aspect ratio
+        const LOGO_W = 280;
+        const LOGO_H = Math.round((logoImg.naturalHeight / logoImg.naturalWidth) * LOGO_W);
+        const logoX  = (W - LOGO_W) / 2;
+        const logoY  = footerAreaTop + 30;
+        ctx.drawImage(logoImg, logoX, logoY, LOGO_W, LOGO_H);
+
+        // ── 9. "QR Generated by Malasakit" caption ────────────────────
+        ctx.save();
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle    = '#9CA3AF';  // gray-400
+        ctx.font         = '400 28px -apple-system, "Inter", "Helvetica Neue", Arial, sans-serif';
+        ctx.fillText('QR Generated by Malasakit', W / 2, logoY + LOGO_H + 20);
+        ctx.restore();
+      } catch {
+        // Logo failed to load — still draw the caption
+        ctx.save();
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle    = '#9CA3AF';
+        ctx.font         = '400 28px -apple-system, "Inter", "Helvetica Neue", Arial, sans-serif';
+        ctx.fillText('QR Generated by Malasakit', W / 2, footerAreaTop + 60);
+        ctx.restore();
+      }
+
+      // ── 10. Trigger PNG download ──────────────────────────────────────
+      const safeName   = (portalLink.clinic_name || 'clinic').replace(/[^a-z0-9]/gi, '-').toLowerCase();
       const link       = document.createElement('a');
-      link.download    = `patient-portal-qr-${portalLink.token.slice(0, 8)}.png`;
+      link.download    = `${safeName}-qr-code.png`;
       link.href        = canvas.toDataURL('image/png');
       link.click();
 
-      toast.success('QR code downloaded as PNG!');
+      toast.success('QR card downloaded as PNG!');
     } catch (err) {
       console.error('QR download failed:', err);
       toast.error('Failed to download QR code. Please try again.');
@@ -263,7 +417,6 @@ export const ClinicalMenu1: React.FC = () => {
             <div className="h-9 w-28 bg-gray-100 rounded-lg animate-pulse" />
           </div>
         </div>
-        {/* QR skeleton */}
         <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 space-y-4">
           <div className="h-3 w-40 bg-gray-100 rounded animate-pulse" />
           <div className="w-48 h-48 bg-gray-100 rounded-xl animate-pulse mx-auto" />
@@ -310,7 +463,6 @@ export const ClinicalMenu1: React.FC = () => {
   // ── Portal link exists ───────────────────────────────────────────────────
   return (
     <>
-      {/* ── Regenerate confirmation modal ─────────────────────────────────── */}
       {showModal && (
         <RegenerateModal
           onCancel={() => setShowModal(false)}
@@ -333,16 +485,10 @@ export const ClinicalMenu1: React.FC = () => {
                 Share this link so patients can book appointments online.
               </p>
             </div>
-
-            {/* Active badge */}
             <div className="ml-auto">
-              <span
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                  portalLink.is_active
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-600'
-                }`}
-              >
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
+                portalLink.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+              }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${
                   portalLink.is_active ? 'bg-green-500' : 'bg-red-500'
                 }`} />
@@ -357,29 +503,20 @@ export const ClinicalMenu1: React.FC = () => {
           <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
             Booking URL
           </p>
-
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
             <Link2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="flex-1 text-sm text-gray-700 font-mono break-all select-all">
               {bookingUrl}
             </span>
           </div>
-
           <div className="flex flex-wrap gap-2">
-            {/* Copy */}
             <button
               id="btn-copy-booking-link"
               onClick={handleCopy}
               className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors"
             >
-              {copied ? (
-                <><Check className="w-4 h-4" /> Copied!</>
-              ) : (
-                <><Copy className="w-4 h-4" /> Copy Link</>
-              )}
+              {copied ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy Link</>}
             </button>
-
-            {/* Open */}
             <a
               href={bookingUrl!}
               target="_blank"
@@ -390,7 +527,6 @@ export const ClinicalMenu1: React.FC = () => {
               Open Portal
             </a>
           </div>
-
           <p className="text-xs text-gray-400">
             🔒 This link is permanent. Share it with patients to let them book appointments.
           </p>
@@ -399,7 +535,6 @@ export const ClinicalMenu1: React.FC = () => {
         {/* ── QR Code card ─────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 space-y-5">
 
-          {/* Card title */}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
@@ -409,7 +544,6 @@ export const ClinicalMenu1: React.FC = () => {
                 Scan to open the online booking page
               </p>
             </div>
-            {/* Status pill */}
             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium ${
               portalLink.is_active
                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -422,7 +556,7 @@ export const ClinicalMenu1: React.FC = () => {
             </span>
           </div>
 
-          {/* QR image area */}
+          {/* QR preview */}
           <div className="flex flex-col items-center gap-3">
             <div
               ref={qrWrapperRef}
@@ -439,16 +573,16 @@ export const ClinicalMenu1: React.FC = () => {
                 includeMargin={false}
               />
             </div>
-            <p className="text-xs text-gray-500 text-center max-w-xs leading-relaxed">
-              Place this QR at your reception desk, on posters, business cards, or
-              social media. Patients scan it to book directly.
-            </p>
+
+            {/* Branded card preview hint */}
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Download className="w-3 h-3" />
+              <span>Download includes clinic name, location & Malasakit branding</span>
+            </div>
           </div>
 
           {/* Action buttons */}
           <div className="flex flex-wrap gap-2 pt-1">
-
-            {/* Download PNG */}
             <button
               id="btn-download-qr-png"
               onClick={handleDownload}
@@ -463,20 +597,6 @@ export const ClinicalMenu1: React.FC = () => {
               Download PNG
             </button>
 
-            {/* Copy booking link (duplicate for QR card convenience) */}
-            <button
-              id="btn-copy-booking-link-qr"
-              onClick={handleCopy}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
-            >
-              {copied ? (
-                <><Check className="w-3.5 h-3.5 text-teal-600" /> Copied!</>
-              ) : (
-                <><Copy className="w-3.5 h-3.5" /> Copy Booking Link</>
-              )}
-            </button>
-
-            {/* Regenerate */}
             <button
               id="btn-regenerate-qr"
               onClick={() => setShowModal(true)}
@@ -488,14 +608,13 @@ export const ClinicalMenu1: React.FC = () => {
             </button>
           </div>
 
-          {/* Security note */}
           <p className="text-[11px] text-gray-400 border-t border-gray-100 pt-3">
             🔐 QR token: <span className="font-mono">{portalLink.token.slice(0, 8)}…</span>
             &nbsp;·&nbsp; Regenerating immediately invalidates all previously shared QR codes.
           </p>
         </div>
 
-        {/* ── Portal Visibility toggle card ─────────────────────────────────── */}
+        {/* ── Portal Visibility toggle ──────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border-2 border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -513,11 +632,9 @@ export const ClinicalMenu1: React.FC = () => {
                 portalLink.is_active ? 'bg-teal-500' : 'bg-gray-300'
               }`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  portalLink.is_active ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                portalLink.is_active ? 'translate-x-6' : 'translate-x-1'
+              }`} />
             </button>
           </div>
         </div>
