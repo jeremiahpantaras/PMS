@@ -558,14 +558,23 @@ const InlineAppointmentCard = React.forwardRef<
   const [editService,      setEditService]      = useState<number | ''>(appointment.service ?? '');
   const [editPractitioner, setEditPractitioner] = useState<number | ''>(appointment.practitioner ?? '');
 
-  // Derive the currently-selected practitioner's discipline for service filtering
-  const selectedPractitionerDiscipline = editPractitioner !== ''
-    ? (practitioners.find(p => String(p.id) === String(editPractitioner))?.discipline ?? null)
+  // Derive the currently-selected practitioner object and their discipline
+  const hasPractitioner = editPractitioner !== '';
+  const selectedPractitionerObj = hasPractitioner
+    ? (practitioners.find(p => String(p.id) === String(editPractitioner)) ?? null)
     : null;
+  const selectedPractitionerDiscipline = selectedPractitionerObj?.discipline ?? null;
 
+  // Only fetch services when a practitioner with a known discipline is selected.
+  // Passing `discipline: null` (no filter) is intentionally avoided here — if
+  // there is no discipline we want an empty list, not all services.
+  const shouldFetchServices = hasPractitioner && !!selectedPractitionerDiscipline;
   const { services, loading: loadingServices } = useAppointmentServices(
-    selectedPractitionerDiscipline ? { discipline: selectedPractitionerDiscipline } : undefined
+    shouldFetchServices ? { discipline: selectedPractitionerDiscipline! } : undefined
   );
+  // When no practitioner or no discipline, override to empty so ServiceSelector
+  // never shows unfiltered services.
+  const filteredServices = shouldFetchServices ? services : [];
 
   const [editStartTime,    setEditStartTime]    = useState(appointment.start_time.slice(0, 5));
   const [editEndTime,      setEditEndTime]      = useState(appointment.end_time.slice(0, 5));
@@ -584,12 +593,18 @@ const InlineAppointmentCard = React.forwardRef<
   // When the practitioner changes and their discipline no longer covers the
   // currently-selected service, clear the selection to avoid an invalid state.
   useEffect(() => {
-    if (editService === '' || services.length === 0) return;
-    const stillValid = services.some(s => s.id === Number(editService));
+    // If no discipline is available (practitioner removed or discipline unset),
+    // always clear the service selection to prevent stale data.
+    if (!shouldFetchServices) {
+      if (editService !== '') setEditService('');
+      return;
+    }
+    if (editService === '' || filteredServices.length === 0) return;
+    const stillValid = filteredServices.some(s => s.id === Number(editService));
     if (!stillValid) {
       setEditService('');
     }
-  }, [services]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filteredServices, shouldFetchServices]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const computeDuration = (start: string, end: string): number => {
@@ -740,14 +755,49 @@ const InlineAppointmentCard = React.forwardRef<
 
       <div>
         <label className="block text-xs text-gray-500 mb-1.5">Consultation Type</label>
-        <ServiceSelector
-          services={services}
-          value={editService}
-          onChange={handleServiceChange}
-          disabled={isTerminal}
-          loading={loadingServices}
-          compact
-        />
+        {/* ── Edge Case 2: No practitioner assigned ── */}
+        {!isTerminal && !hasPractitioner ? (
+          <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+            <AlertCircle className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-gray-400">
+              Assign a practitioner first to see available services.
+            </p>
+          </div>
+        ) : !isTerminal && hasPractitioner && !selectedPractitionerDiscipline && !loadingPractitioners ? (
+          /* ── Edge Case 2: Practitioner exists but has no discipline ── */
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800">No services available</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                The assigned practitioner has no discipline configured. Ask an admin to set one
+                under <strong>Setup → Practitioners</strong>.
+              </p>
+            </div>
+          </div>
+        ) : !isTerminal && shouldFetchServices && !loadingServices && filteredServices.length === 0 ? (
+          /* ── Edge Case 3: Discipline set but no services configured for it ── */
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800">No services configured for this discipline</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                No active clinic services exist for <strong>{selectedPractitionerObj?.discipline}</strong>. Ask an admin to add
+                them under <strong>Setup → Clinic Services</strong>.
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* ── Normal: show discipline-filtered services ── */
+          <ServiceSelector
+            services={filteredServices}
+            value={editService}
+            onChange={handleServiceChange}
+            disabled={isTerminal || (!hasPractitioner && !isTerminal)}
+            loading={loadingServices || (hasPractitioner && loadingPractitioners)}
+            compact
+          />
+        )}
       </div>
 
       <div>

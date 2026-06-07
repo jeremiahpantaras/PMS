@@ -1048,6 +1048,11 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 'availability':       p.availability,
                 'role':               'PRACTITIONER',
                 'roles':              list(p.user.roles) if p.user.roles else ['PRACTITIONER'],
+                # ── Discipline is stored on the Practitioner profile, not the User. ──
+                # Without this field the frontend AppointmentView receives undefined
+                # for practitioner.discipline and incorrectly shows the
+                # "no discipline configured" warning even when one is set.
+                'discipline':         p.discipline or None,
             }
             for p in base_qs
         ]
