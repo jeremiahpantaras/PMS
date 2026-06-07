@@ -451,15 +451,17 @@ export const Diary: React.FC = () => {
 
   // ── Slot action (double-click or drag-select) → SelectOptionModal ──────
   // Available to all users: Admin, Practitioner, Staff
+  const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>();
   const handleSlotAction = useCallback((slot: {
     date: Date; time: string; hour: number; minutes: number; duration: number;
     practitionerId?: number | null;
-  }) => {
+  }, rect?: DOMRect) => {
     // In rebook mode, immediately create the appointment on this slot
     if (rebookMode && rebookData) {
       void handleRebookDrop(slot);
       return;
     }
+    setAnchorRect(rect);
     setPendingSlot(slot);
     setShowSelectOptionModal(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -542,12 +544,22 @@ export const Diary: React.FC = () => {
   const handleSelectOptionClose = () => {
     setShowSelectOptionModal(false);
     setPendingSlot(null);
+    setSelectedPatientId(null);
   };
 
-  const handleSelectNewAppointment = () => {
+  const handleSelectNewAppointment = (patientId: number) => {
+    setSelectedPatientId(patientId);
     setShowSelectOptionModal(false);
     setShowCreateAppointmentModal(true);
   };
+
+  const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+
+  const getPractitionerName = useMemo(() => {
+    if (!pendingSlot?.practitionerId) return undefined;
+    const prac = practitioners.find(p => p.id == pendingSlot.practitionerId);
+    return prac?.name;
+  }, [pendingSlot, practitioners]);
 
   const handleSelectBlockAppointment = () => {
     if (!pendingSlot) return;
@@ -1040,19 +1052,24 @@ export const Diary: React.FC = () => {
               onSelectNewAppointment={handleSelectNewAppointment}
               onSelectBlockAppointment={handleSelectBlockAppointment}
               onSelectNote={handleSelectNote}
+              pendingSlot={pendingSlot}
+              practitionerName={getPractitionerName}
+              anchorRect={anchorRect}
             />
 
             {/* Appointment Modal — opened via SelectOptionModal "Create New Appointment" */}
             <AppointmentModal
               isOpen={showCreateAppointmentModal}
-              onClose={() => { setShowCreateAppointmentModal(false); setPendingSlot(null); }}
+              onClose={() => { setShowCreateAppointmentModal(false); setPendingSlot(null); setSelectedPatientId(null); }}
               onCreated={() => {
                 setShowCreateAppointmentModal(false);
                 setPendingSlot(null);
+                setSelectedPatientId(null);
                 setAppointmentRefreshKey(prev => prev + 1);
               }}
               selectedSlot={pendingSlot}
               selectedClinicBranchId={selectedClinicBranch}
+              defaultPatientId={selectedPatientId}
               defaultPractitionerId={
                 // Priority 1: slot-column practitionerId (Day View split columns)
                 pendingSlot?.practitionerId !== undefined

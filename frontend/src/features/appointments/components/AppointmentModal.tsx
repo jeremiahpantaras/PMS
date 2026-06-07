@@ -29,6 +29,8 @@ interface AppointmentModalProps {
   selectedClinicBranchId?:  number | null;
   /** Pre-select the practitioner from the active calendar filter. The user can still change it. */
   defaultPractitionerId?:   number | null;
+  /** Pre-select the patient from SelectOptionModal search. */
+  defaultPatientId?:       number | null;
 }
 
 interface FormData {
@@ -44,6 +46,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   selectedSlot,
   selectedClinicBranchId,
   defaultPractitionerId,
+  defaultPatientId,
 }) => {
   const { user } = useAuthStore();
 
@@ -123,7 +126,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     if (isOpen) {
       loadPatients();
       setFormData({
-        patient:      '',
+        patient:      defaultPatientId ?? '',
         practitioner: defaultPractitionerId ?? '',
         service:      '',
       });
@@ -133,6 +136,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setErrors({});
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // If defaultPatientId changes after patients are loaded, update formData
+  useEffect(() => {
+    if (defaultPatientId && patients.length > 0) {
+      setFormData(prev => ({ ...prev, patient: defaultPatientId }));
+    }
+  }, [defaultPatientId, patients]);
 
   const loadPatients = async () => {
     setLoadingPatients(true);

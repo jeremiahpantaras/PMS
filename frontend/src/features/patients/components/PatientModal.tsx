@@ -27,6 +27,7 @@ interface PatientModalProps {
   onSave:   (data: CreatePatientData) => Promise<void>;
   patient?: Patient | null;
   mode:     'create' | 'edit';
+  prefillData?: Partial<CreatePatientData>;
 }
 
 export const PatientModal: React.FC<PatientModalProps> = ({
@@ -35,6 +36,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
   onSave,
   patient,
   mode,
+  prefillData,
 }) => {
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
@@ -100,8 +102,14 @@ export const PatientModal: React.FC<PatientModalProps> = ({
       setHasMedicalConditions(!!patient.medical_conditions);
       setHasAllergies(!!patient.allergies);
       setHasMedications(!!patient.medications);
+    } else if (mode === 'create' && prefillData) {
+      setFormData({ ...emptyForm, ...prefillData });
+      setErrors({});
+      setHasMedicalConditions(!!prefillData.medical_conditions);
+      setHasAllergies(!!prefillData.allergies);
+      setHasMedications(!!prefillData.medications);
     }
-  }, [isOpen, mode, patient, emptyForm, buildFormFromPatient]);
+  }, [isOpen, mode, patient, emptyForm, buildFormFromPatient, prefillData]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -218,9 +226,9 @@ export const PatientModal: React.FC<PatientModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 transition-opacity" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[1100] transition-opacity" onClick={onClose} />
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 pointer-events-none">
         <div
           className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] pointer-events-auto overflow-hidden flex flex-col"
           onClick={(e) => e.stopPropagation()}

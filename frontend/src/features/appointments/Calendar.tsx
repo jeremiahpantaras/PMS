@@ -108,7 +108,7 @@ interface CalendarProps {
   comparePractitionerIdA?: number | null;
   comparePractitionerIdB?: number | null;
   /** Admin-only: intercept double-click / drag-select instead of opening AppointmentModal internally */
-  onSlotAction?: (slot: { date: Date; time: string; hour: number; minutes: number; duration: number; practitionerId?: number | null }) => void;
+  onSlotAction?: (slot: { date: Date; time: string; hour: number; minutes: number; duration: number; practitionerId?: number | null }, anchorRect?: DOMRect) => void;
   /** Increment to trigger a refetch of appointments (e.g. after creating one from outside Calendar) */
   appointmentRefreshKey?: number;
   /** Called after recurring appointments are saved, so parent can trigger a refetch */
@@ -1162,12 +1162,11 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     handleMouseUp(date);
   };
 
-  const handleDoubleClick = (date: Date, slot: CalendarSlot) => {
+  const handleDoubleClick = (date: Date, slot: CalendarSlot, element?: HTMLElement) => {
     if (dragState.isDragging || dragState.isHolding || blockDragState.isDragging || blockDragState.isHolding || noteDragState.isDragging || isResizing) return;
     if (onSlotAction) {
-      // Pass the currently selected practitioner so that note/block/appointment creation
-      // from the Week View inherits the active practitioner filter (fixes note ownership).
-      onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15, practitionerId: numericPractitionerId });
+      const rect = element?.getBoundingClientRect();
+      onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15, practitionerId: numericPractitionerId }, rect);
       return;
     }
     openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
@@ -1176,10 +1175,11 @@ const CalendarComponent: React.FC<CalendarProps> = ({
   // ── Column-aware variants for multi-practitioner day view ─────────────────
   // These are identical to handleDoubleClick / handleMouseUp but pass the
   // column's practitioner id through onSlotAction so Diary can pre-fill it.
-  const handleColumnDoubleClick = (date: Date, slot: CalendarSlot, practId: number | null) => {
+  const handleColumnDoubleClick = (date: Date, slot: CalendarSlot, practId: number | null, element?: HTMLElement) => {
     if (dragState.isDragging || dragState.isHolding || blockDragState.isDragging || blockDragState.isHolding || noteDragState.isDragging || isResizing) return;
     if (onSlotAction) {
-      onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15, practitionerId: practId });
+      const rect = element?.getBoundingClientRect();
+      onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15, practitionerId: practId }, rect);
       return;
     }
     openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
@@ -2011,7 +2011,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           onMouseDown={() => handleMouseDown(date, slot)}
           onMouseEnter={() => handleMouseEnter(slot)}
           onMouseUp={() => handleSlotMouseUp(date, slot)}
-          onDoubleClick={() => handleDoubleClick(date, slot)}
+          onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
           className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
             ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
         >
@@ -2065,7 +2065,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         onMouseDown={() => handleMouseDown(date, slot)}
         onMouseEnter={() => handleMouseEnter(slot)}
         onMouseUp={() => handleSlotMouseUp(date, slot)}
-        onDoubleClick={() => handleDoubleClick(date, slot)}
+        onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
         className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex
           ${borderClass}
           ${slotBgClass}`}
@@ -2129,7 +2129,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           onMouseDown={() => handleMouseDown(date, slot)}
           onMouseEnter={() => handleMouseEnter(slot)}
           onMouseUp={() => handleSlotMouseUp(date, slot)}
-          onDoubleClick={() => handleDoubleClick(date, slot)}
+          onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
           className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
             ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
         />
@@ -2158,7 +2158,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         onMouseDown={() => handleMouseDown(date, slot)}
         onMouseEnter={() => handleMouseEnter(slot)}
         onMouseUp={() => handleSlotMouseUp(date, slot)}
-        onDoubleClick={() => handleDoubleClick(date, slot)}
+        onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
         className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
       >
         <div className="w-[90%] h-full relative">
@@ -2403,7 +2403,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               onMouseDown={() => handleMouseDown(date, slot)}
               onMouseEnter={() => handleMouseEnter(slot)}
               onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
-              onDoubleClick={() => handleColumnDoubleClick(date, slot, practId)}
+              onDoubleClick={(e) => handleColumnDoubleClick(date, slot, practId, e.currentTarget as HTMLElement)}
               className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500 ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
             >
               {isFirstLunchSlot && (
@@ -2437,7 +2437,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             onMouseDown={() => handleMouseDown(date, slot)}
             onMouseEnter={() => handleMouseEnter(slot)}
             onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
-            onDoubleClick={() => handleColumnDoubleClick(date, slot, practId)}
+            onDoubleClick={(e) => handleColumnDoubleClick(date, slot, practId, e.currentTarget as HTMLElement)}
             className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
           >
             <div className="w-[90%] h-full relative">
