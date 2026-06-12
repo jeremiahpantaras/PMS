@@ -45,6 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
   WRITTEN_OFF: 'text-red-700',
   PENDING: 'text-yellow-700',
   OVERDUE: 'text-red-700',
+  UNBILLED: 'text-purple-700',
 };
 
 function buildPrintHtml(data: AgeingDebtsResponse): string {
@@ -58,9 +59,12 @@ function buildPrintHtml(data: AgeingDebtsResponse): string {
         <div class="patient-num">#${d.patient_number}</div>
       </td>
       <td>
-        <div class="time-primary">${d.invoice_number}</div>
+        <div class="time-primary">${d.source === 'unbilled_appointment' ? 'UNBILLED' : (d.invoice_number || '—')}</div>
         <div class="time-secondary">${d.invoice_date ? formatDate(d.invoice_date) : '—'}</div>
       </td>
+      <td>${d.appointment_date ? formatDate(d.appointment_date) : '—'}</td>
+      <td>${d.appointment_type || '—'}</td>
+      <td>${d.practitioner_name || '—'}</td>
       <td>${d.due_date ? formatDate(d.due_date) : '—'}</td>
       <td>${d.days_overdue > 0 ? `${d.days_overdue}d` : '—'}</td>
       <td style="text-align:right">${formatPeso(d.balance_due)}</td>
@@ -103,12 +107,12 @@ function buildPrintHtml(data: AgeingDebtsResponse): string {
     <table>
       <thead>
         <tr>
-          <th>Client</th><th>Invoice #</th><th>Due Date</th><th>Age</th>
+          <th>Client</th><th>Reference</th><th>Appt Date</th><th>Appt Type</th><th>Practitioner</th><th>Due Date</th><th>Age</th>
           <th style="text-align:right">Balance</th><th>Bucket</th><th>Status</th>
         </tr>
       </thead>
       <tbody>
-        ${debts.length > 0 ? rowsHtml : '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:16px">No overdue invoices found</td></tr>'}
+        ${debts.length > 0 ? rowsHtml : '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:16px">No overdue invoices found</td></tr>'}
       </tbody>
       <tfoot>
         <tr style="font-weight:700; background:#fef2f2">
@@ -266,6 +270,7 @@ export const AgeingDebtsReport: React.FC = () => {
               <option value="WRITTEN_OFF">Written Off</option>
               <option value="PENDING">Pending</option>
               <option value="OVERDUE">Overdue</option>
+              <option value="UNBILLED">Unbilled</option>
             </select>
             <select
               value={filterBucket}
@@ -362,11 +367,14 @@ export const AgeingDebtsReport: React.FC = () => {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="text-left px-4 py-3 font-semibold text-gray-600">Client</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Invoice #</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Issue Date</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Reference</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Appt Date</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Appt Type</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Practitioner</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600">Due Date</th>
                       <th className="text-right px-4 py-3 font-semibold text-gray-600">Outstanding</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600">Age</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600">Bucket</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600">Actions</th>
                     </tr>
@@ -379,13 +387,23 @@ export const AgeingDebtsReport: React.FC = () => {
                           <div className="text-xs text-gray-400">#{d.patient_number}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-mono text-xs text-gray-700">{d.invoice_number || '—'}</div>
+                          {d.source === 'unbilled_appointment' ? (
+                            <span className="font-mono text-xs text-purple-700 font-medium">UNBILLED</span>
+                          ) : (
+                            <div className="font-mono text-xs text-gray-700">{d.invoice_number || '—'}</div>
+                          )}
                           {d.source === 'debt_entry' && (
                             <div className="text-xs text-green-600 font-medium">Manual Entry</div>
                           )}
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-600">
-                          {d.invoice_date ? formatDate(d.invoice_date) : '—'}
+                          {d.appointment_date ? formatDate(d.appointment_date) : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          {d.appointment_type || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          {d.practitioner_name || '—'}
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-600">
                           {d.due_date ? formatDate(d.due_date) : '—'}
@@ -409,6 +427,10 @@ export const AgeingDebtsReport: React.FC = () => {
                             }`}>
                               {d.status.replace(/_/g, ' ')}
                             </span>
+                          ) : d.source === 'unbilled_appointment' ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium border bg-purple-50 text-purple-700 border-purple-200">
+                              Unbilled
+                            </span>
                           ) : (
                             <StatusBadge status={d.status} />
                           )}
@@ -431,11 +453,11 @@ export const AgeingDebtsReport: React.FC = () => {
                   </tbody>
                   <tfoot>
                     <tr className="bg-red-50 border-t-2 border-red-200 font-bold">
-                      <td colSpan={4} className="px-4 py-3 text-gray-700">Totals</td>
+                      <td colSpan={6} className="px-4 py-3 text-gray-700">Totals</td>
                       <td className="px-4 py-3 text-right text-red-700 text-base">
                         {formatPeso(filteredDebts.reduce((s, d) => s + d.balance_due, 0))}
                       </td>
-                      <td colSpan={3}></td>
+                      <td colSpan={4}></td>
                     </tr>
                   </tfoot>
                 </table>

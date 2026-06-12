@@ -17,10 +17,14 @@ interface PatientDetailsFormProps {
   onChange:  (data: PatientFormData) => void;
   acceptedTerms: boolean;
   acceptedConsent: boolean;
+  acceptedClinicConsent: boolean;
   signatureReady: boolean;
+  clinicConsentReady: boolean;
+  hasClinicConsentForm?: boolean;
   onTermsChange: (checked: boolean) => void;
   onOpenTerms: () => void;
   onOpenConsent: () => void;
+  onOpenClinicConsent: () => void;
 }
 
 export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
@@ -29,10 +33,14 @@ export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
   onChange,
   acceptedTerms,
   acceptedConsent,
+  acceptedClinicConsent,
   signatureReady,
+  clinicConsentReady,
+  hasClinicConsentForm,
   onTermsChange,
   onOpenTerms,
   onOpenConsent,
+  onOpenClinicConsent,
 }) => {
   const set = (field: keyof PatientFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -217,6 +225,31 @@ export const PatientDetailsForm: React.FC<PatientDetailsFormProps> = ({
               {signatureReady ? 'Consent signed and saved.' : 'Consent checked but signature is missing.'}
             </p>
           )}
+
+          {hasClinicConsentForm && (
+          <label className="flex items-start gap-3 cursor-pointer" onClick={onOpenClinicConsent}>
+            <input
+              type="checkbox"
+              checked={acceptedClinicConsent}
+              readOnly
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm text-gray-700">
+              I have read and agree to the{' '}
+              <button
+                type="button"
+                onClick={onOpenClinicConsent}
+                className="text-sky-600 underline hover:text-sky-700"
+              >
+                Clinic Consent Form
+              </button>{' '}
+              <span className="text-red-500">*</span>
+              <span className="block text-xs text-gray-500 mt-1">
+                {clinicConsentReady ? 'Clinic consent signed and saved.' : 'Please review and sign the clinic consent form.'}
+              </span>
+            </span>
+          </label>
+        )}
         </div>
       </div>
     </div>

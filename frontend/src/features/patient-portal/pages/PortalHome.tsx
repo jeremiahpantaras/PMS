@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 
-import { createPortalConsent, fetchPortal, submitBooking } from '../portal.api';
+import { createPortalConsent, fetchPortal, submitBooking, fetchActiveClinicConsent, createClinicConsentDocument, type ClinicConsentFormData, type ClinicConsentDocumentPayload } from '../portal.api';
 import { PortalSidebar }                     from '../components/PortalSidebar';
 import { BranchStep }                        from '../components/BranchStep';
 import { PractitionerStep }                  from '../components/PractitionerStep';
@@ -11,6 +11,7 @@ import { PortalAvailabilityCalendar }        from '../components/PortalAvailabil
 import { PatientDetailsForm }                from '../components/PatientDetailsForm';
 import { TermsAndConditionsModal }           from '../components/TermsAndConditionsModal';
 import { ConsentFormModal }                  from '../components/ConsentFormModal';
+import { ClinicConsentFormViewer }            from '../components/ClinicConsentFormViewer';
 import { PortalFooterActions }               from '../components/PortalFooterActions';
 
 import type {
@@ -76,6 +77,11 @@ export const PortalHome: React.FC = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
 
+  // Clinic consent form state
+  const [clinicConsentForm, setClinicConsentForm] = useState<ClinicConsentFormData | null>(null);
+  const [clinicConsentSignature, setClinicConsentSignature] = useState<string | null>(null);
+  const [showClinicConsentModal, setShowClinicConsentModal] = useState(false);
+
   // ── Load portal ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!token) return;
@@ -83,6 +89,13 @@ export const PortalHome: React.FC = () => {
       .then(setPortal)
       .catch(() => setError('This booking page is unavailable or the link has expired.'))
       .finally(() => setLoading(false));
+
+    // Also load the active clinic consent form (if any)
+    if (token) {
+      fetchActiveClinicConsent(token)
+        .then(setClinicConsentForm)
+        .catch(() => {});
+    }
   }, [token]);
 
   // ── Branch selected → enter inner flow ───────────────────────────────────
@@ -170,6 +183,12 @@ export const PortalHome: React.FC = () => {
       return;
     }
 
+    // If clinic has an active consent form, patient must sign it
+    if (portal?.has_clinic_consent_form && clinicConsentForm && !clinicConsentSignature) {
+      setFormError('Please complete the Clinic Consent Form before booking.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const consent = await createPortalConsent(token, {
@@ -178,6 +197,20 @@ export const PortalHome: React.FC = () => {
         consent_text: consentText,
         signature: signatureData,
       });
+
+      // If clinic has an active consent form, create the clinic consent document
+      if (clinicConsentForm && clinicConsentSignature) {
+        const clinicDocPayload: ClinicConsentDocumentPayload = {
+          title: clinicConsentForm.title,
+          header_snapshot: clinicConsentForm.header_content || '',
+          body_snapshot: clinicConsentForm.body_content,
+          signature: clinicConsentSignature,
+          consent_version: `v${clinicConsentForm.id}`,
+          signer_full_name: `${formData.first_name} ${formData.last_name}`.trim(),
+          signer_email: formData.email,
+        };
+        await createClinicConsentDocument(token, clinicDocPayload);
+      }
 
       const confirmation = await submitBooking(token, {
         ...payload,
@@ -398,10 +431,14 @@ export const PortalHome: React.FC = () => {
               onChange={setFormData}
               acceptedTerms={acceptedTerms}
               acceptedConsent={acceptedConsent}
+              acceptedClinicConsent={Boolean(clinicConsentSignature)}
               signatureReady={Boolean(signatureData)}
+              clinicConsentReady={Boolean(clinicConsentSignature)}
+              hasClinicConsentForm={portal?.has_clinic_consent_form ?? false}
               onTermsChange={setAcceptedTerms}
               onOpenTerms={() => setShowTermsModal(true)}
               onOpenConsent={() => setShowConsentModal(true)}
+              onOpenClinicConsent={() => setShowClinicConsentModal(true)}
             />
           )}
         </div>
@@ -473,6 +510,23 @@ export const PortalHome: React.FC = () => {
           setAcceptedConsent(true);
         }}
       />
+
+      {portal?.has_clinic_consent_form && clinicConsentForm && (
+        <ClinicConsentFormViewer
+          isOpen={showClinicConsentModal}
+          clinicName={portal?.clinic_name || ''}
+          clinicLogo={portal?.clinic_logo || undefined}
+          title={clinicConsentForm.title}
+          headerContent={clinicConsentForm.header_content}
+          bodyContent={clinicConsentForm.body_content}
+          patientFullName={`${formData.first_name} ${formData.last_name}`.trim()}
+          patientEmail={formData.email}
+          onClose={() => setShowClinicConsentModal(false)}
+          onSigned={(signature) => {
+            setClinicConsentSignature(signature);
+          }}
+        />
+      )}
     </div>
   );
 };

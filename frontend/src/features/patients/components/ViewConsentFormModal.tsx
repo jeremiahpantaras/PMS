@@ -1,13 +1,21 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { X, Printer, Mail } from 'lucide-react';
 import { ConsentFormTemplate } from './ConsentFormTemplate';
-import type { PatientConsentRecord } from '../patient.api';
+import type { PatientConsentRecord, PatientConsentDocumentRecord } from '../patient.api';
 import { formatDate } from '../patientProfile.utils.tsx';
 import { getMyClinic } from '@/features/clinics/clinic.api';
 
+/** Unified consent type — accepts either the legacy PatientConsent or the new PatientConsentDocument. */
+export type ViewableConsent = PatientConsentRecord | PatientConsentDocumentRecord;
+
+/** Type guard: returns true if the consent is a PatientConsentDocumentRecord. */
+function isConsentDocument(c: ViewableConsent): c is PatientConsentDocumentRecord {
+  return 'signed_at' in c && 'signer_full_name' in c;
+}
+
 interface ViewConsentFormModalProps {
   isOpen: boolean;
-  consent: PatientConsentRecord;
+  consent: ViewableConsent;
   onClose: () => void;
   onSendEmail: () => void;
 }
@@ -26,6 +34,18 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
     getMyClinic().then((p) => setClinicLogo(p.logo_url ?? undefined)).catch(() => {});
   }, [isOpen]);
 
+  // ── Normalize fields across both consent types ────────────────────────────
+  const isDoc = isConsentDocument(consent);
+
+  const title       = isDoc ? consent.title : 'Data Privacy Consent Form';
+  const signerName  = isDoc ? consent.signer_full_name : consent.full_name;
+  const signerEmail = isDoc ? consent.signer_email : consent.email;
+  const dateSigned  = formatDate(isDoc ? consent.signed_at : consent.created_at);
+  const clinicName  = consent.clinic_name ?? 'Clinic';
+  const bodyText    = isDoc ? consent.body_snapshot : consent.consent_text;
+  const headerHtml  = isDoc ? consent.header_snapshot : '';
+  const isClinicConsent = isDoc && consent.type === 'CLINIC_CONSENT';
+
   const handlePrint = () => {
     if (!printRef.current) return;
 
@@ -36,7 +56,7 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Consent Form – ${consent.full_name}</title>
+          <title>${title} – ${signerName}</title>
           <style>
             @page { size: letter; margin: 0; }
             body { margin: 0; padding: 0; background: white; }
@@ -58,9 +78,6 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
 
   if (!isOpen) return null;
 
-  const dateSigned = formatDate(consent.created_at);
-  const clinicName = consent.clinic_name ?? 'Clinic';
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -73,9 +90,9 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
         {/* ── Toolbar ── */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 shrink-0">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Data Privacy Consent Form</h2>
+            <h2 className="text-base font-bold text-gray-900">{title}</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Signed by {consent.full_name} · {dateSigned}
+              Signed by {signerName} · {dateSigned}
             </p>
           </div>
 
@@ -114,11 +131,14 @@ export const ViewConsentFormModal: React.FC<ViewConsentFormModalProps> = ({
               <ConsentFormTemplate
                 clinicName={clinicName}
                 clinicLogo={clinicLogo}
-                patientName={consent.full_name}
-                patientEmail={consent.email}
+                patientName={signerName}
+                patientEmail={signerEmail}
                 dateSigned={dateSigned}
-                consentText={consent.consent_text}
+                consentText={bodyText}
                 signature={consent.signature}
+                title={title}
+                headerContent={headerHtml || undefined}
+                documentType={isClinicConsent ? 'Clinic Consent Form' : 'Data Privacy Consent Form'}
               />
             </div>
           </div>

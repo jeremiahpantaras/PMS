@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { CheckCircle2, Clock, FilePlus, Files, FileText, Plus, Send, XCircle } from 'lucide-react';
 import { usePatientProfileContext } from './context/PatientProfileContext';
 import {
   getPatientConsents,
   createOrUpdateConsent,
   getClientFormRequests,
+  getPatientConsentDocuments,
   type PatientConsentRecord,
   type ClientFormRequestRecord,
+  type PatientConsentDocumentRecord,
 } from './patient.api';
 import { AddDocumentModal } from './components/AddDocumentModal';
-import { ViewConsentFormModal } from './components/ViewConsentFormModal';
+import { ViewConsentFormModal, type ViewableConsent } from './components/ViewConsentFormModal';
 import { SendConsentFormModal } from './components/SendConsentFormModal';
 import { SendClientFormModal } from './components/SendClientFormModal';
 import { ViewClientFormModal } from './components/ViewClientFormModal';
@@ -23,16 +25,17 @@ export const PatientDocumentsPage = () => {
   const { patient } = usePatientProfileContext();
 
   const [consents, setConsents] = useState<PatientConsentRecord[]>([]);
+  const [consentDocuments, setConsentDocuments] = useState<PatientConsentDocumentRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ── Modal state ───────────────────────────────────────────────────────────
+  // ── Modal state ───────────────────────────────────────────────────────────────────
   const [showAddDocModal, setShowAddDocModal]         = useState(false);
   const [showSignModal, setShowSignModal]             = useState(false);
-  const [viewingConsent, setViewingConsent]           = useState<PatientConsentRecord | null>(null);
-  const [sendingConsent, setSendingConsent]           = useState<PatientConsentRecord | null>(null);
+  const [viewingAnyConsent, setViewingAnyConsent]     = useState<ViewableConsent | null>(null);
+  const [sendingAnyConsent, setSendingAnyConsent]     = useState<ViewableConsent | null>(null);
   const [showClientFormModal, setShowClientFormModal] = useState(false);
-  const [viewingClientForm, setViewingClientForm]       = useState<ClientFormRequestRecord | null>(null);
+  const [viewingClientForm, setViewingClientForm]     = useState<ClientFormRequestRecord | null>(null);
 
   const [clientForms, setClientForms]       = useState<ClientFormRequestRecord[]>([]);
   const [loadingForms, setLoadingForms]     = useState(false);
@@ -73,6 +76,18 @@ export const PatientDocumentsPage = () => {
     return () => { mounted = false; };
   }, [patient]);
 
+  // ── Load consent documents ─────────────────────────────────────────────────
+  const loadConsentDocuments = useCallback(() => {
+    if (!patient) return;
+    let mounted = true;
+
+    getPatientConsentDocuments(patient.id)
+      .then((data) => { if (mounted) setConsentDocuments(data); })
+      .catch(() => {   if (mounted) setConsentDocuments([]); });
+
+    return () => { mounted = false; };
+  }, [patient]);
+
   useEffect(() => {
     const cleanup = loadConsents();
     return cleanup;
@@ -82,6 +97,11 @@ export const PatientDocumentsPage = () => {
     const cleanup = loadClientForms();
     return cleanup;
   }, [loadClientForms]);
+
+  useEffect(() => {
+    const cleanup = loadConsentDocuments();
+    return cleanup;
+  }, [loadConsentDocuments]);
 
   // ── Handle signed consent from ConsentFormModal ───────────────────────────
   const handleConsentSigned = async (signatureDataUrl: string, consentTextFromModal: string) => {
@@ -96,6 +116,8 @@ export const PatientDocumentsPage = () => {
         type: 'CONSENT_FORM',
       });
       setConsents([saved]);
+      // Reload consent documents — the backend now also creates a PatientConsentDocument
+      loadConsentDocuments();
     } catch {
       // error silently — user can retry via Add button
     } finally {
@@ -111,7 +133,22 @@ export const PatientDocumentsPage = () => {
     );
   }
 
-  const hasConsent = consents.length > 0;
+  const hasConsent = consents.length > 0 || consentDocuments.length > 0;
+
+  // ── Build unified consent list (consentDocuments first, then legacy consents without duplicates)
+  // consentDocuments now contain BOTH Data Privacy + Clinic Consent types.
+  // For backward compat, also include legacy consents (PatientConsent) that
+  // don't have a corresponding PatientConsentDocument yet.
+  const unifiedConsents = useMemo<ViewableConsent[]>(() => {
+    const items: ViewableConsent[] = [...consentDocuments];
+    // Add legacy PatientConsent records only if they don't already have a
+    // matching DATA_PRIVACY_CONSENT in consentDocuments.
+    const hasDocPrivacy = consentDocuments.some((d) => d.type === 'DATA_PRIVACY_CONSENT');
+    if (!hasDocPrivacy) {
+      items.push(...consents);
+    }
+    return items;
+  }, [consents, consentDocuments]);
 
   return (
     <>
@@ -129,7 +166,7 @@ export const PatientDocumentsPage = () => {
             <div className="flex items-center gap-2">
               <div className="inline-flex items-center gap-2 px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg text-xs font-medium text-sky-700">
                 <Files className="w-4 h-4" />
-                {consents.length} consent {consents.length === 1 ? 'form' : 'forms'}
+                {unifiedConsents.length} consent {unifiedConsents.length === 1 ? 'form' : 'forms'}
               </div>
               <button
                 type="button"
@@ -152,7 +189,7 @@ export const PatientDocumentsPage = () => {
           </div>
         </div>
 
-        {/* ── Document list ── */}
+        {/* ── Unified consent document list ── */}
         <div className="bg-white border border-gray-200 rounded-2xl p-4">
           {loading || saving ? (
             <div className="py-10 text-center text-sm text-gray-500">
@@ -178,43 +215,66 @@ export const PatientDocumentsPage = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {consents.map((consent) => (
-                <article
-                  key={consent.id}
-                  className="border border-gray-200 rounded-xl p-4 hover:border-sky-300 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
-                        <FileText className="w-4.5 h-4.5 text-sky-500" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-semibold text-gray-900">
-                            Data Privacy Consent Form
-                          </h3>
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200">
-                            Consent
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Signed by {consent.full_name} · {formatDate(consent.created_at)}
-                        </p>
-                      </div>
-                    </div>
+              {unifiedConsents.map((item) => {
+                // Determine display fields based on consent type
+                const isDoc = 'signed_at' in item && 'signer_full_name' in item;
+                const doc = isDoc ? (item as PatientConsentDocumentRecord) : null;
+                const legacy = !isDoc ? (item as PatientConsentRecord) : null;
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setViewingConsent(consent)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-sky-700 bg-sky-50 rounded-lg hover:bg-sky-100 transition-colors border border-sky-200"
-                      >
-                        View
-                      </button>
+                const docTitle    = doc ? doc.title : 'Data Privacy Consent Form';
+                const signerName  = doc ? doc.signer_full_name : legacy!.full_name;
+                const dateSigned  = doc ? formatDate(doc.signed_at) : formatDate(legacy!.created_at);
+                const isClinic    = doc?.type === 'CLINIC_CONSENT';
+                const badgeLabel  = isClinic ? 'Clinic Consent' : 'Data Privacy';
+                const badgeColor  = isClinic
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  : 'bg-sky-50 text-sky-700 border-sky-200';
+                const iconBg      = isClinic ? 'bg-indigo-50' : 'bg-sky-50';
+                const iconColor   = isClinic ? 'text-indigo-500' : 'text-sky-500';
+                const btnColor    = isClinic
+                  ? 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200'
+                  : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200';
+                const uniqueKey   = doc ? `doc-${doc.id}` : `consent-${legacy!.id}`;
+
+                return (
+                  <article
+                    key={uniqueKey}
+                    className={`border border-gray-200 rounded-xl p-4 hover:border-${isClinic ? 'indigo' : 'sky'}-300 transition-colors`}
+                  >
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
+                          <FileText className={`w-4.5 h-4.5 ${iconColor}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                              {docTitle}
+                            </h3>
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${badgeColor}`}>
+                              {badgeLabel}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Signed by {signerName} · {dateSigned}
+                            {doc?.clinic_name && ` · ${doc.clinic_name}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setViewingAnyConsent(item)}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border ${btnColor}`}
+                        >
+                          View
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -342,23 +402,23 @@ export const PatientDocumentsPage = () => {
         }}
       />
 
-      {/* ── View consent modal ── */}
-      {viewingConsent && (
+      {/* ── View consent modal (unified — handles both Data Privacy & Clinic Consent) ── */}
+      {viewingAnyConsent && (
         <ViewConsentFormModal
           isOpen={true}
-          consent={viewingConsent}
-          onClose={() => setViewingConsent(null)}
-          onSendEmail={() => setSendingConsent(viewingConsent)}
+          consent={viewingAnyConsent}
+          onClose={() => setViewingAnyConsent(null)}
+          onSendEmail={() => setSendingAnyConsent(viewingAnyConsent)}
         />
       )}
 
-      {/* ── Send consent email modal ── */}
-      {sendingConsent && (
+      {/* ── Send consent email modal (unified) ── */}
+      {sendingAnyConsent && (
         <SendConsentFormModal
           isOpen={true}
-          onClose={() => setSendingConsent(null)}
+          onClose={() => setSendingAnyConsent(null)}
           patientId={patient.id}
-          consent={sendingConsent}
+          consent={sendingAnyConsent}
         />
       )}
     </>

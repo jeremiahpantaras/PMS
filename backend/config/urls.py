@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from django.http import JsonResponse
 
 from apps.accounts.views import AuthViewSet, UserViewSet, RoleViewSet, PermissionViewSet, PermissionGroupViewSet
-from apps.clinics.views import ClinicViewSet, PractitionerViewSet, LocationViewSet
+from apps.clinics.views import ClinicViewSet, PractitionerViewSet, LocationViewSet, ClinicConsentFormViewSet
 from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, CalendarNoteViewSet, PublicRebookingLinkView, PublicAppointmentConfirmView
 from apps.records.views import ClinicalNoteViewSet, NoteTemplateViewSet, OutcomeMeasureViewSet, AttachmentViewSet
 from apps.billing.views import (
@@ -44,6 +44,7 @@ router.register(r'clinics',         ClinicViewSet,         basename='clinics')
 router.register(r'practitioners',   PractitionerViewSet,   basename='practitioners')
 router.register(r'locations',       LocationViewSet,       basename='locations')
 router.register(r'clinic-services', ClinicServiceViewSet,  basename='clinic-services')
+router.register(r'clinic-consent-forms', ClinicConsentFormViewSet, basename='clinic-consent-forms')
 
 # Contacts
 router.register(r'contacts', ContactViewSet, basename='contacts')

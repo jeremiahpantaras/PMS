@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, StickyNote, User, Trash2, CalendarDays, Check, Pencil } from 'lucide-react';
+import { X, StickyNote, User, Trash2, CalendarDays, Check, Pencil, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import type { CalendarNote } from '@/types';
@@ -199,9 +199,8 @@ export const NoteModal: React.FC<NoteModalProps> = ({
               )}
             </div>
 
-            {/* Meta */}
+            {/* Meta — Date & Time */}
             <div className="space-y-3">
-              {/* Date + time */}
               <div className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
                   <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
@@ -213,32 +212,61 @@ export const NoteModal: React.FC<NoteModalProps> = ({
                   </p>
                 </div>
               </div>
+            </div>
 
-              {/* Created by */}
-              {note.created_by_name && (
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                    <User className="w-3.5 h-3.5 text-gray-500" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Created by</p>
-                    <p className="text-xs font-medium text-gray-700">{note.created_by_name}</p>
-                  </div>
-                </div>
-              )}
+            {/* Audit Trail */}
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                Audit Trail
+              </h4>
 
-              {/* Modified by */}
-              {note.modified_by_name && note.modified_by_name !== note.created_by_name && (
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                    <User className="w-3.5 h-3.5 text-gray-400" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Modified by</p>
-                    <p className="text-xs font-medium text-gray-700">{note.modified_by_name}</p>
-                  </div>
+              {/* Created By */}
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-sky-100 rounded-lg shrink-0">
+                  <User className="w-3.5 h-3.5 text-sky-600" />
                 </div>
-              )}
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Created by</p>
+                  <p className="text-xs font-medium text-gray-800">
+                    {note.created_by_name || 'Unknown'}
+                  </p>
+                  {note.created_at && (() => {
+                    try {
+                      return (
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {format(parseISO(note.created_at), 'MMM d, yyyy · h:mm a')}
+                        </p>
+                      );
+                    } catch { return null; }
+                  })()}
+                </div>
+              </div>
+
+              {/* Modified By — always shown */}
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-purple-100 rounded-lg shrink-0">
+                  <Clock className="w-3.5 h-3.5 text-purple-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Modified by</p>
+                  {note.modified_by_name ? (
+                    <>
+                      <p className="text-xs font-medium text-gray-800">{note.modified_by_name}</p>
+                      {note.updated_at && (() => {
+                        try {
+                          return (
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {format(parseISO(note.updated_at), 'MMM d, yyyy · h:mm a')}
+                            </p>
+                          );
+                        } catch { return null; }
+                      })()}
+                    </>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 italic mt-0.5">Not yet modified</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-between items-center pt-2 border-t border-gray-100">

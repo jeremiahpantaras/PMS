@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, X, Check, Layers } from 'lucide-react';
 import type { ClinicService } from '@/features/manage/services/clinic-services.api';
 
@@ -55,8 +56,11 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   const [isOpen,        setIsOpen]        = useState(false);
   const [search,        setSearch]        = useState('');
   const [highlightIdx,  setHighlightIdx]  = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef    = useRef<HTMLButtonElement>(null);
+  const dropdownRef  = useRef<HTMLDivElement>(null);
   const searchRef    = useRef<HTMLInputElement>(null);
   const listRef      = useRef<HTMLUListElement>(null);
 
@@ -70,9 +74,17 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   // Reset highlight when filter changes
   useEffect(() => { setHighlightIdx(0); }, [search]);
 
-  // Focus search input when dropdown opens
+  // Focus search input and calculate position when dropdown opens
   useEffect(() => {
     if (isOpen) {
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPos({
+          top: rect.bottom + window.scrollY + 6,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      }
       setTimeout(() => searchRef.current?.focus(), 50);
     } else {
       setSearch('');
@@ -83,7 +95,10 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const isClickInsideContainer = containerRef.current && containerRef.current.contains(e.target as Node);
+      const isClickInsideDropdown = dropdownRef.current && dropdownRef.current.contains(e.target as Node);
+      
+      if (!isClickInsideContainer && !isClickInsideDropdown) {
         setIsOpen(false);
       }
     };
@@ -147,9 +162,10 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   ].join(' ');
 
   return (
-    <div ref={containerRef} className="relative w-full" onKeyDown={handleKeyDown}>
+    <div ref={containerRef} className="relative w-full overflow-visible" onKeyDown={handleKeyDown}>
       {/* ── Trigger Button ── */}
       <button
+        ref={buttonRef}
         type="button"
         id="service-selector-trigger"
         className={triggerCls}
@@ -199,10 +215,17 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
         />
       </button>
 
-      {/* ── Dropdown ── */}
-      {isOpen && (
+      {/* ── Dropdown (Rendered via Portal) ── */}
+      {isOpen && createPortal(
         <div
-          className="absolute z-50 top-full left-0 mt-1.5 w-full min-w-[280px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden"
+          ref={dropdownRef}
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden"
+          style={{
+            top: `${dropdownPos.top}px`,
+            left: `${dropdownPos.left}px`,
+            width: `${dropdownPos.width}px`,
+            minWidth: '280px',
+          }}
           role="listbox"
           aria-label="Select a service"
         >
@@ -300,7 +323,8 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
               </span>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Error text */}

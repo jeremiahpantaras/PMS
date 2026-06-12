@@ -17,6 +17,7 @@ import { Permissions } from './pages/users/Permissions';
 import { Subscription } from './pages/account/Subscription';
 import CommunicationSettings from './pages/communication/CommunicationSettings';
 import CommunicationLogs from './pages/communication/CommunicationLogs';
+import { ConsentFormEditor } from './pages/practice/ConsentFormEditor';
 
 // ─── Card → Feature key mapping ───────────────────────────────────────────────
 // Each Setup card maps to its own granular RBAC feature key.
@@ -51,6 +52,7 @@ const SETUP_CARDS: SetupCard[] = [
     options: [
       { id: 'option1', label: 'Locations', component: PracticeOption1 },
       { id: 'option2', label: 'Invoicing', component: PracticeOption2 },
+      { id: 'consent-form', label: 'Consent Form', component: ConsentFormEditor },
     ],
   },
   {

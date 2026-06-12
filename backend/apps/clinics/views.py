@@ -6,13 +6,15 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.core.cache import cache
-from .models import Clinic, Practitioner, Location
+from .models import Clinic, Practitioner, Location, ClinicConsentForm
 from .serializers import (
     ClinicSerializer,
     ClinicBranchSerializer,
     ClinicProfileSetupSerializer,
     PractitionerSerializer,
     LocationSerializer,
+    ClinicConsentFormSerializer,
+    ClinicConsentFormCreateSerializer,
 )
 from apps.common.permissions import IsAdminOrStaffOnly
 import logging
@@ -194,3 +196,51 @@ class LocationViewSet(viewsets.ModelViewSet):
         if user.is_admin:
             return self.queryset
         return self.queryset.filter(clinic=user.clinic)
+
+
+class ClinicConsentFormViewSet(viewsets.ModelViewSet):
+    """
+    CRUD operations for clinic consent forms.
+    Each clinic can have one active consent form at a time.
+    """
+
+    queryset = ClinicConsentForm.objects.all()
+    serializer_class = ClinicConsentFormSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrStaffOnly]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['clinic', 'is_active']
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.clinic:
+            return self.queryset.none()
+
+        main_clinic = user.clinic.main_clinic
+        all_branch_ids = list(main_clinic.get_all_branches().values_list('id', flat=True))
+        return self.queryset.filter(clinic_id__in=all_branch_ids)
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return ClinicConsentFormCreateSerializer
+        return ClinicConsentFormSerializer
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        main_clinic = user.clinic.main_clinic
+        serializer.save(clinic=main_clinic)
+
+    @action(detail=False, methods=['get'], url_path='active')
+    def active_consent(self, request):
+        """Get the active consent form for the current user's clinic."""
+        user = request.user
+        if not user.clinic:
+            return Response({'detail': 'No clinic associated.'}, status=status.HTTP_404_NOT_FOUND)
+
+        main_clinic = user.clinic.main_clinic
+        consent = self.get_queryset().filter(clinic=main_clinic, is_active=True).first()
+
+        if not consent:
+            return Response({'detail': 'No active consent form found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(consent)
+        return Response(serializer.data)

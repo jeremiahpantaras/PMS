@@ -186,3 +186,36 @@ export const getClientFormRequests = async (patientId: number): Promise<ClientFo
   );
   return response.data;
 };
+
+// ─── Patient Consent Document ─────────────────────────────────────────────────
+
+export interface PatientConsentDocumentRecord {
+  id: number;
+  patient: number | null;
+  patient_name?: string;
+  appointment: number | null;
+  appointment_id: number | null;
+  clinic: number;
+  clinic_name: string;
+  type: string;
+  title: string;
+  header_snapshot: string;
+  body_snapshot: string;
+  signature: string;
+  signed_at: string;
+  consent_version: string;
+  signer_full_name: string;
+  signer_email: string;
+  created_at: string;
+}
+
+/**
+ * Get patient consent documents (historical clinic consent snapshots).
+ * GET /patients/{id}/consent_documents/
+ */
+export const getPatientConsentDocuments = async (patientId: number): Promise<PatientConsentDocumentRecord[]> => {
+  const response = await axiosInstance.get<PatientConsentDocumentRecord[]>(
+    `/patients/${patientId}/consent_documents/`,
+  );
+  return response.data;
+};

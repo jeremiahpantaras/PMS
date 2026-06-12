@@ -9,10 +9,16 @@ export interface ConsentFormTemplateData {
   dateSigned: string;
   consentText: string;
   signature: string; // base64 PNG
+  /** Optional document title — defaults to 'Patient Data Privacy Consent Form' */
+  title?: string;
+  /** Optional header content (HTML) rendered above the consent body — used by Clinic Consent Forms */
+  headerContent?: string;
+  /** Label for the 'Document Type' field in the patient info grid */
+  documentType?: string;
 }
 
 /**
- * Pure rendering component for the consent form document.
+ * Pure rendering component for consent form documents (Data Privacy & Clinic Consent).
  * Used by ViewConsentFormModal (display) and SendConsentFormModal (PDF generation via html2canvas).
  * Matches US Letter size: 816 × 1056 px at 96 dpi.
  */
@@ -24,6 +30,9 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
   dateSigned,
   consentText,
   signature,
+  title = 'Patient Data Privacy Consent Form',
+  headerContent,
+  documentType = 'Data Privacy Consent Form',
 }) => {
   return (
     <div
@@ -95,7 +104,7 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
             lineHeight: 1.3,
           }}
         >
-          Patient Data Privacy Consent Form
+          {title}
         </h1>
       </div>
 
@@ -116,7 +125,7 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
           { label: 'Patient Full Name', value: patientName || '—' },
           { label: 'Email Address',     value: patientEmail || '—' },
           { label: 'Date Signed',       value: dateSigned },
-          { label: 'Document Type',     value: 'Data Privacy Consent Form' },
+          { label: 'Document Type',     value: documentType },
         ].map(({ label, value }) => (
           <div key={label}>
             <p style={{ fontSize: '10px', color: '#6b7280', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
@@ -126,6 +135,32 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
           </div>
         ))}
       </div>
+
+      {/* ── HEADER CONTENT (Clinic Consent Forms only) ── */}
+      {headerContent && (
+        <div style={{ marginBottom: '24px' }}>
+          <p
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#6b7280',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              margin: '0 0 10px',
+            }}
+          >
+            Introduction
+          </p>
+          <div
+            style={{
+              fontSize: '14px',
+              lineHeight: 1.8,
+              color: '#374151',
+            }}
+            dangerouslySetInnerHTML={{ __html: headerContent }}
+          />
+        </div>
+      )}
 
       {/* ── CONSENT TEXT ── */}
       <div style={{ marginBottom: '40px' }}>
@@ -162,6 +197,7 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
         style={{
           borderTop: '1px solid #e5e7eb',
           paddingTop: '28px',
+          paddingBottom: '80px',
         }}
       >
         <p
@@ -205,25 +241,15 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
         <p style={{ fontSize: '11px', color: '#9ca3af', margin: '2px 0 0' }}>
           Signed electronically on {dateSigned}
         </p>
-      </div>
 
-      {/* ── FOOTER + MALASAKIT BRANDING ── */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '16px',
-          left: '72px',
-          right: '72px',
-        }}
-      >
-        {/* Existing legal footer */}
+        {/* ── FOOTER + MALASAKIT BRANDING ── */}
         <div
           style={{
             borderTop: '1px solid #e5e7eb',
             paddingTop: '10px',
             display: 'flex',
             justifyContent: 'space-between',
-            marginBottom: '10px',
+            marginTop: '24px',
           }}
         >
           <p style={{ fontSize: '9px', color: '#9ca3af', margin: 0 }}>

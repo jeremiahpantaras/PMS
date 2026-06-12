@@ -6,6 +6,7 @@ from .models import (
     ServiceCategory, PortalService,
     PortalLink, PortalBooking, PatientConsent,
     ClientFormRequest, PatientCase,
+    PatientConsentDocument,
 )
 
 
@@ -291,6 +292,7 @@ class PortalLinkPublicSerializer(serializers.ModelSerializer):
     branches       = serializers.SerializerMethodField()   # ← NEW
     categories     = serializers.SerializerMethodField()
     practitioners  = serializers.SerializerMethodField()
+    has_clinic_consent_form = serializers.SerializerMethodField()
 
     class Meta:
         model  = PortalLink
@@ -300,7 +302,15 @@ class PortalLinkPublicSerializer(serializers.ModelSerializer):
             'clinic_phone', 'clinic_email',
             'branches',       # ← NEW
             'categories', 'practitioners',
+            'has_clinic_consent_form',
         ]
+
+    def get_has_clinic_consent_form(self, obj) -> bool:
+        from apps.clinics.models import ClinicConsentForm
+        return ClinicConsentForm.objects.filter(
+            clinic=obj.clinic,
+            is_active=True,
+        ).exists()
 
     def get_clinic_logo(self, obj) -> str | None:
         request = self.context.get('request')
@@ -671,3 +681,56 @@ class PatientCaseSerializer(serializers.ModelSerializer):
         if obj.primary_practitioner and obj.primary_practitioner.user:
             return obj.primary_practitioner.user.get_full_name()
         return None
+
+
+class PatientConsentDocumentSerializer(serializers.ModelSerializer):
+    patient_name = serializers.CharField(source='patient.get_full_name', read_only=True)
+    clinic_name = serializers.CharField(source='clinic.name', read_only=True)
+    appointment_id = serializers.IntegerField(source='appointment.id', read_only=True, allow_null=True)
+
+    class Meta:
+        model = PatientConsentDocument
+        fields = [
+            'id', 'patient', 'patient_name', 'appointment', 'appointment_id',
+            'clinic', 'clinic_name', 'type', 'title',
+            'header_snapshot', 'body_snapshot',
+            'signature', 'signed_at', 'consent_version',
+            'signer_full_name', 'signer_email',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'patient_name', 'clinic_name', 'appointment_id']
+
+
+class PatientConsentDocumentCreateSerializer(serializers.ModelSerializer):
+    """Used to create a new patient consent document (snapshot)."""
+
+    class Meta:
+        model = PatientConsentDocument
+        fields = [
+            'title', 'header_snapshot', 'body_snapshot',
+            'signature', 'signed_at', 'consent_version',
+            'signer_full_name', 'signer_email',
+            'type',
+        ]
+
+    def validate_signature(self, value: str):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Signature is required.')
+        return value
+
+
+class PublicPatientConsentDocumentCreateSerializer(serializers.Serializer):
+    """Used by public portal to create a clinic consent document."""
+
+    title = serializers.CharField(max_length=255)
+    header_snapshot = serializers.CharField(allow_blank=True, default='')
+    body_snapshot = serializers.CharField()
+    signature = serializers.CharField()
+    consent_version = serializers.CharField(max_length=100, allow_blank=True, default='')
+    signer_full_name = serializers.CharField(max_length=255)
+    signer_email = serializers.EmailField()
+
+    def validate_signature(self, value: str):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Signature is required.')
+        return value

@@ -400,27 +400,32 @@ export const getBanking = async (
 
 export interface AgeingDebtItem {
   id?:             number;
-  source?:         'invoice' | 'debt_entry';
-  invoice_id:     number | null;
-  invoice_number: string;
-  invoice_date:   string | null;
-  due_date:       string | null;
-  patient_id:     number;
-  patient_name:   string;
-  patient_number: string;
-  total_amount:   number;
-  amount_paid:    number;
-  balance_due:    number;
-  status:         string;
-  days_overdue:   number;
-  bucket:         'CURRENT' | '0_30' | '31_60' | '61_90' | '90_plus';
-  category?:      string;
-  notes?:         string;
+  source?:         'invoice' | 'debt_entry' | 'unbilled_appointment';
+  invoice_id:      number | null;
+  invoice_number:  string | null;
+  invoice_date:    string | null;
+  due_date:        string | null;
+  patient_id:      number;
+  patient_name:    string;
+  patient_number:  string;
+  total_amount:    number;
+  amount_paid:     number;
+  balance_due:     number;
+  status:          string;
+  days_overdue:    number;
+  bucket:          'CURRENT' | '0_30' | '31_60' | '61_90' | '90_plus';
+  category?:       string;
+  notes?:          string;
+  appointment_id?:     number | null;
+  appointment_date?:   string | null;
+  appointment_type?:   string;
+  practitioner_name?:  string;
+  practitioner_id?:   number | null;
   CURRENT:        number;
   '0_30':         number;
-  '31_60':        number;
-  '61_90':        number;
-  '90_plus':      number;
+  '31_60':         number;
+  '61_90':         number;
+  '90_plus':       number;
 }
 
 export interface AgeingDebtsSummary {

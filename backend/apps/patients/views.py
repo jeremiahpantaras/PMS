@@ -13,6 +13,7 @@ from .models import (
     ServiceCategory, PortalService,
     PortalLink, PortalBooking,
     PatientConsent,
+    PatientConsentDocument,
     ClientFormRequest,
     PatientCase,
 )
@@ -23,6 +24,8 @@ from .serializers import (
     PortalBookingCreateSerializer, PortalBookingResponseSerializer,
     PatientConsentSerializer, PatientConsentCreateSerializer,
     PublicPatientConsentCreateSerializer,
+    PatientConsentDocumentSerializer, PatientConsentDocumentCreateSerializer,
+    PublicPatientConsentDocumentCreateSerializer,
     ClientFormRequestSerializer,
     PublicClientFormVerifySerializer, PublicClientFormSubmitSerializer,
     PatientCaseSerializer,
@@ -116,6 +119,37 @@ def _confirm_portal_booking(booking, confirmed_by_user):
                 f"Patient WS emit failed for portal booking "
                 f"#{booking.reference_number}: {_ws_err}"
             )
+
+    # ── 1b. Link unsigned consent records to the patient ──────────────────
+    # Consent documents were created before the patient existed (portal flow).
+    # Now that we have a patient, back-fill the patient FK on all matching records.
+    if booking.patient_email and patient:
+        main_clinic = booking.portal_link.clinic
+
+        # Link Data Privacy Consent records (PatientConsent)
+        privacy_updated = PatientConsent.objects.filter(
+            portal_link=booking.portal_link,
+            email__iexact=booking.patient_email,
+            patient__isnull=True,
+        ).update(patient=patient)
+        logger.info(
+            f"[CONSENT LINK] Data Privacy Consent linked: {privacy_updated} records for "
+            f"patient_id={patient.id}, email={booking.patient_email}, "
+            f"booking_ref={booking.reference_number}"
+        )
+
+        # Link Clinic Consent Document records (PatientConsentDocument)
+        # NOTE: Documents are created with portal_link.clinic (main clinic), not booking.branch
+        clinic_updated = PatientConsentDocument.objects.filter(
+            clinic=main_clinic,
+            signer_email__iexact=booking.patient_email,
+            patient__isnull=True,
+        ).update(patient=patient)
+        logger.info(
+            f"[CONSENT LINK] Clinic Consent Document linked: {clinic_updated} records for "
+            f"patient_id={patient.id}, email={booking.patient_email}, "
+            f"clinic_id={main_clinic.id}, booking_ref={booking.reference_number}"
+        )
 
     # ── 2. Find or create Appointment ─────────────────────────────────────
     if booking.appointment_id:
@@ -262,9 +296,70 @@ class PatientViewSet(viewsets.ModelViewSet):
                 'signature':    serializer.validated_data['signature'],
             },
         )
+
+        # Also create/update a PatientConsentDocument so it appears in the
+        # unified consent documents list alongside Clinic Consent Forms.
+        PatientConsentDocument.objects.update_or_create(
+            patient=patient,
+            type=PatientConsentDocument.TYPE_DATA_PRIVACY,
+            defaults={
+                'clinic':            patient.clinic,
+                'title':             'Data Privacy Consent Form',
+                'header_snapshot':   '',
+                'body_snapshot':     serializer.validated_data['consent_text'],
+                'signature':         serializer.validated_data['signature'],
+                'signed_at':         consent.updated_at or timezone.now(),
+                'signer_full_name':  serializer.validated_data['full_name'],
+                'signer_email':      serializer.validated_data['email'],
+            },
+        )
+
         return Response(
             PatientConsentSerializer(consent).data,
             status=status.HTTP_201_CREATED if _created else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['get'], url_path='consent_documents')
+    def consent_documents(self, request, pk=None):
+        """
+        GET /api/patients/{id}/consent_documents/
+        Returns all consent documents (historical snapshots) for a patient.
+        """
+        patient = self.get_object()
+        documents = PatientConsentDocument.objects.filter(
+            patient=patient,
+        ).order_by('-signed_at')
+        serializer = PatientConsentDocumentSerializer(documents, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='create_consent_document')
+    def create_consent_document(self, request, pk=None):
+        """
+        POST /api/patients/{id}/create_consent_document/
+        Creates a new patient consent document (snapshot for legal audit).
+        """
+        patient = self.get_object()
+
+        serializer = PatientConsentDocumentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        document = PatientConsentDocument.objects.create(
+            patient=patient,
+            clinic=patient.clinic,
+            header_snapshot=serializer.validated_data.get('header_snapshot', ''),
+            body_snapshot=serializer.validated_data['body_snapshot'],
+            signature=serializer.validated_data['signature'],
+            signed_at=serializer.validated_data.get('signed_at', timezone.now()),
+            consent_version=serializer.validated_data.get('consent_version', ''),
+            signer_full_name=serializer.validated_data['signer_full_name'],
+            signer_email=serializer.validated_data['signer_email'],
+            type=serializer.validated_data.get('type', PatientConsentDocument.TYPE_CLINIC_CONSENT),
+            title=serializer.validated_data.get('title', 'Clinic Consent Form'),
+        )
+        return Response(
+            PatientConsentDocumentSerializer(document).data,
+            status=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=['post'], url_path='email_consent')
@@ -823,11 +918,136 @@ class PublicPortalConsentCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        consent = serializer.save(portal_link=portal_link)
+        # Try to find existing patient by email to link the consent
+        patient = None
+        email = serializer.validated_data.get('email')
+        if email:
+            patient = Patient.objects.filter(
+                email__iexact=email,
+                clinic=portal_link.clinic,
+            ).first()
+
+        # Get client IP for audit trail
+        ip_address = None
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip_address = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip_address = request.META.get('REMOTE_ADDR')
+
+        # Create the consent directly to ensure portal_link is properly set
+        # (serializer.save() may not properly handle the portal_link kwarg)
+        consent = PatientConsent.objects.create(
+            portal_link=portal_link,
+            patient=patient,
+            full_name=serializer.validated_data['full_name'],
+            email=email,
+            consent_text=serializer.validated_data['consent_text'],
+            signature=serializer.validated_data['signature'],
+            type=PatientConsent.CONSENT_FORM,
+        )
+
+        # Also create a PatientConsentDocument so it appears in the unified
+        # consent documents list alongside Clinic Consent Forms.
+        PatientConsentDocument.objects.create(
+            patient=patient,
+            clinic=portal_link.clinic,
+            type=PatientConsentDocument.TYPE_DATA_PRIVACY,
+            title='Data Privacy Consent Form',
+            header_snapshot='',
+            body_snapshot=serializer.validated_data['consent_text'],
+            signature=serializer.validated_data['signature'],
+            signed_at=consent.created_at,
+            signer_full_name=serializer.validated_data['full_name'],
+            signer_email=email,
+            ip_address=ip_address,
+        )
+
         return Response(
             PublicPatientConsentCreateSerializer(consent).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class PublicClinicConsentDocumentCreateView(APIView):
+    """
+    POST /api/public/portal/{token}/clinic_consent/
+    Creates a clinic consent document snapshot during portal booking.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, token: str):
+        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+
+        serializer = PublicPatientConsentDocumentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get client IP for audit
+        ip_address = None
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip_address = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip_address = request.META.get('REMOTE_ADDR')
+
+        # Try to find existing patient by email to link the consent document
+        patient = None
+        email = serializer.validated_data.get('signer_email')
+        if email:
+            patient = Patient.objects.filter(
+                email__iexact=email,
+                clinic=portal_link.clinic,
+            ).first()
+
+        document = PatientConsentDocument.objects.create(
+            patient=patient,
+            clinic=portal_link.clinic,
+            header_snapshot=serializer.validated_data.get('header_snapshot', ''),
+            body_snapshot=serializer.validated_data['body_snapshot'],
+            signature=serializer.validated_data['signature'],
+            signed_at=timezone.now(),
+            consent_version=serializer.validated_data.get('consent_version', ''),
+            signer_full_name=serializer.validated_data['signer_full_name'],
+            signer_email=serializer.validated_data['signer_email'],
+            type=PatientConsentDocument.TYPE_CLINIC_CONSENT,
+            title=serializer.validated_data.get('title', 'Clinic Consent Form'),
+            ip_address=ip_address,
+        )
+        return Response(
+            PatientConsentDocumentSerializer(document).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PublicClinicConsentFormView(APIView):
+    """
+    GET /api/public/portal/{token}/clinic_consent/
+    Returns the active clinic consent form for the portal, if any.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, token: str):
+        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+
+        from apps.clinics.models import ClinicConsentForm
+        from apps.clinics.serializers import ClinicConsentFormSerializer
+
+        consent = ClinicConsentForm.objects.filter(
+            clinic=portal_link.clinic,
+            is_active=True,
+        ).first()
+
+        if not consent:
+            return Response(
+                {'detail': 'No active clinic consent form found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ClinicConsentFormSerializer(consent, context={'request': request})
+        data = serializer.data
+        data['clinic_name'] = portal_link.clinic.name
+        return Response(data)
 
 
 class PublicAvailableSlotsView(APIView):

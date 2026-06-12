@@ -521,3 +521,96 @@ class PatientCase(TimeStampedModel):
 
     def __str__(self):
         return f"{self.title} - {self.patient.get_full_name()}"
+
+
+class PatientConsentDocument(TimeStampedModel):
+    """
+    Legal audit record that preserves the exact content of a signed consent form.
+    Stores a snapshot of the header and body content at signing time, preserving
+    historical consent records even if the clinic updates their consent form later.
+    Supports both Data Privacy Consent and Clinic Consent Form types.
+    """
+
+    TYPE_CLINIC_CONSENT = 'CLINIC_CONSENT'
+    TYPE_DATA_PRIVACY   = 'DATA_PRIVACY_CONSENT'
+    TYPE_CHOICES = [
+        (TYPE_CLINIC_CONSENT, 'Clinic Consent Form'),
+        (TYPE_DATA_PRIVACY,   'Data Privacy Consent Form'),
+    ]
+
+    patient = models.ForeignKey(
+        Patient,
+        on_delete=models.CASCADE,
+        related_name='consent_documents',
+        null=True,
+        blank=True,
+    )
+    appointment = models.ForeignKey(
+        'appointments.Appointment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consent_documents',
+    )
+    clinic = models.ForeignKey(
+        'clinics.Clinic',
+        on_delete=models.CASCADE,
+        related_name='consent_documents',
+    )
+    type = models.CharField(
+        max_length=50,
+        choices=TYPE_CHOICES,
+        default=TYPE_CLINIC_CONSENT,
+    )
+    title = models.CharField(max_length=255, default='Clinic Consent Form')
+
+    # Snapshots of the consent content at the time of signing
+    header_snapshot = models.TextField(
+        blank=True,
+        default='',
+        help_text='HTML snapshot of the header content when signed',
+    )
+    body_snapshot = models.TextField(
+        blank=True,
+        default='',
+        help_text='HTML snapshot of the body content when signed',
+    )
+
+    # E-signature
+    signature = models.TextField(
+        help_text='base64 encoded PNG signature image',
+    )
+    signed_at = models.DateTimeField(
+        help_text='Timestamp when the consent was signed',
+    )
+
+    # Consent version tracking
+    consent_version = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Version identifier of the consent form when signed',
+    )
+
+    # Optional: IP address for audit trail
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text='IP address of the signer for audit purposes',
+    )
+
+    # Patient info at time of signing (for records where patient FK may be null)
+    signer_full_name = models.CharField(max_length=255)
+    signer_email = models.EmailField()
+
+    class Meta:
+        db_table = 'patient_consent_documents'
+        ordering = ['-signed_at']
+        indexes = [
+            models.Index(fields=['patient', 'type']),
+            models.Index(fields=['clinic', 'signed_at']),
+            models.Index(fields=['appointment']),
+        ]
+
+    def __str__(self):
+        return f"{self.signer_full_name} - {self.title} ({self.signed_at.date()})"

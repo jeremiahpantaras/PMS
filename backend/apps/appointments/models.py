@@ -171,6 +171,16 @@ class Appointment(TimeStampedModel, SoftDeleteModel):
         help_text='How this appointment was originally booked',
     )
 
+    # ── Service override flag ─────────────────────────────────────────────────
+    # Set to True when a staff member manually changes the service on a
+    # portal-originated appointment.  When True, the calendar block renders
+    # the service color instead of the default portal blue.
+    service_overridden = models.BooleanField(
+        default=False,
+        help_text='True when a practitioner/admin has manually changed the '
+                  'consultation type on a portal booking.',
+    )
+
     class Meta:
         db_table = 'appointments'
         ordering = ['-date', '-start_time']

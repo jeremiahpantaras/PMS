@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Clinic, Practitioner, Location
+from .models import Clinic, Practitioner, Location, ClinicConsentForm
 from apps.common.validators import normalize_ph_phone, validate_ph_phone, validate_email_detailed
 from django.core.exceptions import ValidationError as DjangoValidationError
 import logging
@@ -190,3 +190,49 @@ class LocationSerializer(serializers.ModelSerializer):
         model  = Location
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ClinicConsentFormSerializer(serializers.ModelSerializer):
+    clinic_name = serializers.CharField(source='clinic.name', read_only=True)
+
+    class Meta:
+        model = ClinicConsentForm
+        fields = [
+            'id', 'clinic', 'clinic_name', 'title',
+            'header_content', 'body_content', 'is_active',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'clinic_name', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        # Ensure only one active consent form per clinic
+        if attrs.get('is_active', False):
+            clinic = attrs.get('clinic') or (self.instance.clinic if self.instance else None)
+            if clinic:
+                existing = ClinicConsentForm.objects.filter(
+                    clinic=clinic,
+                    is_active=True,
+                )
+                if self.instance:
+                    existing = existing.exclude(pk=self.instance.pk)
+                if existing.exists():
+                    raise serializers.ValidationError(
+                        {'is_active': 'Only one consent form can be active per clinic. Deactivate the existing one first.'}
+                    )
+        return attrs
+
+
+class ClinicConsentFormCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClinicConsentForm
+        fields = ['title', 'header_content', 'body_content', 'is_active']
+
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Title is required.")
+        return value.strip()
+
+    def validate_body_content(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Body content is required.")
+        return value

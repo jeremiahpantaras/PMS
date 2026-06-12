@@ -72,6 +72,7 @@ export interface PortalData {
   branches:       PortalBranch[];
   categories:     PortalCategory[];
   practitioners:  PortalPractitioner[];
+  has_clinic_consent_form: boolean;
 }
 
 export interface BookingPayload {

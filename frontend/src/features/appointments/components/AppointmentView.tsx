@@ -1486,7 +1486,7 @@ const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = 
                 </button>
                 {/* Appointment Dropdown Menu */}
                 {tab.isDropdown && showAppointmentDropdown && (
-                  <div className="absolute left-0 top-full mt-1 w-66 bg-white border border-gray-200 rounded-xl shadow-lg z-9999 py-1">
+                  <div className="absolute left-0 top-full mt-1 w-66 bg-white border border-gray-200 rounded-xl shadow-lg z-999 py-1">
                     <button
                       onClick={() => {
                         setShowAppointmentDropdown(false);

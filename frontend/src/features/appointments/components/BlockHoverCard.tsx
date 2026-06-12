@@ -20,12 +20,13 @@ const fmt12 = (time: string): string => {
 };
 
 // Row component outside the main component
-const HoverRow: React.FC<{ icon: React.ReactNode; label: string; value: React.ReactNode }> = ({ icon, label, value }) => (
+const HoverRow: React.FC<{ icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode }> = ({ icon, label, value, sub }) => (
   <div className="flex items-start gap-2.5 py-1.5">
     <div className="flex-shrink-0 mt-0.5 text-gray-400">{icon}</div>
     <div className="min-w-0 flex-1">
       <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide leading-none mb-0.5">{label}</p>
       <p className="text-xs text-gray-800 font-medium leading-snug">{value}</p>
+      {sub && <p className="text-[10px] text-gray-400 mt-0.5 leading-none">{sub}</p>}
     </div>
   </div>
 );
@@ -123,17 +124,27 @@ export const BlockHoverCard: React.FC<BlockHoverCardProps> = ({
             icon={<User className="w-3.5 h-3.5" />}
             label="Created By"
             value={block.created_by_name}
+            sub={block.created_at && (() => {
+              try { return format(parseISO(block.created_at), 'MMM d, yyyy h:mm a'); }
+              catch { return undefined; }
+            })()}
           />
         )}
 
-        {/* Modified By */}
-        {block.modified_by_name && (
-          <HoverRow
-            icon={<Pencil className="w-3.5 h-3.5" />}
-            label="Modified By"
-            value={block.modified_by_name}
-          />
-        )}
+        {/* Modified By — always shown */}
+        <HoverRow
+          icon={<Pencil className="w-3.5 h-3.5" />}
+          label="Modified By"
+          value={
+            block.modified_by_name
+              ? block.modified_by_name
+              : <span className="text-gray-400 italic font-normal">Not yet modified</span>
+          }
+          sub={block.modified_by_name && block.updated_at && (() => {
+            try { return format(parseISO(block.updated_at), 'MMM d, yyyy h:mm a'); }
+            catch { return undefined; }
+          })()}
+        />
 
         {/* People / Users Involved */}
         {block.visible_to_user_names && block.visible_to_user_names.length > 0 && (

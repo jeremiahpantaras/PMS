@@ -4,7 +4,12 @@ import { getPractitioners, getMyClinic } from '@/features/clinics/clinic.api';
 import { getContacts } from '@/features/contacts/contact.api';
 import axiosInstance from '@/lib/axios';
 import { ConsentFormTemplate } from './ConsentFormTemplate';
-import type { PatientConsentRecord } from '../patient.api';
+import type { ViewableConsent } from './ViewConsentFormModal';
+
+/** Type guard: returns true if the consent is a PatientConsentDocumentRecord. */
+function isConsentDocument(c: ViewableConsent): c is import('../patient.api').PatientConsentDocumentRecord {
+  return 'signed_at' in c && 'signer_full_name' in c;
+}
 
 interface EmailSuggestion {
   name: string;
@@ -16,7 +21,7 @@ interface SendConsentFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   patientId: number;
-  consent: PatientConsentRecord;
+  consent: ViewableConsent;
 }
 
 export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
@@ -25,11 +30,20 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
   patientId,
   consent,
 }) => {
+  // ── Normalize fields across both consent types ──────────────────────────
+  const isDoc = isConsentDocument(consent);
+  const title       = isDoc ? consent.title : 'Data Privacy Consent Form';
+  const signerName  = isDoc ? consent.signer_full_name : consent.full_name;
+  const signerEmail = isDoc ? consent.signer_email : consent.email;
+  const bodyText    = isDoc ? consent.body_snapshot : consent.consent_text;
+  const headerHtml  = isDoc ? consent.header_snapshot : '';
+  const isClinicConsent = isDoc && consent.type === 'CLINIC_CONSENT';
+
   const [emails, setEmails] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
-  const [subject, setSubject] = useState(`Data Privacy Consent Form – ${consent.full_name}`);
+  const [subject, setSubject] = useState(`${title} – ${signerName}`);
   const [body, setBody] = useState(
-    `Dear ${consent.full_name},\n\nPlease find attached your signed Data Privacy Consent Form.\n\nBest regards,\nClinic Team`
+    `Dear ${signerName},\n\nPlease find attached your signed ${title}.\n\nBest regards,\nClinic Team`
   );
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -47,14 +61,14 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    setEmails(consent.email ? [consent.email] : []);
+    setEmails(signerEmail ? [signerEmail] : []);
     setEmailInput('');
     setErrorMessage('');
     setSuccessMessage('');
     setAttachment(null);
-    setSubject(`Data Privacy Consent Form – ${consent.full_name}`);
+    setSubject(`${title} – ${signerName}`);
     setBody(
-      `Dear ${consent.full_name},\n\nPlease find attached your signed Data Privacy Consent Form.\n\nBest regards,\nClinic Team`
+      `Dear ${signerName},\n\nPlease find attached your signed ${title}.\n\nBest regards,\nClinic Team`
     );
     setIsGeneratingPdf(true);
 
@@ -116,8 +130,9 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
         const { createRoot } = await import('react-dom/client');
         const root = createRoot(container);
 
-        const dateSigned = consent.created_at
-          ? new Date(consent.created_at).toLocaleDateString('en-PH', {
+        const dateField = isDoc ? consent.signed_at : consent.created_at;
+        const dateSigned = dateField
+          ? new Date(dateField).toLocaleDateString('en-PH', {
               year: 'numeric',
               month: 'long',
               day: 'numeric',
@@ -129,11 +144,14 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
             <ConsentFormTemplate
               clinicName={consent.clinic_name ?? 'Clinic'}
               clinicLogo={clinicLogo}
-              patientName={consent.full_name}
-              patientEmail={consent.email}
+              patientName={signerName}
+              patientEmail={signerEmail}
               dateSigned={dateSigned}
-              consentText={consent.consent_text}
+              consentText={bodyText}
               signature={consent.signature}
+              title={title}
+              headerContent={headerHtml || undefined}
+              documentType={isClinicConsent ? 'Clinic Consent Form' : 'Data Privacy Consent Form'}
             />
           );
           setTimeout(resolve, 800);
@@ -158,7 +176,7 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, pdfW, Math.min(pdfH, 279.4));
 
         const blob = pdf.output('blob');
-        const slug = consent.full_name.replace(/\s+/g, '-').toLowerCase();
+        const slug = signerName.replace(/\s+/g, '-').toLowerCase();
         const file = new File([blob], `consent-form-${slug}.pdf`, { type: 'application/pdf' });
 
         root.unmount();
@@ -308,7 +326,7 @@ export const SendConsentFormModal: React.FC<SendConsentFormModalProps> = ({
               </div>
               <div>
                 <h2 className="text-base font-bold text-gray-900">Send Consent Form</h2>
-                <p className="text-xs text-gray-500">{consent.full_name}</p>
+                <p className="text-xs text-gray-500">{signerName}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">

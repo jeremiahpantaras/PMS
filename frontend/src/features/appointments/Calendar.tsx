@@ -473,8 +473,10 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         label: apt.service_name ?? apt.chief_complaint ?? null,
       };
     }
-    // Check if portal booking — mint green overrides service/status colors
-    if (isPortalBooking(apt)) {
+    // Portal booking — blue is the default for online bookings.
+    // Once a practitioner manually changes the Consultation Type,
+    // service_overridden=true and we fall through to the service color below.
+    if (isPortalBooking(apt) && !apt.service_overridden) {
       return {
         useHex: true,
         hex:    PORTAL_MINT_HEX,

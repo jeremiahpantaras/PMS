@@ -215,6 +215,13 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         else:
             serializer.save(updated_by=request.user)
 
+        # ── Auto-set service_overridden flag ─────────────────────────────────
+        # When a practitioner manually changes the service on a portal booking,
+        # flag it so the calendar renders the service color instead of portal blue.
+        if 'service' in filtered_data and appointment.booking_source == 'portal':
+            appointment.service_overridden = True
+            appointment.save(update_fields=['service_overridden', 'updated_at'])
+
         # ── DNA hard-sync: arrival_status=DNA → status=DNA ───────────────────
         # Business rule: DNA is never a soft marker.  When a patient is marked
         # as Did Not Arrive, the top-level appointment status must also become

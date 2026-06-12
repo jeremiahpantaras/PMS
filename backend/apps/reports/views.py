@@ -1224,7 +1224,7 @@ class ReportViewSet(viewsets.ModelViewSet):
                 is_deleted=False,
                 status__in=['PENDING', 'PARTIALLY_PAID', 'OVERDUE'],
             )
-            .select_related('patient')
+            .select_related('patient', 'appointment', 'appointment__practitioner__user')
             .order_by('invoice_date', 'invoice_number')
         )
 
@@ -1263,26 +1263,94 @@ class ReportViewSet(viewsets.ModelViewSet):
             bucket_totals[bucket] = round(bucket_totals[bucket] + balance, 2)
 
             items.append({
-                'id':             inv.id,
-                'source':         'invoice',
-                'invoice_id':     inv.id,
-                'invoice_number': inv.invoice_number,
-                'invoice_date':   str(inv.invoice_date),
-                'due_date':       str(inv.due_date) if inv.due_date else None,
-                'patient_id':     inv.patient_id,
-                'patient_name':   inv.patient.get_full_name() if inv.patient else '',
-                'patient_number': inv.patient.patient_number if inv.patient else '',
-                'total_amount':   float(inv.total_amount),
-                'amount_paid':    float(inv.amount_paid),
-                'balance_due':    balance,
-                'status':         inv.status,
-                'days_overdue':   days_overdue,
-                'bucket':         bucket,
-                'CURRENT':        balance if bucket == 'CURRENT' else 0.0,
-                '0_30':           balance if bucket == '0_30'    else 0.0,
-                '31_60':          balance if bucket == '31_60'   else 0.0,
-                '61_90':          balance if bucket == '61_90'   else 0.0,
-                '90_plus':        balance if bucket == '90_plus' else 0.0,
+                'id':                 inv.id,
+                'source':             'invoice',
+                'invoice_id':         inv.id,
+                'invoice_number':     inv.invoice_number,
+                'invoice_date':       str(inv.invoice_date),
+                'due_date':           str(inv.due_date) if inv.due_date else None,
+                'patient_id':         inv.patient_id,
+                'patient_name':       inv.patient.get_full_name() if inv.patient else '',
+                'patient_number':     inv.patient.patient_number if inv.patient else '',
+                'total_amount':       float(inv.total_amount),
+                'amount_paid':        float(inv.amount_paid),
+                'balance_due':        balance,
+                'status':             inv.status,
+                'days_overdue':       days_overdue,
+                'bucket':             bucket,
+                'appointment_id':     inv.appointment_id,
+                'appointment_date':   str(inv.appointment.date) if inv.appointment else None,
+                'appointment_type':  inv.appointment.appointment_type if inv.appointment else '',
+                'practitioner_name':  inv.appointment.practitioner.user.get_full_name() if inv.appointment and inv.appointment.practitioner and inv.appointment.practitioner.user else '',
+                'practitioner_id':    inv.appointment.practitioner_id if inv.appointment else None,
+                'CURRENT':           balance if bucket == 'CURRENT' else 0.0,
+                '0_30':               balance if bucket == '0_30'    else 0.0,
+                '31_60':              balance if bucket == '31_60'   else 0.0,
+                '61_90':              balance if bucket == '61_90'   else 0.0,
+                '90_plus':            balance if bucket == '90_plus' else 0.0,
+            })
+
+        unbilled_appts = (
+            Appointment.objects
+            .filter(
+                clinic_id__in=all_branch_ids,
+                status__in=['COMPLETED', 'CHECKED_IN', 'IN_PROGRESS'],
+                is_deleted=False,
+            )
+            .exclude(
+                billing_invoices__is_deleted=False
+            )
+            .select_related('patient', 'practitioner__user', 'clinic')
+        )
+
+        if branch_id:
+            try:
+                unbilled_appts = unbilled_appts.filter(clinic_id=int(branch_id))
+            except (ValueError, TypeError):
+                pass
+
+        for appt in unbilled_appts:
+            days_outstanding = (today - appt.date).days
+
+            if days_outstanding <= 0:
+                bucket = 'CURRENT'
+            elif days_outstanding <= 30:
+                bucket = '0_30'
+            elif days_outstanding <= 60:
+                bucket = '31_60'
+            elif days_outstanding <= 90:
+                bucket = '61_90'
+            else:
+                bucket = '90_plus'
+
+            bucket_totals[bucket] = round(bucket_totals[bucket] + 0.0, 2)
+
+            items.append({
+                'id':                 appt.id,
+                'source':             'unbilled_appointment',
+                'invoice_id':         None,
+                'invoice_number':     None,
+                'invoice_date':       None,
+                'due_date':           None,
+                'patient_id':         appt.patient_id,
+                'patient_name':       appt.patient.get_full_name() if appt.patient else '',
+                'patient_number':     appt.patient.patient_number if appt.patient else '',
+                'total_amount':       0.0,
+                'amount_paid':        0.0,
+                'balance_due':        0.0,
+                'status':             'UNBILLED',
+                'days_overdue':       days_outstanding,
+                'bucket':             bucket,
+                'appointment_id':     appt.id,
+                'appointment_date':   str(appt.date),
+                'appointment_type':  appt.appointment_type if appt.appointment_type else '',
+                'practitioner_name':  appt.practitioner.user.get_full_name() if appt.practitioner and appt.practitioner.user else '',
+                'practitioner_id':    appt.practitioner_id,
+                'CURRENT':           0.0,
+                '0_30':               0.0,
+                '31_60':              0.0,
+                '61_90':              0.0,
+                '90_plus':            0.0,
             })
 
         debt_entries = (

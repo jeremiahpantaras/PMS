@@ -43,6 +43,10 @@ export interface Appointment {
   cancellation_reason:  string;
   cancelled_at:         string | null;
   booking_source:       string;
+  /** True when a practitioner/admin has manually changed the consultation
+   *  type on a portal-originated appointment. When true, the calendar block
+   *  renders the service color instead of the default portal blue. */
+  service_overridden:   boolean;
   created_at:           string;
   updated_at:           string;
 }

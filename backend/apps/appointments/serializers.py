@@ -48,6 +48,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'updated_by', 'updated_by_name',
             'cancelled_by', 'cancellation_reason', 'cancelled_at',
             'booking_source',
+            'service_overridden',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
@@ -169,6 +170,7 @@ class AppointmentEditSerializer(serializers.ModelSerializer):
             'service_name',
             'service_color',
             'service_duration',
+            'service_overridden',
             'updated_by',
             'updated_by_name',
             'updated_at',
@@ -179,6 +181,7 @@ class AppointmentEditSerializer(serializers.ModelSerializer):
             'service_name',
             'service_color',
             'service_duration',
+            'service_overridden',
             'updated_by',
             'updated_by_name',
             'updated_at',

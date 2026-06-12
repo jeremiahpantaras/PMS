@@ -91,25 +91,46 @@ export const NoteHoverCard: React.FC<NoteHoverCardProps> = ({
 
           {/* Created by */}
           {note.created_by_name && (
-            <div className="flex items-center gap-2">
-              <User className="w-3 h-3 text-gray-400 shrink-0" />
+            <div className="flex items-start gap-2">
+              <User className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wide leading-none">Created by</p>
                 <p className="text-[10px] text-gray-700 font-medium">{note.created_by_name}</p>
+                {note.created_at && (() => {
+                  try {
+                    return (
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {format(parseISO(note.created_at), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    );
+                  } catch { return null; }
+                })()}
               </div>
             </div>
           )}
 
-          {/* Modified by */}
-          {note.modified_by_name && note.modified_by_name !== note.created_by_name && (
-            <div className="flex items-center gap-2">
-              <User className="w-3 h-3 text-gray-300 shrink-0" />
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide leading-none">Modified by</p>
+          {/* Modified by — always shown */}
+          <div className="flex items-start gap-2">
+            <User className="w-3 h-3 text-gray-300 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide leading-none">Modified by</p>
+              {note.modified_by_name ? (
                 <p className="text-[10px] text-gray-700 font-medium">{note.modified_by_name}</p>
-              </div>
+              ) : (
+                <p className="text-[10px] text-gray-400 italic">Not yet modified</p>
+              )}
+              {/* Last Modified timestamp */}
+              {note.modified_by_name && note.updated_at && (() => {
+                try {
+                  return (
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {format(parseISO(note.updated_at), 'MMM d, yyyy h:mm a')}
+                    </p>
+                  );
+                } catch { return null; }
+              })()}
             </div>
-          )}
+          </div>
         </div>
       </div>
 

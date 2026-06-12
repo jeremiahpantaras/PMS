@@ -5,7 +5,8 @@ from .views import (
     ServiceCategoryViewSet, PortalServiceViewSet,
     PortalLinkViewSet, PortalBookingAdminViewSet,
     PublicPortalView, PublicPortalBookView, PublicAvailableSlotsView,
-    PublicPortalConsentCreateView,
+    PublicPortalConsentCreateView, PublicClinicConsentDocumentCreateView,
+    PublicClinicConsentFormView,
     PublicClientFormView, PublicClientFormVerifyView, PublicClientFormSubmitView,
     PatientCaseViewSet,
 )
@@ -36,6 +37,16 @@ urlpatterns = [
         'public/portal/<str:token>/consent/',
         PublicPortalConsentCreateView.as_view(),
         name='public-portal-consent',
+    ),
+    path(
+        'public/portal/<str:token>/clinic_consent/',
+        PublicClinicConsentDocumentCreateView.as_view(),
+        name='public-portal-clinic-consent',
+    ),
+    path(
+        'public/portal/<str:token>/clinic_consent/form/',
+        PublicClinicConsentFormView.as_view(),
+        name='public-portal-clinic-consent-form',
     ),
     path(
         'public/portal/<str:token>/slots/',

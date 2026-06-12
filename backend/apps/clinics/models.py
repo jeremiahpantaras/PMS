@@ -260,6 +260,58 @@ class Location(TimeStampedModel, SoftDeleteModel):
 
 # ── Clinic Communication Settings ─────────────────────────────────────────────
 
+class ClinicConsentForm(TimeStampedModel):
+    """
+    Clinic-owned customizable consent form.
+    Each clinic can have one active consent form at a time.
+    Content is stored as HTML for rich text support.
+    """
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name='consent_forms',
+    )
+    title = models.CharField(
+        max_length=255,
+        default='Patient Consent Form',
+        help_text='Display title for this consent form',
+    )
+    header_content = models.TextField(
+        blank=True,
+        default='',
+        help_text='HTML content for the consent form header',
+    )
+    body_content = models.TextField(
+        blank=True,
+        default='',
+        help_text='HTML content for the consent form body/terms',
+    )
+    is_active = models.BooleanField(
+        default=False,
+        help_text='Only one consent form can be active per clinic',
+    )
+
+    class Meta:
+        db_table = 'clinic_consent_forms'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['clinic', 'is_active']),
+        ]
+
+    def __str__(self):
+        status = 'ACTIVE' if self.is_active else 'INACTIVE'
+        return f"{self.clinic.name} - {self.title} ({status})"
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            ClinicConsentForm.objects.filter(
+                clinic=self.clinic,
+                is_active=True,
+            ).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+
 class ClinicCommunicationSettings(TimeStampedModel):
     """
     Per-clinic configuration for the automated communication workflow.
