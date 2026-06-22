@@ -4,14 +4,14 @@ from rest_framework.permissions import BasePermission
 class IsAdminOrStaffOnly(BasePermission):
     """
     Denies access to users with ONLY the PRACTITIONER role.
-    Allows users who have ADMIN or STAFF in their roles list.
+    Allows users who have ADMIN, STAFF, or ADMIN_ASSISTANT in their roles list.
     """
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         effective = request.user.get_effective_roles()
-        return bool({'ADMIN', 'STAFF'} & set(effective))
+        return bool({'ADMIN', 'STAFF', 'ADMIN_ASSISTANT'} & set(effective))
 
 
 class IsAdminOnly(BasePermission):

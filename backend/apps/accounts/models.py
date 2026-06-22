@@ -52,18 +52,18 @@ DEFAULT_PERMISSIONS = {
         'appointments': 'edit',
         'calendar': 'edit',
         'diary': 'edit',
-        'clinical_notes': 'edit',
+        'clinical_notes': 'view',   # Manager can VIEW clinical notes, not edit
         'client_cases': 'edit',
         'patients': 'edit',
         'reports': 'edit',
         'inventory': 'edit',
         'invoices': 'edit',
         'billing': 'edit',
-        'subscriptions': 'view',
+        'subscriptions': 'none',    # No subscription management
         'setup': 'view',
         'staff_management': 'edit',
-        'permissions': 'view',
-        'settings': 'view',
+        'permissions': 'none',      # Cannot manage system permissions
+        'settings': 'none',         # No system settings access
         'documents': 'edit',
         'outcome_measures': 'edit',
         'contacts': 'edit',
@@ -72,11 +72,11 @@ DEFAULT_PERMISSIONS = {
         'setup_practice':      'edit',
         'setup_items':         'edit',
         'setup_users':         'edit',
-        'setup_account':       'view',
+        'setup_account':       'none',  # No account/billing settings
         'setup_communication': 'edit',
         # Granular manage card permissions
         'manage_administration': 'edit',
-        'manage_clinical':       'edit',
+        'manage_clinical':       'view',
         'manage_communications': 'edit',
         # Granular report card permissions
         'reports_administration': 'edit',
@@ -167,6 +167,7 @@ DEFAULT_PERMISSIONS = {
 ROLE_PRIORITY = ['ADMIN', 'ADMIN_ASSISTANT', 'PRACTITIONER', 'STAFF', 'FINANCE', 'READ_ONLY']
 
 # Permission defaults for ADMIN_ASSISTANT (manager-level) and FINANCE roles.
+# ADMIN_ASSISTANT is the internal slug for the "Manager" role as seen in the UI.
 DEFAULT_PERMISSIONS['ADMIN_ASSISTANT'] = DEFAULT_PERMISSIONS['MANAGER'].copy()
 DEFAULT_PERMISSIONS['FINANCE'] = {
     'dashboard':    'view',
@@ -601,6 +602,11 @@ class User(AbstractUser, TimeStampedModel, SoftDeleteModel):
         return self.is_admin
 
     @property
+    def is_manager(self):
+        """True when the user holds the ADMIN_ASSISTANT (Manager) role."""
+        return 'ADMIN_ASSISTANT' in (self.roles or [self.role])
+
+    @property
     def is_practitioner(self):
         return 'PRACTITIONER' in (self.roles or [self.role])
     
@@ -656,6 +662,29 @@ class User(AbstractUser, TimeStampedModel, SoftDeleteModel):
     def can_edit(self, feature_key: str) -> bool:
         return self.has_feature_permission(feature_key, 'edit')
 
+    def get_managed_branches(self):
+        """
+        Return the QuerySet of Clinic branches this user is assigned to manage.
+
+        For ADMIN_ASSISTANT (Manager) users: returns all branches in
+        UserBranchAccess for this user.
+
+        For ADMIN (Owner) users: returns all branches of their clinic family.
+
+        For all other roles: returns an empty QuerySet.
+        """
+        from apps.clinics.models import Clinic
+        if self.is_admin:
+            if self.clinic:
+                return self.clinic.get_all_branches()
+            return Clinic.objects.none()
+        if self.is_manager:
+            return Clinic.objects.filter(
+                user_branch_accesses__user=self,
+                is_deleted=False,
+            )
+        return Clinic.objects.none()
+
 
 class Permission(TimeStampedModel):
     """Custom permissions for fine-grained access control"""
@@ -686,6 +715,50 @@ class Role(TimeStampedModel):
 
 
 # ── Audit: Role Change Log ────────────────────────────────────────────────────
+
+# ── Phase 4: Branch Assignment Engine ─────────────────────────────────────────
+
+class UserBranchAccess(TimeStampedModel):
+    """
+    Many-to-many junction table between Users and Clinic branches.
+
+    Primary purpose: express a Manager's (ADMIN_ASSISTANT) scope — i.e. which
+    branches they are responsible for.  One Manager may own many branches, but
+    each branch may only have ONE Manager (enforced in the serializer layer).
+
+    Also used to express multi-branch assignments for operational roles in
+    future phases (currently operational users keep the single clinic_branch FK).
+
+    The existing User.clinic_branch FK is kept as a convenience pointer to the
+    "primary" branch and remains the source of truth for all existing queries
+    in Calendar, Diary, and Appointments.
+    """
+
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='branch_accesses',
+        help_text='The user who has access to / manages this branch.',
+    )
+    branch = models.ForeignKey(
+        'clinics.Clinic',
+        on_delete=models.CASCADE,
+        related_name='user_branch_accesses',
+        help_text='The clinic branch the user can access.',
+    )
+
+    class Meta:
+        db_table = 'user_branch_access'
+        unique_together = [('user', 'branch')]
+        ordering = ['branch__name']
+        indexes = [
+            models.Index(fields=['user', 'branch']),
+            models.Index(fields=['branch']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} → {self.branch.name}"
+
 
 class UserRoleChangeLog(models.Model):
     """

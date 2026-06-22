@@ -67,6 +67,8 @@ export interface CreateStaffData {
   gender?: GenderType;
   address?: string;
   clinic_branch?: number | null;
+  /** List of branch IDs to assign (used for Manager multi-branch scope). */
+  branch_ids?: number[];
 
   // Legacy single-block availability (PRACTITIONER only, kept for compat)
   duty_start_time?: string;

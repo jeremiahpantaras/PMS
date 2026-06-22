@@ -4,6 +4,7 @@ from django.db import transaction
 import logging
 from .models import (
     User, Role, Permission, PermissionGroup, FeaturePermission,
+    UserBranchAccess,
     FEATURE_KEYS, ROLE_PRIORITY, _union_permissions,
     derive_permission_group_for_roles,
 )
@@ -132,6 +133,21 @@ class UserSerializer(serializers.ModelSerializer):
     position         = serializers.CharField(required=False, allow_blank=True)
     discipline       = serializers.CharField(required=False, allow_blank=True)
 
+    # ── Phase 4/9/10: Multi-branch assignment (Manager scope) ─────────────────
+    # Write-only list of branch PKs.  Used when creating/updating a Manager.
+    # For read, use `manager_branches` (SerializerMethodField below).
+    branch_ids      = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+        help_text='List of branch IDs to assign to this user (Managers only).',
+    )
+    # Read-only: list of branches this Manager is assigned to.
+    manager_branches = serializers.SerializerMethodField()
+    # Read-only: whether this user holds the Manager (ADMIN_ASSISTANT) role.
+    is_manager       = serializers.SerializerMethodField()
+
     class Meta:
         model  = User
         fields = [
@@ -143,6 +159,8 @@ class UserSerializer(serializers.ModelSerializer):
             'password_rotation', 'last_password_change',
             # RBAC
             'permission_group', 'permission_group_name', 'permissions_map',
+            # Manager multi-branch
+            'branch_ids', 'manager_branches', 'is_manager',
             # Position (for all staff)
             'position',
             # Availability fields (legacy single block)
@@ -158,6 +176,38 @@ class UserSerializer(serializers.ModelSerializer):
         if obj.permission_group_id:
             return obj.permission_group.name
         return None
+
+    def get_manager_branches(self, obj) -> list:
+        """
+        Return a list of branch dicts for Manager users.
+        Used by the frontend to populate the branch-scope picker and
+        by the backend security layer to validate branch assignments.
+        """
+        effective_roles = obj.get_effective_roles()
+        if 'ADMIN' in effective_roles:
+            # Owner sees all branches — return minimal list for reference
+            if obj.clinic:
+                return list(
+                    obj.clinic.get_all_branches().values('id', 'name', 'city', 'is_main_branch')
+                )
+            return []
+        if 'ADMIN_ASSISTANT' in effective_roles:
+            branches = obj.branch_accesses.select_related('branch').values(
+                'branch__id', 'branch__name', 'branch__city', 'branch__is_main_branch'
+            ).order_by('branch__name')
+            return [
+                {
+                    'id': b['branch__id'],
+                    'name': b['branch__name'],
+                    'city': b['branch__city'],
+                    'is_main_branch': b['branch__is_main_branch']
+                }
+                for b in branches
+            ]
+        return []
+
+    def get_is_manager(self, obj) -> bool:
+        return obj.is_manager
 
     def get_permissions_map(self, obj) -> dict:
         """
@@ -343,10 +393,42 @@ class UserSerializer(serializers.ModelSerializer):
                         'lunch_end_time': 'Lunch end time must be after lunch start time.'
                     })
 
+        # ── Phase 5: One Manager per branch constraint ────────────────────────
+        # Validated here (serializer layer) AND enforced in the view layer with
+        # select_for_update() inside a transaction to prevent race conditions.
+        incoming_roles = attrs.get('roles') or [attrs.get('role', 'STAFF')]
+        branch_ids     = attrs.get('branch_ids', [])
+
+        if 'ADMIN_ASSISTANT' in incoming_roles and branch_ids:
+            from apps.clinics.models import Clinic
+            for branch_id in branch_ids:
+                try:
+                    branch = Clinic.objects.get(pk=branch_id, is_deleted=False)
+                except Clinic.DoesNotExist:
+                    raise serializers.ValidationError(
+                        {'branch_ids': f'Branch ID {branch_id} does not exist.'}
+                    )
+                # Check whether another Manager (not this instance) is already assigned
+                existing_qs = UserBranchAccess.objects.filter(
+                    branch=branch,
+                    user__roles__contains=['ADMIN_ASSISTANT'],
+                    user__is_deleted=False,
+                )
+                if self.instance:
+                    existing_qs = existing_qs.exclude(user=self.instance)
+                if existing_qs.exists():
+                    raise serializers.ValidationError(
+                        {'branch_ids':
+                         f'Branch "{branch.name}" already has an assigned Manager. '
+                         f'Only one Manager is allowed per branch.'}
+                    )
+
         return attrs
 
     def create(self, validated_data):
-        password = validated_data.pop('password', None)
+        password  = validated_data.pop('password', None)
+        branch_ids = validated_data.pop('branch_ids', [])
+
         # Ensure roles is set; derive from role if absent.
         roles = validated_data.get('roles')
         role  = validated_data.get('role', 'STAFF')
@@ -373,10 +455,53 @@ class UserSerializer(serializers.ModelSerializer):
         if password:
             user.set_password(password)
             user.save()
+
+        # ── Phase 4: Sync UserBranchAccess rows for Managers ─────────────────
+        if branch_ids and 'ADMIN_ASSISTANT' in roles:
+            self._sync_branch_accesses(user, branch_ids)
+            # Keep clinic_branch FK pointing at primary (first) branch for compat
+            if branch_ids:
+                from apps.clinics.models import Clinic
+                try:
+                    primary = Clinic.objects.get(pk=branch_ids[0])
+                    User.objects.filter(pk=user.pk).update(clinic_branch=primary)
+                    user.clinic_branch = primary
+                except Clinic.DoesNotExist:
+                    pass
+
         return user
 
+    # ── Phase 4 helper: sync UserBranchAccess rows ───────────────────────────
+    @staticmethod
+    def _sync_branch_accesses(user, branch_ids: list):
+        """
+        Atomically replace all UserBranchAccess rows for `user` with the
+        supplied `branch_ids`.  Wrapped in select_for_update to prevent
+        the race condition that would allow two Managers on the same branch.
+        """
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            # Lock existing rows to prevent concurrent inserts on the same branch
+            existing_ids = list(
+                UserBranchAccess.objects.select_for_update()
+                .filter(user=user)
+                .values_list('branch_id', flat=True)
+            )
+            to_remove = set(existing_ids) - set(branch_ids)
+            to_add    = set(branch_ids) - set(existing_ids)
+
+            if to_remove:
+                UserBranchAccess.objects.filter(user=user, branch_id__in=to_remove).delete()
+
+            if to_add:
+                UserBranchAccess.objects.bulk_create(
+                    [UserBranchAccess(user=user, branch_id=bid) for bid in to_add],
+                    ignore_conflicts=True,
+                )
+
     def update(self, instance, validated_data):
-        password = validated_data.pop('password', None)
+        password   = validated_data.pop('password', None)
+        branch_ids = validated_data.pop('branch_ids', None)  # None = not in payload (no change)
 
         # Fields that live on the Practitioner model (not User) — pull them out
         practitioner_only_fields = ['duty_start_time', 'duty_end_time', 'discipline']
@@ -479,6 +604,25 @@ class UserSerializer(serializers.ModelSerializer):
                     "UserSerializer.update: could not sync practitioner profile for user %s: %s",
                     instance.pk, exc,
                 )
+
+        # \u2500\u2500 Phase 4: Sync UserBranchAccess rows for Managers (on update) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        # branch_ids is None when not present in the payload (no change desired);
+        # an empty list means "remove all branch assignments".
+        if branch_ids is not None and 'ADMIN_ASSISTANT' in effective_roles_after:
+            self._sync_branch_accesses(instance, branch_ids)
+            # Sync clinic_branch FK to the primary (first) branch
+            if branch_ids:
+                from apps.clinics.models import Clinic
+                try:
+                    primary = Clinic.objects.get(pk=branch_ids[0])
+                    instance.clinic_branch = primary
+                    instance.save(update_fields=['clinic_branch'])
+                except Clinic.DoesNotExist:
+                    pass
+            else:
+                # All branches removed \u2014 null out the FK
+                instance.clinic_branch = None
+                instance.save(update_fields=['clinic_branch'])
 
         return instance
 

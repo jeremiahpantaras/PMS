@@ -10,6 +10,7 @@ Orchestrates:
   6. Inactive patient check-ins
 """
 import logging
+import os
 from datetime import timedelta
 
 from django.conf import settings
@@ -17,6 +18,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from apps.common.email_utils import log_rendered_logos
 from apps.clinics.models import ClinicCommunicationSettings
 from apps.notifications.models import CommunicationLog
 
@@ -132,6 +134,7 @@ def _send_email(*, recipient, subject, template_prefix, context, clinic,
             subject=subject, body_preview=text, status='SENT',
         )
         logger.info("Email sent → %s [%s] to %s", comm_type, template_prefix, recipient)
+        log_rendered_logos(html, context.get('clinic_logo_url'), f"CommService: {comm_type}", recipient)
         return True, ''
     except Exception as e:
         msg = f"SMTP error ({template_prefix}): {e}"

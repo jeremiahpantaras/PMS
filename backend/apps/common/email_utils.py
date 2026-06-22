@@ -30,6 +30,20 @@ def _get_clinic_logo_url(clinic) -> str | None:
             return None
     return None
 
+def log_rendered_logos(html_content: str, clinic_logo_url: str | None, email_type: str, recipient: str):
+    """Log whether the Malasakit and Clinic logos were successfully rendered in the email HTML."""
+    has_malasakit = 'malasakit-logo.png' in html_content
+    has_clinic = False
+    if clinic_logo_url and clinic_logo_url in html_content:
+        has_clinic = True
+    
+    logger.info(
+        f"[{email_type}] Logos rendered for {recipient} -> "
+        f"Malasakit: {'YES' if has_malasakit else 'NO'} | "
+        f"Clinic: {'YES' if has_clinic else 'NO'} (URL: {clinic_logo_url})"
+    )
+
+
 
 # ── Booking confirmation email ────────────────────────────────────────────────
 
@@ -102,6 +116,7 @@ def send_booking_confirmation_email(booking) -> tuple[bool, str]:
             "Booking confirmation sent → booking=%s email=%s",
             booking.reference_number, recipient_email,
         )
+        log_rendered_logos(html_content, context.get('clinic_logo_url'), 'Booking Confirmation', recipient_email)
         return True, ''
     except Exception as e:
         error_msg = f"SMTP error for booking confirmation #{booking.reference_number}: {e}"
@@ -171,6 +186,7 @@ def send_new_client_welcome_email(patient) -> tuple[bool, str]:
             "Welcome email sent → patient=%s (%s) email=%s",
             patient.id, patient.patient_number, recipient_email,
         )
+        log_rendered_logos(html_content, context.get('clinic_logo_url'), 'New Client Welcome', recipient_email)
         return True, ''
     except Exception as e:
         error_msg = f"SMTP error for welcome email, patient {patient.id}: {e}"

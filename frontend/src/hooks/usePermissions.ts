@@ -20,7 +20,7 @@
 
 import { useMemo } from 'react';
 import { useAuthStore } from '@/store/auth.store';
-import type { FeatureKey, AccessLevel, PermissionsMap } from '@/types/auth';
+import type { FeatureKey, AccessLevel, PermissionsMap, ManagerBranch } from '@/types/auth';
 
 const LEVELS: Record<AccessLevel, number> = { none: 0, view: 1, edit: 2 };
 
@@ -53,6 +53,14 @@ export interface UsePermissionsReturn {
   permissionsMap: PermissionsMap;
   /** Whether the user is an Owner (ADMIN role). */
   isOwner: boolean;
+  /** Whether the user is a Manager (ADMIN_ASSISTANT role). */
+  isManager: boolean;
+  /**
+   * Branches this user is allowed to assign when creating staff.
+   * Owner: all clinic branches. Manager: only their assigned branches.
+   * All other roles: empty array.
+   */
+  managerBranches: ManagerBranch[];
 }
 
 export function usePermissions(): UsePermissionsReturn {
@@ -68,9 +76,23 @@ export function usePermissions(): UsePermissionsReturn {
     return FEATURE_KEYS.reduce((acc, k) => { acc[k] = 'none'; return acc; }, {} as PermissionsMap);
   }, [user]);
 
-  const isOwner = user
-    ? ((user.roles && user.roles.length > 0) ? user.roles : [user.role]).includes('ADMIN')
-    : false;
+  const userRoles = user
+    ? ((user.roles && user.roles.length > 0) ? user.roles : [user.role])
+    : [];
+
+  const isOwner   = userRoles.includes('ADMIN');
+  const isManager = userRoles.includes('ADMIN_ASSISTANT');
+
+  /** Branches this actor may assign.  Derived from `user.manager_branches` populated by the server. */
+  const rawBranches = user?.manager_branches ?? [];
+  const managerBranches: ManagerBranch[] = useMemo(() => {
+    return rawBranches.map((b: any) => ({
+      id: b.id ?? b.branch__id,
+      name: b.name ?? b.branch__name,
+      city: b.city ?? b.branch__city,
+      is_main_branch: b.is_main_branch ?? b.branch__is_main_branch,
+    }));
+  }, [rawBranches]);
 
   const accessLevel = (feature: FeatureKey): AccessLevel =>
     permissionsMap[feature] ?? 'none';
@@ -81,5 +103,5 @@ export function usePermissions(): UsePermissionsReturn {
   const canView = (feature: FeatureKey): boolean => hasAccess(feature, 'view');
   const canEdit = (feature: FeatureKey): boolean => hasAccess(feature, 'edit');
 
-  return { canView, canEdit, hasAccess, accessLevel, permissionsMap, isOwner };
+  return { canView, canEdit, hasAccess, accessLevel, permissionsMap, isOwner, isManager, managerBranches };
 }

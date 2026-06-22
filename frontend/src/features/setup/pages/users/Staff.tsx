@@ -5,6 +5,7 @@ import { CreateStaffAccountModal } from '../../components/modals/CreateStaffAcco
 import { useStaffManagement }      from '../../hooks/useStaffManagement';
 import type { CreateStaffData, StaffMember } from '../../types/staff.types';
 import { useAuthStore }            from '@/store/auth.store';
+import { usePermissions }          from '@/hooks/usePermissions';
 
 export const Staff: React.FC = () => {
   const [isModalOpen, setIsModalOpen]     = useState(false);
@@ -12,6 +13,7 @@ export const Staff: React.FC = () => {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
 
   const currentUser = useAuthStore(s => s.user);
+  const { isOwner, isManager, managerBranches } = usePermissions();
 
   const {
     staff, loading, error,
@@ -45,6 +47,16 @@ export const Staff: React.FC = () => {
     );
   });
 
+  // Determine branch scope text
+  let scopeText = "Viewing Staff For: All Branches";
+  if (isManager && !isOwner) {
+    if (managerBranches.length > 0) {
+      scopeText = `Viewing Staff For: ${managerBranches.map(b => b.name).join(', ')}`;
+    } else {
+      scopeText = "Viewing Staff For: No Branches Assigned";
+    }
+  }
+
   return (
     <div className="p-6 space-y-5">
 
@@ -55,7 +67,12 @@ export const Staff: React.FC = () => {
             <Users className="w-5 h-5 text-sky-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Staff</h1>
+            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              Staff 
+              <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                {scopeText}
+              </span>
+            </h1>
             <p className="text-xs text-gray-400">Manage staff members and practitioners</p>
           </div>
         </div>

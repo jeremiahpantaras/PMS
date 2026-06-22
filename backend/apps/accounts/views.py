@@ -1126,6 +1126,18 @@ class UserViewSet(viewsets.ModelViewSet):
         if user.is_admin:
             # Admin sees all users in their clinic family
             base_qs = qs.filter(clinic=user.clinic)
+        elif user.is_manager:
+            # Manager sees users whose assigned branches intersect with their managed branches.
+            # Covers both the legacy single-branch (clinic_branch) and new multi-branch (branch_accesses).
+            manager_branch_ids = list(user.branch_accesses.values_list('branch_id', flat=True))
+            if user.clinic and manager_branch_ids:
+                from django.db.models import Q
+                base_qs = qs.filter(clinic=user.clinic).filter(
+                    Q(clinic_branch_id__in=manager_branch_ids) |
+                    Q(branch_accesses__branch_id__in=manager_branch_ids)
+                ).distinct()
+            else:
+                base_qs = qs.none()
         else:
             base_qs = qs.filter(clinic=user.clinic) if user.clinic else qs.none()
 
@@ -1144,7 +1156,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def _validate_branch(self, request, branch_id):
         """
-        Helper: verify the branch belongs to the requesting admin's clinic family.
+        Helper: verify the branch belongs to the requesting admin/manager's clinic family.
         Returns the Clinic branch instance or raises a validation error dict.
         """
         if not branch_id:
@@ -1168,16 +1180,67 @@ class UserViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Create new staff / practitioner account.
-        ✅ Now accepts clinic_branch in the request body.
+        ✅ Accepts clinic_branch (single branch) or branch_ids (multi-branch for Managers).
         Auto-generates password and sends via email.
-        Only admins can create users.
+
+        Phase 9 security rules:
+          ─ Only Owner (ADMIN) or Manager (ADMIN_ASSISTANT) may create accounts.
+          ─ Manager cannot create Owner or another Manager.
+          ─ Branch scope: requested branches must be a subset of the Manager's owned branches.
         """
-        if not request.user.is_admin:
+        actor        = request.user
+        is_owner     = actor.is_admin
+        is_manager   = actor.is_manager
+
+        # ── Role gate: only Owner or Manager may create staff ─────────────────
+        if not (is_owner or is_manager):
             return Response(
-                {'detail': 'Only administrators can create staff accounts.'},
+                {'detail': 'Only administrators and managers can create staff accounts.'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
+        # ── Phase 9: Manager role escalation gate ──────────────────────────────
+        # Manager may NEVER create Owner or another Manager.
+        if is_manager and not is_owner:
+            requested_roles = request.data.get('roles', [])
+            if not isinstance(requested_roles, list):
+                requested_roles = [requested_roles]
+            restricted = {'ADMIN', 'ADMIN_ASSISTANT'}
+            if restricted & set(requested_roles):
+                return Response(
+                    {'detail': 'Managers cannot create Owner or Manager accounts.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        # ── Phase 9: Manager branch scope enforcement ─────────────────────────
+        # requested_branches ⊆ manager_owned_branches
+        if is_manager and not is_owner:
+            from apps.accounts.models import UserBranchAccess
+            manager_branch_ids = set(
+                actor.branch_accesses.values_list('branch_id', flat=True)
+            )
+
+            # Support both single clinic_branch and list branch_ids in payload
+            requested_branch_ids = set()
+            raw_branch_ids = request.data.get('branch_ids', [])
+            if raw_branch_ids:
+                requested_branch_ids = set(map(int, raw_branch_ids))
+            elif request.data.get('clinic_branch'):
+                requested_branch_ids = {int(request.data['clinic_branch'])}
+
+            if requested_branch_ids and not requested_branch_ids.issubset(manager_branch_ids):
+                illegal = requested_branch_ids - manager_branch_ids
+                return Response(
+                    {'detail': f'You do not have authority over branch(es): {list(illegal)}.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # If Manager has exactly 1 branch and none is requested, auto-assign it
+            if not requested_branch_ids and len(manager_branch_ids) == 1:
+                # Inject the auto-assigned branch into request data for downstream use
+                auto_branch = list(manager_branch_ids)[0]
+                request.data['clinic_branch'] = auto_branch
+
         # ── Validate branch before touching the serializer ──────────────────
         branch_id    = request.data.get('clinic_branch')
         branch_result = self._validate_branch(request, branch_id)
@@ -1187,11 +1250,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
         branch = branch_result  # Clinic instance or None
 
-        # ── Validate remaining fields ────────────────────────────────────────
+        # ── Validate remaining fields ─────────────────────────────────────────
         serializer = self.get_serializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             with transaction.atomic():
                 from datetime import timedelta
@@ -1326,15 +1389,42 @@ class UserViewSet(viewsets.ModelViewSet):
         ✅ Creates Practitioner profile when role is changed TO 'PRACTITIONER'.
         ✅ Detects email changes: resets password, notifies new address, forces
            must_change_password on next login.
+        Phase 9: Manager cannot escalate target's role to ADMIN/ADMIN_ASSISTANT,
+                 and Manager cannot reassign users to branches they don't own.
         """
-        if not request.user.is_admin:
+        actor      = request.user
+        is_owner   = actor.is_admin
+        is_manager = actor.is_manager
+
+        if not (is_owner or is_manager):
             return Response(
-                {'detail': 'Only administrators can update staff accounts.'},
+                {'detail': 'Only administrators and managers can update staff accounts.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # ── Phase 9: Manager escalation gate on update ─────────────────────────
+        if is_manager and not is_owner:
+            new_roles = request.data.get('roles', [])
+            if not isinstance(new_roles, list):
+                new_roles = [new_roles]
+            restricted = {'ADMIN', 'ADMIN_ASSISTANT'}
+            if restricted & set(new_roles):
+                return Response(
+                    {'detail': 'Managers cannot assign Owner or Manager roles.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            # Also prevent changing a Manager's branch assignments
+            instance = self.get_object()
+            if instance.is_manager:
+                return Response(
+                    {"detail": "Managers cannot modify another Manager's account."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         partial     = kwargs.pop('partial', False)
-        instance    = self.get_object()
+        # Re-use instance if already fetched by the manager gate; otherwise fetch now.
+        if 'instance' not in dir():
+            instance = self.get_object()
         old_email   = instance.email  # capture before any mutation
         branch_id   = request.data.get('clinic_branch')
 
@@ -1361,8 +1451,9 @@ class UserViewSet(viewsets.ModelViewSet):
                 )
 
         old_role = instance.role
+        old_effective_roles = instance.get_effective_roles()
         new_role_requested = serializer.validated_data.get('role', old_role)
-        new_roles_requested = serializer.validated_data.get('roles', instance.get_effective_roles())
+        new_roles_requested = serializer.validated_data.get('roles', old_effective_roles)
 
         # ── Owner demotion protection ─────────────────────────────────────────
         # Protect when ADMIN is being removed from the roles list
@@ -1427,7 +1518,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # ── Sync Practitioner profile when PRACTITIONER added/removed ────────
         practitioner_created = False
-        had_practitioner = 'PRACTITIONER' in (instance.roles or [old_role])
+        had_practitioner = 'PRACTITIONER' in old_effective_roles
         has_practitioner = 'PRACTITIONER' in new_roles
 
         if has_practitioner:
@@ -1492,6 +1583,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 )
 
         elif not has_practitioner and had_practitioner:
+            print(f">>> [UserViewSet] Triggering practitioner removal workflow for {instance.email} <<<")
             # ── PRACTITIONER role removed — run deactivation workflow ─────
             from apps.accounts.services.practitioner_deactivation import (
                 get_practitioner_removal_impact,
@@ -1516,10 +1608,12 @@ class UserViewSet(viewsets.ModelViewSet):
                 # No future data to clean — safe to proceed without confirmation
 
             # Either confirmed or no impact — execute the removal
+            print(f">>> [UserViewSet] Executing execute_practitioner_removal for {instance.email} <<<")
             removal_result = execute_practitioner_removal(
                 user_id=instance.pk,
                 performed_by=request.user,
             )
+            print(f">>> [UserViewSet] removal_result: {removal_result} <<<")
             logger.info(
                 "Practitioner role removal executed for: %s by %s — %s",
                 instance.email, request.user.email, removal_result,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, UserPlus, AlertCircle, Building2, RefreshCw, Clock, Plus, Trash2, Check, ShieldCheck, Stethoscope, Users, DollarSign, Crown, Eye } from 'lucide-react';
+import { X, UserPlus, AlertCircle, Building2, RefreshCw, Clock, Plus, Trash2, Check, ShieldCheck, Stethoscope, Users, DollarSign, Crown, Eye, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { CreateStaffData, StaffFormErrors, StaffMember, PractitionerRoleImpact } from '../../types/staff.types';
 import type { DutySchedule, DutyDay } from '@/features/clinics/clinic.api';
@@ -26,6 +26,8 @@ const ALL_CLINICAL_ROLES: {
   bg: string;
   /** If true, only admins (isOwner) can see + select this card */
   ownerOnly?: boolean;
+  /** If true, only Owners can see this card (Managers cannot create Managers) */
+  managerOnly?: boolean;
   /** Warning shown beneath role card when selected */
   warning?: string;
 }[] = [
@@ -41,11 +43,13 @@ const ALL_CLINICAL_ROLES: {
   },
   {
     value: 'ADMIN_ASSISTANT',
-    label: 'Admin Assistant',
-    description: 'Full administrative access',
+    label: 'Manager',
+    description: 'Branch management & admin',
     icon: ShieldCheck,
     ring: 'ring-violet-400',
     bg: 'bg-violet-50 text-violet-700 border-violet-200',
+    /** Only Owner can create another Manager. Managers cannot create Managers. */
+    managerOnly: true,
   },
   {
     value: 'PRACTITIONER',
@@ -144,6 +148,7 @@ const EMPTY_FORM: CreateStaffData = {
   gender:        'Male',
   roles:         ['STAFF'],
   clinic_branch: null,
+  branch_ids:    [],
   // Availability defaults
   duty_days:        DEFAULT_DUTY_DAYS,
   lunch_start_time: '12:00',
@@ -181,15 +186,22 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
   isOpen, onClose, onSubmit, editingStaff = null, currentUserId,
 }) => {
   const isEditMode = !!editingStaff;
-  const { isOwner } = usePermissions();
+  const { isOwner, isManager, managerBranches } = usePermissions();
 
   // Multi-role helpers
   const isMe = !!(editingStaff && currentUserId && editingStaff.id === currentUserId);
   // Original roles array of the staff being edited (for submit payload preservation)
   const originalRolesRef = useRef<string[]>([]);
 
-  // Roles visible to current user: ADMIN card only shown to owners
-  const visibleClinicalRoles = ALL_CLINICAL_ROLES.filter(r => !r.ownerOnly || isOwner);
+  // Phase 6/7: Filter role cards based on the actor's authority.
+  // Owner: sees all cards (including ADMIN and ADMIN_ASSISTANT/Manager).
+  // Manager: can see operational roles only — cannot create Owner or another Manager.
+  // Others: only see operational roles.
+  const visibleClinicalRoles = ALL_CLINICAL_ROLES.filter(r => {
+    if (r.ownerOnly && !isOwner)   return false;  // ADMIN card: Owner only
+    if (r.managerOnly && !isOwner) return false;  // Manager card: Owner only (Managers cannot create Managers)
+    return true;
+  });
 
   const [formData, setFormData] = useState<CreateStaffData>(EMPTY_FORM);
   const [errors, setErrors]     = useState<StaffFormErrors>({});
@@ -223,6 +235,19 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
 
   const { branches, loading: loadingBranches } = useClinicBranches();
 
+  // Phase 8: Auto-assign branch for Managers with exactly 1 branch.
+  // When the modal opens in create-mode and the actor is a single-branch Manager,
+  // pre-populate clinic_branch so the user doesn't have to pick (and can't pick wrong).
+  useEffect(() => {
+    if (!isEditMode && isManager && !isOwner && managerBranches.length === 1) {
+      setFormData(prev => ({
+        ...prev,
+        clinic_branch: managerBranches[0].id,
+        branch_ids: [managerBranches[0].id],
+      }));
+    }
+  }, [isEditMode, isManager, isOwner, managerBranches]);
+
   useEffect(() => {
     if (editingStaff) {
       // Compute effective roles (multi-role aware)
@@ -254,6 +279,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
         gender:        editingStaff.gender         ?? 'Male',
         roles:         displayRoles,
         clinic_branch: editingStaff.clinic_branch  ?? null,
+        branch_ids:    editingStaff.manager_branches ? editingStaff.manager_branches.map(b => b.id) : [],
         // Availability
         duty_days:        (editingStaff.duty_days ?? editingStaff.availability?.duty_days ?? DEFAULT_DUTY_DAYS) as DutyDay[],
         lunch_start_time: editingStaff.lunch_start_time ?? editingStaff.availability?.lunch_start_time ?? '12:00',
@@ -284,7 +310,14 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
       e.date_of_birth = 'Date of birth cannot be in the future';
 
     // Branch is required for all roles — every user must be scoped to a branch
-    if (!formData.clinic_branch) e.clinic_branch = 'Branch assignment is required.';
+    const isManagerRole = (formData.roles ?? []).includes('ADMIN_ASSISTANT');
+    if (isManagerRole) {
+      if (!formData.branch_ids || formData.branch_ids.length === 0) {
+        e.clinic_branch = 'A Manager must be assigned to at least one branch.';
+      }
+    } else {
+      if (!formData.clinic_branch) e.clinic_branch = 'Branch assignment is required.';
+    }
 
     // Availability validation (for PRACTITIONER role only)
     const needsSchedule = (formData.roles ?? []).includes('PRACTITIONER');
@@ -317,6 +350,10 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
     }
 
     setErrors(e);
+    if (Object.keys(e).length > 0) {
+      console.error('[CreateStaffAccountModal] Validation Failed! Errors:', e);
+      console.log('[CreateStaffAccountModal] Current formData:', formData);
+    }
     return Object.keys(e).length === 0;
   };
 
@@ -934,7 +971,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                     </div>
                   )}
 
-                  {/* Assign Branch — required for all roles */}
+                  {/* ── Phase 8: Context-aware Branch Selector ─────────────────────── */}
                   <div className="md:col-span-2">
                     <Label required>
                       <span className="flex items-center gap-1.5">
@@ -942,41 +979,160 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
                         Assign to Clinic Branch
                       </span>
                     </Label>
-                    {loadingBranches ? (
-                      <div className={`${selectCls} text-gray-400`}>Loading branches…</div>
-                    ) : branches.length === 0 ? (
-                      <div className={`${selectCls} text-amber-600 bg-amber-50 border-amber-200`}>
-                        No branches found. Please add a clinic branch first.
+
+                    {formData.roles.includes('ADMIN_ASSISTANT') ? (
+                      /* ── Manager Scope: Multi-branch Checkboxes ── */
+                      <div className="space-y-2">
+                        <p className="text-xs text-gray-500 mb-2">
+                          Select the branches this Manager is authorized to manage.
+                        </p>
+                        {(isOwner ? branches : managerBranches).map(branch => {
+                          const isSelected = formData.branch_ids?.includes(branch.id);
+                          return (
+                            <label
+                              key={branch.id}
+                              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-200'
+                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                value={branch.id}
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const current = formData.branch_ids || [];
+                                  if (e.target.checked) {
+                                    set('branch_ids', [...current, branch.id]);
+                                  } else {
+                                    set('branch_ids', current.filter(id => id !== branch.id));
+                                  }
+                                }}
+                                className="accent-sky-500 w-4 h-4 rounded border-gray-300 text-sky-500 focus:ring-sky-400"
+                              />
+                              <span className="text-sm font-medium text-gray-700">
+                                {branch.name}
+                                {branch.is_main_branch ? (
+                                  <span className="ml-1.5 text-[10px] font-semibold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded">Main</span>
+                                ) : null}
+                                {branch.city ? <span className="ml-1 text-gray-400">· {branch.city}</span> : null}
+                              </span>
+                            </label>
+                          );
+                        })}
+                        {(!formData.branch_ids || formData.branch_ids.length === 0) && (
+                          <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            A Manager must be assigned to at least one branch.
+                          </p>
+                        )}
                       </div>
                     ) : (
-                      <select
-                        value={formData.clinic_branch ?? ''}
-                        onChange={e =>
-                          set('clinic_branch', e.target.value ? Number(e.target.value) : null)
-                        }
-                        className={`${selectCls} ${
-                          errors.clinic_branch ? 'border-rose-400 ring-2 ring-rose-200' : ''
-                        }`}
-                      >
-                        <option value="" disabled>— Select a branch —</option>
-                        {branches.map(b => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                            {b.is_main_branch ? ' (Main)' : ''}
-                            {b.city ? ` · ${b.city}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {errors.clinic_branch ? (
-                      <p className="mt-1 text-xs text-rose-500 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        {errors.clinic_branch}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-[10px] text-gray-400">
-                        Every user must be assigned to a branch for correct diary and calendar scoping.
-                      </p>
+                      /* ── Operational Roles: Single Primary Branch ── */
+                      <>
+                        {/* ── Case A: Manager with exactly 1 branch → auto-assign (read-only) ── */}
+                        {isManager && !isOwner && managerBranches.length === 1 && (
+                          <div className="flex items-center gap-2 px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-lg text-sm text-sky-800">
+                            <Lock className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                            <span>
+                              Auto-assigned to <strong>{managerBranches[0].name}</strong>
+                              {managerBranches[0].is_main_branch ? ' (Main)' : ''}
+                              {managerBranches[0].city ? ` · ${managerBranches[0].city}` : ''}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ── Case B: Manager with multiple branches → single radio select ── */}
+                        {isManager && !isOwner && managerBranches.length > 1 && (
+                          <div className="space-y-2">
+                            {managerBranches.map(branch => {
+                              const isSelected = formData.clinic_branch === branch.id;
+                              return (
+                                <label
+                                  key={branch.id}
+                                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-200'
+                                      : 'bg-white border-gray-200 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="clinic_branch"
+                                    value={branch.id}
+                                    checked={isSelected}
+                                    onChange={() => set('clinic_branch', branch.id)}
+                                    className="accent-sky-500"
+                                  />
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {branch.name}
+                                    {branch.is_main_branch ? (
+                                      <span className="ml-1.5 text-[10px] font-semibold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded">Main</span>
+                                    ) : null}
+                                    {branch.city ? <span className="ml-1 text-gray-400">· {branch.city}</span> : null}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                            {errors.clinic_branch && (
+                              <p className="mt-1 text-xs text-rose-500 flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                {errors.clinic_branch}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── Case C: Owner → full dropdown of all branches ── */}
+                        {(isOwner || (!isManager && managerBranches.length === 0)) && (
+                          <>
+                            {loadingBranches ? (
+                              <div className={`${selectCls} text-gray-400`}>Loading branches…</div>
+                            ) : branches.length === 0 ? (
+                              <div className={`${selectCls} text-amber-600 bg-amber-50 border-amber-200`}>
+                                No branches found. Please add a clinic branch first.
+                              </div>
+                            ) : (
+                              <select
+                                value={formData.clinic_branch ?? ''}
+                                onChange={e =>
+                                  set('clinic_branch', e.target.value ? Number(e.target.value) : null)
+                                }
+                                className={`${selectCls} ${
+                                  errors.clinic_branch ? 'border-rose-400 ring-2 ring-rose-200' : ''
+                                }`}
+                              >
+                                <option value="" disabled>— Select a branch —</option>
+                                {branches.map(b => (
+                                  <option key={b.id} value={b.id}>
+                                    {b.name}
+                                    {b.is_main_branch ? ' (Main)' : ''}
+                                    {b.city ? ` · ${b.city}` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            {errors.clinic_branch ? (
+                              <p className="mt-1 text-xs text-rose-500 flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                {errors.clinic_branch}
+                              </p>
+                            ) : (
+                              <p className="mt-0.5 text-[10px] text-gray-400">
+                                Every user must be assigned to a branch for correct diary and calendar scoping.
+                              </p>
+                            )}
+                          </>
+                        )}
+
+                        {/* No branches case for Manager */}
+                        {isManager && !isOwner && managerBranches.length === 0 && (
+                          <div className={`${selectCls} text-amber-600 bg-amber-50 border-amber-200`}>
+                            You have no branches assigned. Contact an Administrator.
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 

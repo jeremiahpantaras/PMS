@@ -23,6 +23,7 @@ import logging
 from datetime import date
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -82,23 +83,26 @@ def get_practitioner_removal_impact(user_id: int) -> dict:
         }
 
     today = date.today()
+    now_time = timezone.localtime().time()
+
+    future_condition = Q(date__gt=today) | Q(date=today, start_time__gt=now_time)
 
     future_appointments = Appointment.objects.filter(
+        future_condition,
         practitioner=practitioner,
-        date__gt=today,
         status__in=_ACTIVE_APPOINTMENT_STATUSES,
         is_deleted=False,
     ).count()
 
     future_blockouts = BlockAppointment.objects.filter(
+        future_condition,
         practitioner=practitioner,
-        date__gt=today,
         is_deleted=False,
     ).count()
 
     future_calendar_events = CalendarNote.objects.filter(
+        future_condition,
         practitioner=practitioner,
-        date__gt=today,
     ).count()
 
     has_impact = (
@@ -149,9 +153,11 @@ def execute_practitioner_removal(user_id: int, performed_by) -> dict:
         CalendarNote,
     )
     from apps.clinics.models import Practitioner
+    from apps.accounts.models import User
 
     practitioner = _get_practitioner_for_user(user_id)
     if practitioner is None:
+        print(f">>> [practitioner_deactivation] NO ACTIVE PRACTITIONER PROFILE FOUND for user_id={user_id}. SKIPPING DELETION. <<<")
         logger.warning(
             'execute_practitioner_removal: no active Practitioner profile for user_id=%s',
             user_id,
@@ -164,67 +170,53 @@ def execute_practitioner_removal(user_id: int, performed_by) -> dict:
         }
 
     today = date.today()
+    now_time = timezone.localtime().time()
+    
+    future_condition = Q(date__gt=today) | Q(date=today, start_time__gt=now_time)
 
     with transaction.atomic():
         # ── 1. Hard-delete future appointments ────────────────────────────
         future_apts_qs = Appointment.objects.filter(
+            future_condition,
             practitioner=practitioner,
-            date__gt=today,
             status__in=_ACTIVE_APPOINTMENT_STATUSES,
             is_deleted=False,
         )
         future_apt_ids = list(future_apts_qs.values_list('id', 'date', 'status'))
-        logger.info(
-            '[PRACTITIONER REMOVAL] Targeting %d future appointment(s) for user_id=%s (today=%s): %s',
-            len(future_apt_ids), user_id, today,
-            [(f'id={i} date={d} status={s}') for i, d, s in future_apt_ids],
-        )
+        count_apts = len(future_apt_ids)
+        print(f">>> [practitioner_deactivation] Future appointments found={count_apts} | IDs={future_apt_ids} <<<")
+        logger.info(f"[PRACTITIONER REMOVAL] Future appointments found={count_apts}")
+        
         deleted_appointments, _ = future_apts_qs.delete()
-        logger.info(
-            '[PRACTITIONER REMOVAL] Deleted %d future appointment(s) for user_id=%s',
-            deleted_appointments, user_id,
-        )
+        print(f">>> [practitioner_deactivation] Future appointments deleted={deleted_appointments} <<<")
+        logger.info(f"[PRACTITIONER REMOVAL] Future appointments deleted={deleted_appointments}")
 
         # ── 2. Hard-delete future block appointments ─────────────────────
         future_blocks_qs = BlockAppointment.objects.filter(
+            future_condition,
             practitioner=practitioner,
-            date__gt=today,
             is_deleted=False,
         )
         future_block_ids = list(future_blocks_qs.values_list('id', 'date'))
-        logger.info(
-            '[PRACTITIONER REMOVAL] Targeting %d future block(s) for user_id=%s: %s',
-            len(future_block_ids), user_id,
-            [(f'id={i} date={d}') for i, d in future_block_ids],
-        )
+        
         deleted_blockouts, _ = future_blocks_qs.delete()
-        logger.info(
-            '[PRACTITIONER REMOVAL] Deleted %d future block(s) for user_id=%s',
-            deleted_blockouts, user_id,
-        )
+        logger.info(f"[PRACTITIONER REMOVAL] Future blockouts deleted={deleted_blockouts}")
 
         # ── 3. Hard-delete future calendar notes ─────────────────────────
         future_notes_qs = CalendarNote.objects.filter(
+            future_condition,
             practitioner=practitioner,
-            date__gt=today,
         )
         future_note_ids = list(future_notes_qs.values_list('id', 'date'))
-        logger.info(
-            '[PRACTITIONER REMOVAL] Targeting %d future note(s) for user_id=%s: %s',
-            len(future_note_ids), user_id,
-            [(f'id={i} date={d}') for i, d in future_note_ids],
-        )
+        
         deleted_calendar_events, _ = future_notes_qs.delete()
-        logger.info(
-            '[PRACTITIONER REMOVAL] Deleted %d future note(s) for user_id=%s',
-            deleted_calendar_events, user_id,
-        )
 
         # ── 4. Soft-delete the Practitioner profile ──────────────────────
         Practitioner.objects.filter(pk=practitioner.pk).update(
             is_deleted=True,
             deleted_at=timezone.now(),
         )
+        print(f">>> [practitioner_deactivation] Soft-deleted Practitioner profile id={practitioner.pk} <<<")
         logger.info(
             '[PRACTITIONER REMOVAL] Soft-deleted Practitioner profile id=%s for user_id=%s, '
             'user.roles was: %s',
@@ -233,6 +225,7 @@ def execute_practitioner_removal(user_id: int, performed_by) -> dict:
             User.objects.get(pk=user_id).roles if User.objects.filter(pk=user_id).exists() else 'N/A',
         )
 
+        print(f">>> [practitioner_deactivation] COMPLETE. Deleted {deleted_appointments} apts, {deleted_blockouts} blocks, {deleted_calendar_events} notes. <<<")
         logger.info(
             '[PRACTITIONER REMOVAL] COMPLETE for user_id=%s (practitioner_id=%s) by %s: '
             'deleted %d future appointments, %d blockouts, %d calendar events',
@@ -247,7 +240,6 @@ def execute_practitioner_removal(user_id: int, performed_by) -> dict:
     # ── 5. Invalidate practitioners cache (outside transaction) ──────────
     try:
         from apps.accounts.views import _invalidate_practitioners_cache
-        from apps.accounts.models import User
         user = User.objects.get(pk=user_id)
         _invalidate_practitioners_cache(user)
     except Exception:

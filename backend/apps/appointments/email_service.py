@@ -5,6 +5,8 @@ from django.utils import timezone
 import logging
 import os
 
+from apps.common.email_utils import log_rendered_logos
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,6 +124,7 @@ def send_appointment_reminder_email(appointment) -> tuple[bool, str]:
             "Reminder sent → appointment_id=%s patient=%s email=%s",
             appointment.id, patient.id, recipient_email,
         )
+        log_rendered_logos(html_content, context.get('clinic_logo_url'), 'Appointment Reminder', recipient_email)
         return True, ''
 
     except Exception as e:
@@ -225,6 +228,7 @@ def send_appointment_cancellation_email(appointment, cancellation_reason: str) -
             "Cancellation email sent → appointment_id=%s patient=%s email=%s",
             appointment.id, patient.id, recipient_email,
         )
+        log_rendered_logos(html_content, context.get('clinic_logo_url'), 'Appointment Cancellation', recipient_email)
         return True, ''
 
     except Exception as e:

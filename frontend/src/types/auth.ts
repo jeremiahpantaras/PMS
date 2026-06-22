@@ -41,6 +41,14 @@ export type FeatureKey =
 
 export type PermissionsMap = Record<FeatureKey, AccessLevel>;
 
+/** A single clinic branch returned in the manager_branches list. */
+export interface ManagerBranch {
+  id:             number;
+  name:           string;
+  city?:          string | null;
+  is_main_branch: boolean;
+}
+
 export interface User {
   id:                    number;
   email:                 string;
@@ -55,6 +63,9 @@ export interface User {
   avatar_url:            string | null;
   is_active:             boolean;
   clinic:                number | null;
+  /** Primary branch this user is assigned to (single FK — backward compat). */
+  clinic_branch?:        number | null;
+  clinic_branch_name?:   string | null;
   created_at:            string;
   password_changed:       boolean;
   needs_password_change:  boolean;
@@ -68,6 +79,15 @@ export interface User {
   permission_group?:      number | null;
   permission_group_name?: string | null;
   permissions_map?:       PermissionsMap;
+  // Phase 10: Manager multi-branch scope
+  /** True when the user holds the ADMIN_ASSISTANT (Manager) role. */
+  is_manager?:            boolean;
+  /**
+   * For Owner (ADMIN): all branches in the clinic family.
+   * For Manager (ADMIN_ASSISTANT): only branches they are assigned to manage.
+   * For all other roles: empty array.
+   */
+  manager_branches?:     ManagerBranch[];
 }
 
 export interface AuthTokens {
