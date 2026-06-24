@@ -183,7 +183,7 @@ export const PortalAvailabilityCalendar: React.FC<PortalAvailabilityCalendarProp
           )}
         </div>
         {/* Clinic hours badge */}
-        <div className="hidden sm:flex items-center gap-1 text-[10px] text-[#0575E6] font-medium bg-green-100 rounded-full px-2 py-0.5 mr-2 whitespace-nowrap">
+        <div className="flex items-center gap-1 text-[10px] text-[#0575E6] font-medium bg-green-100 rounded-full px-2 py-0.5 mr-2 whitespace-nowrap">
           <Clock className="w-2.5 h-2.5" />
           {practitionerAvailability?.duty_schedule
             ? 'Split-shift schedule'

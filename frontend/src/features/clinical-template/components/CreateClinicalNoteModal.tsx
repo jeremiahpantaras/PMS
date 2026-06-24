@@ -104,6 +104,8 @@ export const CreateClinicalNoteModal: React.FC<CreateClinicalNoteModalProps> = (
     }
   }, [isOpen, fetchData, initialAppointmentId]);
 
+  const isAppointmentMode = Boolean(initialAppointmentId);
+
   // Handle appointment selection - auto-set date from appointment
   const handleAppointmentSelect = (appointmentId: number) => {
     setSelectedAppointment(appointmentId);
@@ -113,6 +115,16 @@ export const CreateClinicalNoteModal: React.FC<CreateClinicalNoteModalProps> = (
       setNoteDate(selectedAppt.date);
     }
   };
+
+  // Auto-populate date for appointment mode when appointments load
+  useEffect(() => {
+    if (isAppointmentMode && initialAppointmentId && appointments.length > 0) {
+      const selectedAppt = appointments.find(a => a.id === initialAppointmentId);
+      if (selectedAppt) {
+        setNoteDate(selectedAppt.date);
+      }
+    }
+  }, [appointments, initialAppointmentId, isAppointmentMode]);
 
   const handleTemplateSelect = (template: ClinicalTemplate) => {
     setSelectedTemplate(template);
@@ -358,40 +370,58 @@ export const CreateClinicalNoteModal: React.FC<CreateClinicalNoteModalProps> = (
                   <div>
                     <label className="flex items-center gap-2 text-xs font-medium text-gray-600 mb-1.5">
                       <ClipboardList className="w-4 h-4" />
-                      Select Session
+                      Session
                     </label>
-                    {appointments.length === 0 ? (
+                    {isAppointmentMode && selectedAppointmentDetails ? (
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <p className="font-semibold text-gray-900">
+                            {formatDate(selectedAppointmentDetails.date)} — {formatTime(selectedAppointmentDetails.start_time)}
+                          </p>
+                          <span className="text-[10px] font-medium bg-sky-100 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded-full">Linked</span>
+                        </div>
+                        {selectedAppointmentDetails.practitioner_name && (
+                          <p className="text-xs text-gray-500">{selectedAppointmentDetails.practitioner_name}</p>
+                        )}
+                        {selectedAppointmentDetails.service_name && (
+                          <p className="text-xs text-gray-500">{selectedAppointmentDetails.service_name}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-2 italic">(Linked from Appointment)</p>
+                      </div>
+                    ) : appointments.length === 0 ? (
                       <div className="text-sm text-gray-500 py-2">
                         No sessions found for this patient.
                       </div>
                     ) : (
-                      <select
-                        value={selectedAppointment ?? ''}
-                        onChange={(e) => handleAppointmentSelect(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white"
-                      >
-                        <option value="">Select a session...</option>
-                        {appointments.map((appt) => {
-                          const hasNote = existingNotes.some(note => note.appointment === appt.id);
-                          return (
-                            <option 
-                              key={appt.id} 
-                              value={appt.id}
-                              disabled={hasNote}
-                              title={hasNote ? 'This session has already a Clinical Note.' : undefined}
-                            >
-                              {formatDate(appt.date)} — {formatTime(appt.start_time)}
-                              {appt.practitioner_name ? ` — ${appt.practitioner_name}` : ''}
-                              {appt.service_name ? ` — ${appt.service_name}` : ''}
-                              {hasNote ? ' (Note exists)' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <>
+                        <select
+                          value={selectedAppointment ?? ''}
+                          onChange={(e) => handleAppointmentSelect(Number(e.target.value))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white"
+                        >
+                          <option value="">Select a session...</option>
+                          {appointments.map((appt) => {
+                            const hasNote = existingNotes.some(note => note.appointment === appt.id);
+                            return (
+                              <option 
+                                key={appt.id} 
+                                value={appt.id}
+                                disabled={hasNote}
+                                title={hasNote ? 'This session has already a Clinical Note.' : undefined}
+                              >
+                                {formatDate(appt.date)} — {formatTime(appt.start_time)}
+                                {appt.practitioner_name ? ` — ${appt.practitioner_name}` : ''}
+                                {appt.service_name ? ` — ${appt.service_name}` : ''}
+                                {hasNote ? ' (Note exists)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Select the patient's session
+                        </p>
+                      </>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      Select the patient's session
-                    </p>
                   </div>
                 </div>
 

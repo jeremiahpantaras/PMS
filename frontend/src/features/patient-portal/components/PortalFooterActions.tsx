@@ -25,14 +25,18 @@ export const PortalFooterActions: React.FC<PortalFooterActionsProps> = ({
   return (
     <div className="flex items-center justify-between pt-4 border-t border-gray-200">
 
-      {/* Back — always visible inside inner flow; goes back or returns to branch picker */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        {step === 'practitioner' ? 'Change Location' : 'Back'}
-      </button>
+      {/* Back — hidden on first step, goes back for subsequent steps */}
+      {step !== 'practitioner' ? (
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
+      ) : (
+        <div /> /* Empty div to preserve flex layout spacing (justify-between) */
+      )}
 
       {/* Continue / Submit */}
       {isSubmit ? (

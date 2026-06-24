@@ -512,7 +512,7 @@ const DeleteConfirmModal: React.FC<{
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export const Permissions: React.FC = () => {
-  const { isOwner, canEdit } = usePermissions();
+  const { isOwner, isManager, canEdit } = usePermissions();
   // Subscribe to external permission refreshes (e.g. WS-driven updates from
   // another browser session).  permissionsVersion increments each time the
   // auth store's refreshPermissions() completes successfully.
@@ -527,7 +527,7 @@ export const Permissions: React.FC = () => {
   const [editMap,      setEditMap]      = useState<Record<string, AccessLevel>>({});
   const [isSaving,     setIsSaving]     = useState(false);
 
-  const canManage = isOwner || canEdit('permissions');
+  const canManage = isOwner || isManager || canEdit('permissions');
 
   // Sort groups by fixed role hierarchy for consistent display order.
   // OWNER → MANAGER → FRONTDESK → PRACTITIONER → CUSTOM

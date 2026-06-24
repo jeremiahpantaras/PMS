@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle, ChevronRight, FileText, FolderKanban, Loader2, Mail, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createRoot } from 'react-dom/client';
@@ -393,7 +394,21 @@ export const PatientCasesNotesPage = () => {
   const [loadingPractitioners, setLoadingPractitioners] = useState(false);
 
   const [isCreateNoteOpen, setIsCreateNoteOpen] = useState(false);
+  const [createNoteAppointmentId, setCreateNoteAppointmentId] = useState<number | undefined>(undefined);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const state = location.state as { openCreateNoteForAppointment?: number } | null;
+    if (state?.openCreateNoteForAppointment) {
+      setCreateNoteAppointmentId(state.openCreateNoteForAppointment);
+      setIsCreateNoteOpen(true);
+      // Clear the state to prevent re-opening on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
 
   useEffect(() => {
     if (cases.length === 0) {
@@ -406,6 +421,15 @@ export const PatientCasesNotesPage = () => {
       setSelectedCaseId(cases[0].id);
     }
   }, [cases, selectedCaseId]);
+
+  // Defensive check: if they try to auto-open note creation but have no cases
+  useEffect(() => {
+    if (!loadingCases && cases.length === 0 && isCreateNoteOpen) {
+      toast.error('Please create a case first before adding a clinical note.');
+      setIsCreateNoteOpen(false);
+      setCreateNoteAppointmentId(undefined);
+    }
+  }, [loadingCases, cases.length, isCreateNoteOpen]);
 
   const monthOptions = useMemo(() => {
     const values = new Set<string>();
@@ -779,7 +803,11 @@ export const PatientCasesNotesPage = () => {
       {selectedCase && (
         <CreateClinicalNoteModal
           isOpen={isCreateNoteOpen}
-          onClose={() => setIsCreateNoteOpen(false)}
+          onClose={() => {
+            setIsCreateNoteOpen(false);
+            setCreateNoteAppointmentId(undefined);
+          }}
+          appointmentId={createNoteAppointmentId}
           patientId={patient.id}
           patientName={patient.full_name}
           existingNotes={clinicalNotes

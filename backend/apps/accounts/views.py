@@ -1192,6 +1192,7 @@ class UserViewSet(viewsets.ModelViewSet):
         is_owner     = actor.is_admin
         is_manager   = actor.is_manager
 
+
         # ── Role gate: only Owner or Manager may create staff ─────────────────
         if not (is_owner or is_manager):
             return Response(
@@ -1293,7 +1294,22 @@ class UserViewSet(viewsets.ModelViewSet):
                     must_change_password=True,
                     temp_password_expires_at=temp_expires,
                 )
-                
+
+                # ── Sync UserBranchAccess for Manager (ADMIN_ASSISTANT) ──────
+                # The serializer validates branch_ids but this view bypasses
+                # serializer.save(), so we must sync manually here.
+                branch_ids = serializer.validated_data.get('branch_ids', [])
+                if branch_ids and 'ADMIN_ASSISTANT' in roles:
+                    UserSerializer._sync_branch_accesses(user, branch_ids)
+                    # Set clinic_branch FK to primary branch for backward compat
+                    if not branch:
+                        try:
+                            primary = Clinic.objects.get(pk=branch_ids[0])
+                            user.clinic_branch = primary
+                            user.save(update_fields=['clinic_branch'])
+                        except Clinic.DoesNotExist:
+                            pass
+
                 # ── Create Practitioner profile if PRACTITIONER is in roles ──
                 practitioner_created = False
                 if 'PRACTITIONER' in roles:
@@ -1402,29 +1418,42 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Re-use instance if already fetched by the manager gate; otherwise fetch now.
+        if 'instance' not in dir():
+            instance = self.get_object()
+
         # ── Phase 9: Manager escalation gate on update ─────────────────────────
         if is_manager and not is_owner:
-            new_roles = request.data.get('roles', [])
-            if not isinstance(new_roles, list):
-                new_roles = [new_roles]
+            incoming_roles = request.data.get('roles', [])
+            if not isinstance(incoming_roles, list):
+                incoming_roles = [incoming_roles]
+
+            current_roles = instance.roles if getattr(instance, 'roles', None) else [instance.role]
+            added_roles = list(set(incoming_roles) - set(current_roles))
+
+            # ── Phase 2: Temporary Debug Logs ──
+            print("Current Roles:", current_roles)
+            print("Incoming Roles:", incoming_roles)
+            print("Added Roles:", added_roles)
+            print("Request User:", actor.id, actor.roles)
+
             restricted = {'ADMIN', 'ADMIN_ASSISTANT'}
-            if restricted & set(new_roles):
+            
+            # Phase 3: Validate only the newly-added roles, not existing ones
+            if restricted & set(added_roles):
                 return Response(
                     {'detail': 'Managers cannot assign Owner or Manager roles.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            # Also prevent changing a Manager's branch assignments
-            instance = self.get_object()
-            if instance.is_manager:
+            
+            # Phase 4: Prevent modifying another Manager's account, but allow self-editing
+            if instance.is_manager and instance.id != actor.id:
                 return Response(
                     {"detail": "Managers cannot modify another Manager's account."},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
         partial     = kwargs.pop('partial', False)
-        # Re-use instance if already fetched by the manager gate; otherwise fetch now.
-        if 'instance' not in dir():
-            instance = self.get_object()
         old_email   = instance.email  # capture before any mutation
         branch_id   = request.data.get('clinic_branch')
 
@@ -1988,6 +2017,7 @@ class PermissionGroupViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return PermissionGroup.objects.none()
         if user.is_admin and user.clinic:
+            # Owner sees ALL permission groups
             main_clinic = user.clinic.main_clinic
             return (
                 PermissionGroup.objects
@@ -1995,7 +2025,17 @@ class PermissionGroupViewSet(viewsets.ModelViewSet):
                 .prefetch_related('feature_permissions')
                 .order_by('role_template', 'name')
             )
-        # Non-admin: read-only, own group only
+        if user.is_manager and user.clinic:
+            # Manager sees all groups EXCEPT Owner-template groups
+            main_clinic = user.clinic.main_clinic
+            return (
+                PermissionGroup.objects
+                .filter(clinic=main_clinic)
+                .exclude(role_template='OWNER')
+                .prefetch_related('feature_permissions')
+                .order_by('role_template', 'name')
+            )
+        # Non-admin/non-manager: read-only, own group only
         if user.permission_group_id:
             return PermissionGroup.objects.filter(pk=user.permission_group_id).prefetch_related('feature_permissions')
         return PermissionGroup.objects.none()
@@ -2011,14 +2051,25 @@ class PermissionGroupViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsAdminOrStaffOnly()]
 
     def perform_create(self, serializer):
-        if not self.request.user.is_admin:
+        user = self.request.user
+        if not (user.is_admin or user.is_manager):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only administrators can create permission groups.')
-        main_clinic = self.request.user.clinic.main_clinic
+            raise PermissionDenied('Only administrators and managers can create permission groups.')
+        # Managers cannot create Owner-template groups
+        if user.is_manager and not user.is_admin:
+            from rest_framework.exceptions import PermissionDenied
+            if serializer.validated_data.get('role_template') == 'OWNER':
+                raise PermissionDenied('Managers cannot create Owner permission groups.')
+        main_clinic = user.clinic.main_clinic
         serializer.save(clinic=main_clinic)
 
     def perform_update(self, serializer):
         """Save then notify every active member of the updated group."""
+        user = self.request.user
+        # Managers cannot edit Owner-template groups
+        if user.is_manager and not user.is_admin and serializer.instance.role_template == 'OWNER':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Managers cannot edit Owner permission groups.')
         instance = serializer.save()
         self._emit_permission_updates(instance)
 
@@ -2063,8 +2114,11 @@ class PermissionGroupViewSet(viewsets.ModelViewSet):
         source = self.get_object()
         new_name = request.data.get('name', f'{source.name} (Copy)')
 
-        if not request.user.is_admin:
-            return Response({'detail': 'Only administrators can duplicate groups.'}, status=403)
+        if not (request.user.is_admin or request.user.is_manager):
+            return Response({'detail': 'Only administrators and managers can duplicate groups.'}, status=403)
+        # Managers cannot duplicate Owner groups
+        if request.user.is_manager and not request.user.is_admin and source.role_template == 'OWNER':
+            return Response({'detail': 'Managers cannot duplicate Owner permission groups.'}, status=403)
 
         main_clinic = request.user.clinic.main_clinic
         if PermissionGroup.objects.filter(clinic=main_clinic, name=new_name).exists():
@@ -2092,8 +2146,11 @@ class PermissionGroupViewSet(viewsets.ModelViewSet):
     def assign_user(self, request, pk=None):
         """Assign a user to this permission group."""
         group = self.get_object()
-        if not request.user.is_admin:
-            return Response({'detail': 'Only administrators can assign permission groups.'}, status=403)
+        if not (request.user.is_admin or request.user.is_manager):
+            return Response({'detail': 'Only administrators and managers can assign permission groups.'}, status=403)
+        # Managers cannot assign users to Owner groups
+        if request.user.is_manager and not request.user.is_admin and group.role_template == 'OWNER':
+            return Response({'detail': 'Managers cannot assign users to Owner permission groups.'}, status=403)
 
         user_id = request.data.get('user_id')
         if not user_id:

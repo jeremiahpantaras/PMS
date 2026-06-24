@@ -2120,118 +2120,230 @@ class ReportViewSet(viewsets.ModelViewSet):
 
     # ── 1. Occupancy Report ───────────────────────────────────────────────────
 
-    @action(detail=False, methods=['get'], url_path='occupancy')
-    def occupancy(self, request):
-        """
-        GET /api/reports/occupancy/
+    def _calculate_daily_availability(self, prac, dt, day_blocks):
+        day_name = dt.strftime('%a')
+        duty_days = prac.duty_days or ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+        if day_name not in duty_days:
+            return 0
+            
+        working_ranges = []
+        if prac.duty_schedule and day_name in prac.duty_schedule:
+            for block in prac.duty_schedule[day_name]:
+                start_str = block.get('start')
+                end_str = block.get('end')
+                if start_str and end_str:
+                    sh, sm = map(int, start_str.split(':'))
+                    eh, em = map(int, end_str.split(':'))
+                    working_ranges.append((sh * 60 + sm, eh * 60 + em))
+        else:
+            if not prac.duty_start_time or not prac.duty_end_time:
+                return 0
+            sh = prac.duty_start_time.hour * 60 + prac.duty_start_time.minute
+            eh = prac.duty_end_time.hour * 60 + prac.duty_end_time.minute
+            working_ranges.append((sh, eh))
+            
+            if prac.lunch_start_time and prac.lunch_end_time:
+                lsh = prac.lunch_start_time.hour * 60 + prac.lunch_start_time.minute
+                leh = prac.lunch_end_time.hour * 60 + prac.lunch_end_time.minute
+                
+                new_ranges = []
+                for r_start, r_end in working_ranges:
+                    if leh <= r_start or lsh >= r_end:
+                        new_ranges.append((r_start, r_end))
+                    else:
+                        if r_start < lsh:
+                            new_ranges.append((r_start, lsh))
+                        if r_end > leh:
+                            new_ranges.append((leh, r_end))
+                working_ranges = new_ranges
 
-        Measures provider utilisation: scheduled minutes vs occupied minutes.
+        for b in day_blocks:
+            bsh = b.start_time.hour * 60 + b.start_time.minute
+            beh = b.end_time.hour * 60 + b.end_time.minute
+            
+            new_ranges = []
+            for r_start, r_end in working_ranges:
+                if beh <= r_start or bsh >= r_end:
+                    new_ranges.append((r_start, r_end))
+                else:
+                    if r_start < bsh:
+                        new_ranges.append((r_start, bsh))
+                    if r_end > beh:
+                        new_ranges.append((beh, r_end))
+            working_ranges = new_ranges
+            
+        return sum(max(0, r_end - r_start) for r_start, r_end in working_ranges)
 
-        Query params:
-            start_date      (YYYY-MM-DD)
-            end_date        (YYYY-MM-DD)
-            practitioner_id (int)   optional
-            branch_id       (int)   optional
+    def _build_occupancy_data(self, request):
         """
+        Helper method to compute occupancy metrics.
+        Returns a dictionary of the report data.
+        """
+        from collections import defaultdict
+        from apps.appointments.models import BlockAppointment
+        from apps.clinics.models import Practitioner
+        
         clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
         start, end = self._get_date_range(request)
 
-        qs = (
-            Appointment.objects
-            .filter(
-                clinic_id__in=all_branch_ids,
-                is_deleted=False,
-                date__range=[start, end],
-                status__in=['COMPLETED', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS', 'SCHEDULED', 'ARRIVED'],
-            )
-            .select_related('practitioner__user', 'service')
-            .order_by('practitioner_id', 'date', 'start_time')
-        )
-
         practitioner_id = request.query_params.get('practitioner_id')
         branch_id       = request.query_params.get('branch_id')
-        if practitioner_id:
-            try:
-                qs = qs.filter(practitioner_id=int(practitioner_id))
-            except (ValueError, TypeError):
-                pass
-        if branch_id:
-            try:
-                qs = qs.filter(clinic_id=int(branch_id))
-            except (ValueError, TypeError):
-                pass
 
-        # ── Aggregate per practitioner ──────────────────────────────────────
-        prac_data: dict[int, dict] = {}
-        daily_data: dict[date, dict] = {}
+        # Filters for branch and practitioner
+        b_ids = [int(branch_id)] if branch_id else all_branch_ids
+        p_ids = [int(practitioner_id)] if practitioner_id else None
 
-        for appt in qs:
-            prac = appt.practitioner
-            prac_id   = prac.id   if prac else 0
-            prac_name = prac.user.get_full_name() if prac and prac.user else 'Unassigned'
+        # Fetch practitioners
+        prac_qs = Practitioner.objects.filter(
+            clinic_id__in=b_ids,
+            is_deleted=False,
+            is_accepting_patients=True
+        ).select_related('user', 'clinic')
+        if p_ids:
+            prac_qs = prac_qs.filter(id__in=p_ids)
 
-            occupied_mins = appt.duration_minutes or 0
-            # Scheduled = the appointment slot duration (same as occupied for booked slots)
-            scheduled_mins = occupied_mins
+        # Fetch blocks
+        block_qs = BlockAppointment.objects.filter(
+            clinic_id__in=b_ids,
+            is_deleted=False,
+            date__range=[start, end]
+        )
+        if p_ids:
+            block_qs = block_qs.filter(Q(practitioner__isnull=True) | Q(practitioner_id__in=p_ids))
+        
+        blocks_by_date = defaultdict(list)
+        for b in block_qs:
+            blocks_by_date[b.date].append(b)
 
-            # Per-practitioner
-            if prac_id not in prac_data:
-                prac_data[prac_id] = {
-                    'practitioner_id':   prac_id,
-                    'practitioner_name': prac_name,
-                    'scheduled_minutes': 0,
-                    'occupied_minutes':  0,
-                    'appointment_count': 0,
-                    'service_ids':       set(),
-                }
-            prac_data[prac_id]['scheduled_minutes'] += scheduled_mins
-            prac_data[prac_id]['occupied_minutes']  += occupied_mins
-            prac_data[prac_id]['appointment_count'] += 1
+        # Appointments
+        booked_statuses = ['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'DNA', 'CANCELLED', 'CHECKED_IN', 'IN_PROGRESS', 'ARRIVED']
+        appt_qs = Appointment.objects.filter(
+            clinic_id__in=b_ids,
+            is_deleted=False,
+            date__range=[start, end],
+            status__in=booked_statuses,
+        ).select_related('practitioner__user', 'service')
+        
+        if p_ids:
+            appt_qs = appt_qs.filter(practitioner_id__in=p_ids)
+
+        # Initialize practitioner data
+        prac_data = {}
+        for p in prac_qs:
+            prac_data[p.id] = {
+                'practitioner_id': p.id,
+                'practitioner_name': p.user.get_full_name() if p.user else 'Unassigned',
+                'branch_id': p.clinic_id,
+                'branch_name': p.clinic.name if p.clinic else None,
+                'scheduled_minutes': 0,
+                'occupied_minutes': 0,
+                'completed_minutes': 0,
+                'cancelled_minutes': 0,
+                'dna_minutes': 0,
+                'appointment_count': 0,
+                'service_ids': set(),
+            }
+
+        daily_data = defaultdict(lambda: {'scheduled_minutes': 0, 'occupied_minutes': 0})
+        branch_data = defaultdict(lambda: {'scheduled_minutes': 0, 'occupied_minutes': 0})
+
+        # Calculate scheduled (available) minutes
+        curr = start
+        while curr <= end:
+            day_blocks = blocks_by_date[curr]
+            for p in prac_qs:
+                p_blocks = [b for b in day_blocks if b.practitioner_id is None or b.practitioner_id == p.id]
+                avail = self._calculate_daily_availability(p, curr, p_blocks)
+                
+                prac_data[p.id]['scheduled_minutes'] += avail
+                daily_data[curr]['scheduled_minutes'] += avail
+                branch_data[p.clinic.name]['scheduled_minutes'] += avail
+                
+            curr += timedelta(days=1)
+
+        # Aggregate booked minutes
+        for appt in appt_qs:
+            p_id = appt.practitioner_id
+            if p_id not in prac_data:
+                continue # Edge case
+                
+            dur = appt.duration_minutes or 0
+            
+            prac_data[p_id]['occupied_minutes'] += dur
+            prac_data[p_id]['appointment_count'] += 1
             if appt.service_id:
-                prac_data[prac_id]['service_ids'].add(appt.service_id)
+                prac_data[p_id]['service_ids'].add(appt.service_id)
+                
+            if appt.status in ['COMPLETED', 'CHECKED_IN', 'IN_PROGRESS', 'ARRIVED']:
+                prac_data[p_id]['completed_minutes'] += dur
+            elif appt.status == 'CANCELLED':
+                prac_data[p_id]['cancelled_minutes'] += dur
+            elif appt.status == 'DNA':
+                prac_data[p_id]['dna_minutes'] += dur
 
-            # Per-day (global)
-            d = appt.date
-            if d not in daily_data:
-                daily_data[d] = {'scheduled_minutes': 0, 'occupied_minutes': 0}
-            daily_data[d]['scheduled_minutes'] += scheduled_mins
-            daily_data[d]['occupied_minutes']  += occupied_mins
+            daily_data[appt.date]['occupied_minutes'] += dur
+            branch_data[prac_data[p_id]['branch_name']]['occupied_minutes'] += dur
 
         practitioners = []
-        for row in prac_data.values():
+        for p_id, row in prac_data.items():
             sched = row['scheduled_minutes']
-            occ   = row['occupied_minutes']
-            pct   = round((occ / sched * 100) if sched > 0 else 0.0, 2)
+            occ = row['occupied_minutes']
+            comp = row['completed_minutes']
+            pct = round((occ / sched * 100) if sched > 0 else 0.0, 2)
+            util = round((comp / sched * 100) if sched > 0 else 0.0, 2)
+            
             practitioners.append({
-                'practitioner_id':   row['practitioner_id'],
+                'practitioner_id': row['practitioner_id'],
                 'practitioner_name': row['practitioner_name'],
+                'branch_name': row['branch_name'],
                 'scheduled_minutes': sched,
-                'occupied_minutes':  occ,
-                'occupancy_pct':     pct,
+                'occupied_minutes': occ,
+                'completed_minutes': comp,
+                'cancelled_minutes': row['cancelled_minutes'],
+                'dna_minutes': row['dna_minutes'],
+                'occupancy_pct': pct,
+                'utilization_pct': util,
                 'appointment_count': row['appointment_count'],
-                'service_count':     len(row['service_ids']),
+                'service_count': len(row['service_ids']),
             })
+            
         practitioners.sort(key=lambda r: -r['occupancy_pct'])
 
         daily_trend = []
         for d in sorted(daily_data.keys()):
-            row    = daily_data[d]
-            sched  = row['scheduled_minutes']
-            occ    = row['occupied_minutes']
-            pct    = round((occ / sched * 100) if sched > 0 else 0.0, 2)
+            row = daily_data[d]
+            sched = row['scheduled_minutes']
+            occ = row['occupied_minutes']
+            pct = round((occ / sched * 100) if sched > 0 else 0.0, 2)
             daily_trend.append({
-                'date':              str(d),
+                'date': str(d),
                 'scheduled_minutes': sched,
-                'occupied_minutes':  occ,
-                'occupancy_pct':     pct,
+                'occupied_minutes': occ,
+                'occupancy_pct': pct,
             })
+            
+        branch_chart = []
+        for b_name, row in branch_data.items():
+            sched = row['scheduled_minutes']
+            occ = row['occupied_minutes']
+            pct = round((occ / sched * 100) if sched > 0 else 0.0, 2)
+            branch_chart.append({
+                'branch_name': b_name,
+                'occupancy_pct': pct,
+            })
+        branch_chart.sort(key=lambda x: -x['occupancy_pct'])
 
         total_sched = sum(r['scheduled_minutes'] for r in practitioners)
         total_occ   = sum(r['occupied_minutes']  for r in practitioners)
+        total_comp  = sum(r['completed_minutes'] for r in practitioners)
+        total_canc  = sum(r['cancelled_minutes'] for r in practitioners)
+        total_dna   = sum(r['dna_minutes']       for r in practitioners)
         total_appts = sum(r['appointment_count'] for r in practitioners)
+        
         overall_pct = round((total_occ / total_sched * 100) if total_sched > 0 else 0.0, 2)
+        overall_util = round((total_comp / total_sched * 100) if total_sched > 0 else 0.0, 2)
 
-        return Response({
+        return {
             'report_type':  'OCCUPANCY',
             'tab':          'PERFORMANCE',
             'start_date':   str(start),
@@ -2243,13 +2355,114 @@ class ReportViewSet(viewsets.ModelViewSet):
             },
             'summary': {
                 'overall_occupancy_pct':   overall_pct,
+                'overall_utilization_pct': overall_util,
                 'total_scheduled_minutes': total_sched,
                 'total_occupied_minutes':  total_occ,
+                'total_completed_minutes': total_comp,
+                'total_cancelled_minutes': total_canc,
+                'total_dna_minutes':       total_dna,
                 'total_appointments':      total_appts,
             },
             'practitioners': practitioners,
             'daily_trend':   daily_trend,
-        })
+            'branch_chart':  branch_chart,
+        }
+
+    @action(detail=False, methods=['get'], url_path='occupancy')
+    def occupancy(self, request):
+        """
+        GET /api/reports/occupancy/
+        Measures provider utilisation: scheduled minutes vs occupied minutes.
+        """
+        data = self._build_occupancy_data(request)
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='occupancy/print')
+    def occupancy_print(self, request):
+        """
+        GET /api/reports/occupancy/print/
+        Returns server-side rendered HTML for printing the Occupancy Report.
+        """
+        from django.template.loader import render_to_string
+        from django.http import HttpResponse
+
+        data = self._build_occupancy_data(request)
+        clinic, main_clinic, _ = self._get_clinic_and_branch_ids(request)
+
+        branch_id = request.query_params.get('branch_id')
+        branch_name = 'All Branches'
+        if branch_id:
+            try:
+                branch_name = main_clinic.get_all_branches().get(id=branch_id).name
+            except Exception:
+                pass
+
+        context = {
+            'clinic': main_clinic,
+            'branch_name': branch_name,
+            'start_date': data['start_date'],
+            'end_date': data['end_date'],
+            'generated_by': request.user.get_full_name() if request.user else 'System',
+            'generated_at': timezone.now(),
+            'summary': data['summary'],
+            'practitioners': data['practitioners'],
+        }
+
+        html = render_to_string('reports/occupancy_report.html', context)
+        return HttpResponse(html, content_type='text/html')
+
+    @action(detail=False, methods=['get'], url_path='occupancy_drill_down')
+    def occupancy_drill_down(self, request):
+        """
+        GET /api/reports/occupancy_drill_down/
+        Returns paginated actual appointments for a specific practitioner.
+        """
+        clinic, main_clinic, all_branch_ids = self._get_clinic_and_branch_ids(request)
+        start, end = self._get_date_range(request)
+
+        practitioner_id = request.query_params.get('practitioner_id')
+        branch_id       = request.query_params.get('branch_id')
+
+        b_ids = [int(branch_id)] if branch_id else all_branch_ids
+
+        booked_statuses = ['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'DNA', 'CANCELLED', 'CHECKED_IN', 'IN_PROGRESS', 'ARRIVED']
+        qs = Appointment.objects.filter(
+            clinic_id__in=b_ids,
+            is_deleted=False,
+            date__range=[start, end],
+            status__in=booked_statuses,
+        ).select_related('patient', 'service', 'clinic').order_by('-date', '-start_time')
+        
+        if practitioner_id:
+            qs = qs.filter(practitioner_id=practitioner_id)
+            
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            data = []
+            for appt in page:
+                data.append({
+                    'appointment_id': appt.id,
+                    'date': str(appt.date),
+                    'time': str(appt.start_time),
+                    'patient_name': appt.patient.get_full_name() if appt.patient else '',
+                    'consultation_type': appt.service.name if appt.service else appt.appointment_type,
+                    'status': appt.status,
+                    'branch': appt.clinic.name if appt.clinic else '',
+                })
+            return self.get_paginated_response(data)
+            
+        data = []
+        for appt in qs:
+            data.append({
+                'appointment_id': appt.id,
+                'date': str(appt.date),
+                'time': str(appt.start_time),
+                'patient_name': appt.patient.get_full_name() if appt.patient else '',
+                'consultation_type': appt.service.name if appt.service else appt.appointment_type,
+                'status': appt.status,
+                'branch': appt.clinic.name if appt.clinic else '',
+            })
+        return Response(data)
 
     # ── 2. Business Performance ───────────────────────────────────────────────
 

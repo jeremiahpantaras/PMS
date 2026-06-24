@@ -8,11 +8,15 @@
  * Strips non-digits, removes leading 0 or 63 prefix, then formats.
  */
 export const formatPHPhone = (value: string): string => {
+  if (!value) return '';
+  
   const digits = value.replace(/\D/g, '');
 
   let cleaned = digits;
   if (cleaned.startsWith('0')) cleaned = cleaned.slice(1);
   if (cleaned.startsWith('63')) cleaned = cleaned.slice(2);
+
+  if (!cleaned) return '';
 
   // Limit to 10 digits
   cleaned = cleaned.slice(0, 10);

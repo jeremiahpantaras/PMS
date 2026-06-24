@@ -29,6 +29,11 @@ class Clinic(TimeStampedModel, SoftDeleteModel):
         help_text='Auto-generated unique branch identifier',
         blank=True, null=True
     )
+    slug = models.SlugField(
+        max_length=200, unique=True,
+        help_text='Public URL slug for this clinic branch (e.g. cebu-clinic)',
+        blank=True, null=True
+    )
     email        = models.EmailField(blank=True)
     phone        = models.CharField(max_length=15, blank=True, validators=[validate_ph_phone])
     address      = models.TextField(blank=True)
@@ -119,6 +124,20 @@ class Clinic(TimeStampedModel, SoftDeleteModel):
                     code = generate_branch_code(root_name, sequence)
 
             self.branch_code = code
+
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.name)
+            # If name is empty or slugifies to empty string, fallback to branch_code or generic
+            if not base_slug:
+                base_slug = self.branch_code.lower() if self.branch_code else 'clinic'
+            
+            slug = base_slug
+            sequence = 1
+            while Clinic.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{sequence}"
+                sequence += 1
+            self.slug = slug
 
         super().save(*args, **kwargs)
 

@@ -74,12 +74,12 @@ import { FeatureAccessGuard } from '@/components/auth/FeatureAccessGuard';
 // ── NEW: Clinic Setup ─────────────────────────────────────────────────────────
 import { ClinicSetupPage } from '@/features/clinic-setup/ClinicSetupPage';
 
-// ─── Routes where ClinicMessages should NOT appear ────────────────────────────
-const HIDDEN_MESSAGE_PATHS = ['/portal', '/clinic-setup'];
+// ─── Routes where internal components should NOT appear ────────────────────────────
+const PUBLIC_PATHS = ['/login', '/register', '/portal', '/clinic-setup', '/book', '/client-form', '/public'];
 
 const ClinicMessagesGuard = () => {
   const location = useLocation();
-  const isHidden = HIDDEN_MESSAGE_PATHS.some(p => location.pathname.startsWith(p));
+  const isHidden = PUBLIC_PATHS.some(p => location.pathname.startsWith(p));
   if (isHidden) return null;
   return <ClinicMessages />;
 };
@@ -87,11 +87,16 @@ const ClinicMessagesGuard = () => {
 const NotificationBellGuard = () => {
   const { isAuthenticated } = useAuthStore();
   const location            = useLocation();
-  const isPublicPage        = ['/login', '/register', '/portal', '/clinic-setup'].some(p =>
-    location.pathname.startsWith(p)
-  );
+  const isPublicPage        = PUBLIC_PATHS.some(p => location.pathname.startsWith(p));
   if (!isAuthenticated || isPublicPage) return null;
   return <NotificationBell />;
+};
+
+const FloatingNotificationsGuard = () => {
+  const location = useLocation();
+  const isPublicPage = PUBLIC_PATHS.some(p => location.pathname.startsWith(p));
+  if (isPublicPage) return null;
+  return <FloatingNotificationsContainer />;
 };
 
 const GlobalLogoutModal = () => {
@@ -278,6 +283,11 @@ function App() {
           <Route path="/cookie-policy"     element={<PublicRoute><CookiePolicy /></PublicRoute>} />
 
           {/* ── Patient Portal ──────────────────────────────────────── */}
+          <Route path="/book/:token"         element={<PortalHome />} />
+          <Route path="/book/:token/success" element={<BookAppointmentSuccess />} />
+          <Route path="/book"                element={<PortalHome />} />
+          
+          {/* Legacy Fallbacks */}
           <Route path="/portal/:token"         element={<PortalHome />} />
           <Route path="/portal/:token/success" element={<BookAppointmentSuccess />} />
           {/* ── Public Client Form ──────────────────────────────────── */}
@@ -338,7 +348,7 @@ function App() {
 
         <ClinicMessagesGuard />
         <NotificationBellGuard />
-        <FloatingNotificationsContainer />
+        <FloatingNotificationsGuard />
         <GlobalLogoutModal />
         <SessionGuard />
         <Analytics />

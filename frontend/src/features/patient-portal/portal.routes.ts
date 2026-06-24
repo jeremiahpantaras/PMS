@@ -1,4 +1,6 @@
 export const PORTAL_ROUTES = {
-  home:    (token: string) => `/portal/${token}`,
-  success: (token: string) => `/portal/${token}/success`,
+  home:    (slug: string) => `/book/${slug}`,
+  success: (slug: string) => `/book/${slug}/success`,
+  legacy:  (token: string) => `/portal/${token}`,
+  legacySuccess: (token: string) => `/portal/${token}/success`,
 } as const;

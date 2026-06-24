@@ -1467,9 +1467,11 @@ const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = 
                     if (tab.isDropdown) {
                       setShowAppointmentDropdown(!showAppointmentDropdown);
                     } else if (tab.key === 'clinical_notes') {
-                      // Redirect to PatientCasesNotesPage
+                      // Redirect to PatientCasesNotesPage and trigger note creation for this appointment
                       onClose();
-                      navigate(`/patients/${appointment.patient}/cases`);
+                      navigate(`/patients/${appointment.patient}/cases`, { 
+                        state: { openCreateNoteForAppointment: appointment.id } 
+                      });
                     } else {
                       setActiveTab(tab.key);
                       if (isEditing) cancelEdit();

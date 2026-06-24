@@ -31,7 +31,13 @@ export const Diary: React.FC = () => {
   const isAdmin        = effectiveRoles.includes('ADMIN');
   const isPractitioner = effectiveRoles.includes('PRACTITIONER');
   const isStaff        = effectiveRoles.includes('STAFF');
+  const isManager      = user?.is_manager || false;
 
+  const isRestrictedPractitioner = isPractitioner && !isAdmin && !isManager;
+  const practitionerBranchIds = useMemo(() => {
+    if (!isRestrictedPractitioner) return null;
+    return (user?.manager_branches || []).map((b: any) => b.id);
+  }, [isRestrictedPractitioner, user?.manager_branches]);
   // ── Rebook Mode ──────────────────────────────────────────────────
   const { rebookMode, rebookData, startRebook, exitRebook } = useRebookMode();
 
@@ -136,17 +142,24 @@ export const Diary: React.FC = () => {
     // Compare the practitioner's current branch with what we last cached.
     // When they differ (branch reassignment, or "All Branches" toggle), reset
     // the auto-select guard so the calendar snaps to the new scope immediately.
-    const currentBranchId = own.clinic_branch_id ?? null;
+    let currentBranchId = own.clinic_branch_id ?? null;
+    if (isRestrictedPractitioner && practitionerBranchIds && practitionerBranchIds.length > 0) {
+      // If the currently assigned branch is null or not in the allowed list, default to the first allowed branch
+      if (currentBranchId == null || !practitionerBranchIds.includes(currentBranchId)) {
+        currentBranchId = practitionerBranchIds[0];
+      }
+    }
+
     if (currentBranchId !== cachedOwnBranchId) {
       setCachedOwnBranchId(currentBranchId);
       hasAutoSelectedBranch.current = false; // allow re-selection on next check
     }
 
-    if (own.clinic_branch_id != null) {
+    if (currentBranchId != null) {
       // Branch-assigned: navigate to that branch tab.
       if (!hasAutoSelectedBranch.current) {
         hasAutoSelectedBranch.current = true;
-        setSelectedClinicBranch(own.clinic_branch_id);
+        setSelectedClinicBranch(currentBranchId);
         setSelectedPractitioner(own.id);
       }
     } else {
@@ -184,6 +197,27 @@ export const Diary: React.FC = () => {
       setSelectedPractitioner(null);
     }
   }, [practitioners, selectedPractitioner, cachedOwnId]);
+
+  // ── Route / State Protection Guard ───────────────────────────────────────────
+  // Prevent restricted practitioners from accessing "All Branches" (null).
+  // If they somehow bypass the UI, immediately force them to their first assigned branch.
+  useEffect(() => {
+    if (isRestrictedPractitioner && selectedClinicBranch === null) {
+      if (practitionerBranchIds && practitionerBranchIds.length > 0) {
+        // Reset compare mode and switch to first assigned branch
+        setSelectedClinicBranch(practitionerBranchIds[0]);
+        setCompareMode(false);
+        setComparePractitioners([null, null]);
+        
+        // Restore own practitioner context if applicable
+        if (cachedOwnBranchId === practitionerBranchIds[0]) {
+          setSelectedPractitioner(cachedOwnId);
+        } else {
+          setSelectedPractitioner(null);
+        }
+      }
+    }
+  }, [isRestrictedPractitioner, selectedClinicBranch, practitionerBranchIds, cachedOwnBranchId, cachedOwnId]);
 
   // True when the currently selected branch tab is the user's "own" clinic:
   // - Branch-assigned practitioner/staff: their home branch tab is active.
@@ -608,8 +642,11 @@ export const Diary: React.FC = () => {
 
               {/* All Branches */}
               <button
-                onClick={() => handleClinicBranchSelect(null)}
-                disabled={loadingBranches}
+                onClick={() => {
+                  if (!isRestrictedPractitioner) handleClinicBranchSelect(null);
+                }}
+                disabled={loadingBranches || isRestrictedPractitioner}
+                title={isRestrictedPractitioner ? "Practitioners can only view their assigned branches." : undefined}
                 className={`
                   relative flex items-center gap-2 px-6 py-3 text-sm font-medium whitespace-nowrap
                   transition-all duration-200 border-b-2
@@ -617,7 +654,7 @@ export const Diary: React.FC = () => {
                     ? 'bg-white text-care-blue border-care-blue shadow-sm'
                     : 'bg-transparent text-steady-slate border-transparent hover:text-trust-harbor hover:bg-gray-100/50'
                   }
-                  ${loadingBranches ? 'opacity-50 cursor-not-allowed' : ''}
+                  ${(loadingBranches || isRestrictedPractitioner) ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
                 `}
               >
                 <Building2 className="w-4 h-4" />
@@ -625,31 +662,37 @@ export const Diary: React.FC = () => {
               </button>
 
               {/* Individual Branch Tabs */}
-              {branches.map((branch) => (
-                <button
-                  key={branch.id}
-                  onClick={() => handleClinicBranchSelect(branch.id)}
-                  disabled={loadingBranches}
-                  className={`
-                    relative flex items-center gap-2 px-6 py-3 text-sm font-medium whitespace-nowrap
-                    transition-all duration-200 border-b-2
-                    ${selectedClinicBranch === branch.id
-                      ? 'bg-white text-care-blue border-care-blue shadow-sm'
-                      : 'bg-transparent text-steady-slate border-transparent hover:text-trust-harbor hover:bg-gray-100/50'
-                    }
-                    ${loadingBranches ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                >
-                  <Building2 className="w-4 h-4" />
-                  <span>{branch.name}</span>
-                  {branch.is_main_branch && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                      Main
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-400">• {branch.city}</span>
-                </button>
-              ))}
+              {branches.map((branch) => {
+                const isUnauthorized = isRestrictedPractitioner && practitionerBranchIds && !practitionerBranchIds.includes(branch.id);
+                
+                return (
+                  <button
+                    key={branch.id}
+                    onClick={() => {
+                      if (!isUnauthorized) handleClinicBranchSelect(branch.id);
+                    }}
+                    disabled={loadingBranches || isUnauthorized}
+                    className={`
+                      relative flex items-center gap-2 px-6 py-3 text-sm font-medium whitespace-nowrap
+                      transition-all duration-200 border-b-2
+                      ${selectedClinicBranch === branch.id
+                        ? 'bg-white text-care-blue border-care-blue shadow-sm'
+                        : 'bg-transparent text-steady-slate border-transparent hover:text-trust-harbor hover:bg-gray-100/50'
+                      }
+                      ${(loadingBranches || isUnauthorized) ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
+                    `}
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>{branch.name}</span>
+                    {branch.is_main_branch && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                        Main
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400">• {branch.city}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

@@ -84,18 +84,27 @@ export const PortalHome: React.FC = () => {
 
   // ── Load portal ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setError('Please use the branch-specific booking link provided by your clinic.');
+      setLoading(false);
+      return;
+    }
+    
     fetchPortal(token)
-      .then(setPortal)
+      .then((data) => {
+        setPortal(data);
+        if (data.branches?.length) {
+          // Auto-select the branch (since backend now restricts this to the current branch only)
+          setSelectedBranch(data.branches[0]);
+        }
+      })
       .catch(() => setError('This booking page is unavailable or the link has expired.'))
       .finally(() => setLoading(false));
 
     // Also load the active clinic consent form (if any)
-    if (token) {
-      fetchActiveClinicConsent(token)
-        .then(setClinicConsentForm)
-        .catch(() => {});
-    }
+    fetchActiveClinicConsent(token)
+      .then(setClinicConsentForm)
+      .catch(() => {});
   }, [token]);
 
   // ── Branch selected → enter inner flow ───────────────────────────────────
@@ -328,13 +337,11 @@ export const PortalHome: React.FC = () => {
       <div className="hidden lg:block">
         <PortalSidebar
           portal={portal}
-          selectedBranch={selectedBranch}
           selectedPractitioner={selectedPractitioner}
           selectedService={selectedService}
           selectedDate={selectedDate}
           selectedSlot={selectedSlot}
           currentStep={INNER_STEP_NUMBER[innerStep]}
-          onChangeBranch={() => setSelectedBranch(null)}
         />
       </div>
 

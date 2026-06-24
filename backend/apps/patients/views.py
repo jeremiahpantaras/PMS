@@ -85,6 +85,7 @@ def _confirm_portal_booking(booking, confirmed_by_user):
         if patient is None:
             patient = Patient.objects.create(
                 clinic=clinic,
+                home_branch=clinic,
                 first_name=booking.patient_first_name,
                 last_name=booking.patient_last_name,
                 date_of_birth=booking.patient_date_of_birth or '2000-01-01',
@@ -234,6 +235,18 @@ class PatientViewSet(viewsets.ModelViewSet):
         all_branch_ids = list(main_clinic.get_all_branches().values_list('id', flat=True))
         base_qs = qs.filter(clinic_id__in=all_branch_ids)
 
+        # ── RBAC Patient Visibility Scoping ───────────────────────────────
+        if not user.is_admin:
+            from django.db.models import Q
+            if user.is_manager:
+                assigned_branches = list(user.get_managed_branches().values_list('id', flat=True))
+            else:
+                assigned_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+                if not assigned_branches and user.clinic_branch_id:
+                    assigned_branches = [user.clinic_branch_id]
+            
+            base_qs = base_qs.filter(home_branch_id__in=assigned_branches)
+
         # ── Default: exclude archived patients unless explicitly requested ──
         # Pass ?include_archived=true  → return ALL (active + archived)
         # Pass ?archived=true          → return ONLY archived
@@ -249,7 +262,17 @@ class PatientViewSet(viewsets.ModelViewSet):
         return base_qs
 
     def perform_create(self, serializer):
-        patient = serializer.save()
+        user = self.request.user
+        kwargs = {}
+        if not serializer.validated_data.get('home_branch'):
+            if user.clinic_branch_id:
+                kwargs['home_branch_id'] = user.clinic_branch_id
+            elif user.is_manager and user.get_managed_branches().exists():
+                kwargs['home_branch'] = user.get_managed_branches().first()
+            elif user.branch_accesses.exists():
+                kwargs['home_branch_id'] = user.branch_accesses.first().branch_id
+        
+        patient = serializer.save(**kwargs)
         # Send welcome email in the background (fire-and-forget)
         try:
             from apps.common.email_utils import send_new_client_welcome_email
@@ -693,16 +716,53 @@ class PortalLinkViewSet(viewsets.ModelViewSet):
     http_method_names  = ['get', 'patch', 'head', 'options']
 
     def get_queryset(self):
-        main_clinic = self.request.user.clinic.main_clinic
-        return self.queryset.filter(clinic=main_clinic)
+        user = self.request.user
+        if not user.clinic:
+            return self.queryset.none()
+
+        main_clinic = user.clinic.main_clinic
+        all_branch_ids = list(main_clinic.get_all_branches().values_list('id', flat=True))
+        base_qs = self.queryset.filter(clinic_id__in=all_branch_ids)
+
+        if not user.is_admin:
+            if user.is_manager:
+                assigned_branches = list(user.get_managed_branches().values_list('id', flat=True))
+            else:
+                assigned_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+                if not assigned_branches and user.clinic_branch_id:
+                    assigned_branches = [user.clinic_branch_id]
+            base_qs = base_qs.filter(clinic_id__in=assigned_branches)
+
+        return base_qs
 
     def list(self, request, *args, **kwargs):
-        main_clinic = request.user.clinic.main_clinic
-        portal_link, created = PortalLink.get_or_create_for_clinic(main_clinic)
-        if created:
-            logger.info(f"Portal link auto-created for clinic: {main_clinic.name}")
-        serializer = self.get_serializer(portal_link, context={'request': request})
-        return Response([serializer.data])
+        user = request.user
+        if not user.clinic:
+            return Response([])
+
+        from apps.clinics.models import Clinic
+        main_clinic = user.clinic.main_clinic
+        all_branch_ids = list(main_clinic.get_all_branches().values_list('id', flat=True))
+        branches_qs = Clinic.objects.filter(id__in=all_branch_ids, is_active=True, is_deleted=False)
+
+        if not user.is_admin:
+            if user.is_manager:
+                assigned_branches = list(user.get_managed_branches().values_list('id', flat=True))
+            else:
+                assigned_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+                if not assigned_branches and user.clinic_branch_id:
+                    assigned_branches = [user.clinic_branch_id]
+            branches_qs = branches_qs.filter(id__in=assigned_branches)
+
+        # Auto-create missing portal links for authorized active branches
+        for branch in branches_qs:
+            portal_link, created = PortalLink.get_or_create_for_clinic(branch)
+            if created:
+                logger.info(f"Portal link auto-created for branch: {branch.name}")
+
+        queryset = self.get_queryset().filter(clinic__is_active=True, clinic__is_deleted=False)
+        serializer = self.get_serializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
         instance   = self.get_object()
@@ -805,11 +865,34 @@ class PortalBookingAdminViewSet(viewsets.ReadOnlyModelViewSet):
 
 # ─── Public Portal endpoints (no auth) ───────────────────────────────────────
 
+def _get_portal_link(token_or_slug):
+    from django.db.models import Q
+    from apps.clinics.models import Clinic
+    from django.http import Http404
+
+    portal_link = PortalLink.objects.filter(
+        Q(token=token_or_slug) | Q(clinic__slug=token_or_slug),
+        is_active=True
+    ).first()
+
+    if portal_link:
+        return portal_link
+
+    clinic = Clinic.objects.filter(slug=token_or_slug, is_active=True, is_deleted=False).first()
+    if clinic:
+        portal_link, created = PortalLink.get_or_create_for_clinic(clinic)
+        if created:
+            logger.info(f"Portal link auto-created on public access for branch: {clinic.name}")
+        if portal_link.is_active:
+            return portal_link
+
+    raise Http404("No active patient portal found for this link.")
+
 class PublicPortalView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, token: str):
-        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+    def get(self, request, token_or_slug: str):
+        portal_link = _get_portal_link(token_or_slug)
         serializer  = PortalLinkPublicSerializer(portal_link, context={'request': request})
         return Response(serializer.data)
 
@@ -817,8 +900,8 @@ class PublicPortalView(APIView):
 class PublicPortalBookView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, token: str):
-        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+    def post(self, request, token_or_slug: str):
+        portal_link = _get_portal_link(token_or_slug)
 
         serializer = PortalBookingCreateSerializer(
             data=request.data,
@@ -911,8 +994,8 @@ class PublicPortalBookView(APIView):
 class PublicPortalConsentCreateView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, token: str):
-        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+    def post(self, request, token_or_slug: str):
+        portal_link = _get_portal_link(token_or_slug)
 
         serializer = PublicPatientConsentCreateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -976,8 +1059,8 @@ class PublicClinicConsentDocumentCreateView(APIView):
     """
     permission_classes = [AllowAny]
 
-    def post(self, request, token: str):
-        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+    def post(self, request, token_or_slug: str):
+        portal_link = _get_portal_link(token_or_slug)
 
         serializer = PublicPatientConsentDocumentCreateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1027,8 +1110,8 @@ class PublicClinicConsentFormView(APIView):
     """
     permission_classes = [AllowAny]
 
-    def get(self, request, token: str):
-        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+    def get(self, request, token_or_slug: str):
+        portal_link = _get_portal_link(token_or_slug)
 
         from apps.clinics.models import ClinicConsentForm
         from apps.clinics.serializers import ClinicConsentFormSerializer
@@ -1053,8 +1136,8 @@ class PublicClinicConsentFormView(APIView):
 class PublicAvailableSlotsView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, token: str):
-        portal_link = get_object_or_404(PortalLink, token=token, is_active=True)
+    def get(self, request, token_or_slug: str):
+        portal_link = _get_portal_link(token_or_slug)
 
         service_id      = request.query_params.get('service')
         date_str        = request.query_params.get('date')
@@ -1066,10 +1149,13 @@ class PublicAvailableSlotsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Services are owned by the main clinic family, not the individual branch
+        main_clinic = portal_link.clinic.parent_clinic if portal_link.clinic.parent_clinic_id else portal_link.clinic
+
         service = get_object_or_404(
             ClinicService,
             pk=service_id,
-            clinic=portal_link.clinic,
+            clinic=main_clinic,
             is_active=True,
             show_in_portal=True,
         )

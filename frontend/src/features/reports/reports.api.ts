@@ -740,9 +740,14 @@ export const getFinancialBulkExport = async (
 export interface OccupancyPractitionerRow {
   practitioner_id:    number;
   practitioner_name:  string;
+  branch_name:        string;
   scheduled_minutes:  number;
   occupied_minutes:   number;
+  completed_minutes:  number;
+  cancelled_minutes:  number;
+  dna_minutes:        number;
   occupancy_pct:      number;   // 0–100
+  utilization_pct:    number;   // 0–100
   appointment_count:  number;
   service_count:      number;
 }
@@ -762,10 +767,15 @@ export interface OccupancyResponse {
   filters:        Record<string, unknown>;
   practitioners:  OccupancyPractitionerRow[];
   daily_trend:    OccupancyDailyPoint[];
+  branch_chart:   { branch_name: string; occupancy_pct: number }[];
   summary: {
-    overall_occupancy_pct:  number;
+    overall_occupancy_pct:   number;
+    overall_utilization_pct: number;
     total_scheduled_minutes: number;
     total_occupied_minutes:  number;
+    total_completed_minutes: number;
+    total_cancelled_minutes: number;
+    total_dna_minutes:       number;
     total_appointments:      number;
   };
 }
@@ -779,6 +789,40 @@ export const getOccupancy = async (
   params?: OccupancyParams
 ): Promise<OccupancyResponse> => {
   const response = await axiosInstance.get('/reports/occupancy/', { params });
+  return response.data;
+};
+
+export const printOccupancyReport = async (
+  params?: OccupancyParams
+): Promise<string> => {
+  const response = await axiosInstance.get('/reports/occupancy/print/', {
+    params,
+    responseType: 'text',
+  });
+  return response.data;
+};
+
+// ── Drill Down ────────────────────────────────────────────────────────────────
+export interface OccupancyDrillDownParams extends ReportDateRange {
+  practitioner_id?: number;
+  branch_id?:       number;
+  page?:            number;
+}
+
+export interface OccupancyDrillDownItem {
+  appointment_id:    number;
+  date:              string;
+  time:              string;
+  patient_name:      string;
+  consultation_type: string;
+  status:            string;
+  branch:            string;
+}
+
+export const getOccupancyDrillDown = async (
+  params?: OccupancyDrillDownParams
+): Promise<{ count: number; next: string | null; previous: string | null; results: OccupancyDrillDownItem[] }> => {
+  const response = await axiosInstance.get('/reports/occupancy_drill_down/', { params });
   return response.data;
 };
 

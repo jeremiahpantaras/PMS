@@ -366,11 +366,13 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
       handleClose();
     } catch (err: any) {
       const data = err?.response?.data as Record<string, string | string[]> | undefined;
+      console.log('[DEBUG-MODAL] 400 Error Data:', data);
       if (data) {
         const mapped: StaffFormErrors = {};
         const pick = (v: string | string[]) => (Array.isArray(v) ? v[0] : v);
         if (data.email)  mapped.email  = pick(data.email);
         if (data.phone)  mapped.phone  = pick(data.phone);
+        if (data.branch_ids) mapped.general = pick(data.branch_ids);
         if (data.detail) mapped.general = pick(data.detail);
         if (Object.keys(mapped).length > 0) {
           setErrors(mapped);

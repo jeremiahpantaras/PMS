@@ -179,7 +179,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_manager_branches(self, obj) -> list:
         """
-        Return a list of branch dicts for Manager users.
+        Return a list of branch dicts for Manager users and Practitioners.
         Used by the frontend to populate the branch-scope picker and
         by the backend security layer to validate branch assignments.
         """
@@ -191,11 +191,13 @@ class UserSerializer(serializers.ModelSerializer):
                     obj.clinic.get_all_branches().values('id', 'name', 'city', 'is_main_branch')
                 )
             return []
-        if 'ADMIN_ASSISTANT' in effective_roles:
+            
+        if 'ADMIN_ASSISTANT' in effective_roles or 'PRACTITIONER' in effective_roles:
             branches = obj.branch_accesses.select_related('branch').values(
                 'branch__id', 'branch__name', 'branch__city', 'branch__is_main_branch'
             ).order_by('branch__name')
-            return [
+            
+            branch_list = [
                 {
                     'id': b['branch__id'],
                     'name': b['branch__name'],
@@ -204,6 +206,18 @@ class UserSerializer(serializers.ModelSerializer):
                 }
                 for b in branches
             ]
+            
+            # Fallback for single-branch assigned Practitioner
+            if not branch_list and 'PRACTITIONER' in effective_roles and obj.clinic_branch:
+                branch_list = [{
+                    'id': obj.clinic_branch.id,
+                    'name': obj.clinic_branch.name,
+                    'city': obj.clinic_branch.city,
+                    'is_main_branch': obj.clinic_branch.is_main_branch
+                }]
+                
+            return branch_list
+            
         return []
 
     def get_is_manager(self, obj) -> bool:
@@ -605,7 +619,7 @@ class UserSerializer(serializers.ModelSerializer):
                     instance.pk, exc,
                 )
 
-        # \u2500\u2500 Phase 4: Sync UserBranchAccess rows for Managers (on update) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        # ── Phase 4: Sync UserBranchAccess rows for Managers (on update) ───────────
         # branch_ids is None when not present in the payload (no change desired);
         # an empty list means "remove all branch assignments".
         if branch_ids is not None and 'ADMIN_ASSISTANT' in effective_roles_after:

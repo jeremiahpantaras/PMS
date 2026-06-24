@@ -1,13 +1,16 @@
 import React, { useState, useCallback } from 'react';
-import { Clock, CalendarDays, Users, TrendingUp, BarChart2 } from 'lucide-react';
+import { Clock, CalendarDays, Users, TrendingUp, BarChart2, AlertCircle, Printer } from 'lucide-react';
 import {
   getOccupancy,
+  getOccupancyDrillDown,
+  printOccupancyReport,
   type OccupancyResponse,
   type OccupancyPractitionerRow,
   type OccupancyDailyPoint,
+  type OccupancyDrillDownItem,
 } from '../../reports.api';
+import { getClinicBranches, getPractitioners, type Practitioner } from '../../../clinics/clinic.api';
 import {
-  DateRangePicker,
   StatCard,
   ReportLoading,
   ReportError,
@@ -18,6 +21,7 @@ import {
   monthStart,
 } from '../../components/ReportShared';
 import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,14 +32,16 @@ const fmtMins = (mins: number): string => {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 };
 
-const OccupancyBar: React.FC<{ pct: number }> = ({ pct }) => {
+const OccupancyBar: React.FC<{ pct: number; label?: string; colorClass?: string }> = ({ pct, label, colorClass }) => {
   const clamped = Math.min(100, Math.max(0, pct));
-  const color =
+  const color = colorClass ? colorClass : (
     clamped >= 80 ? 'bg-green-500'
     : clamped >= 50 ? 'bg-yellow-400'
-    : 'bg-red-400';
+    : 'bg-red-400'
+  );
   return (
     <div className="flex items-center gap-2">
+      {label && <span className="text-xs text-gray-500 w-8">{label}</span>}
       <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
         <div className={`h-2 rounded-full ${color}`} style={{ width: `${clamped}%` }} />
       </div>
@@ -46,62 +52,71 @@ const OccupancyBar: React.FC<{ pct: number }> = ({ pct }) => {
   );
 };
 
+
+
 // ─── Drill-down daily chart ───────────────────────────────────────────────────
 
-const DailyTrendChart: React.FC<{
-  points:      OccupancyDailyPoint[];
-  practitioner: string;
-  onClose:     () => void;
-}> = ({ points, practitioner, onClose }) => {
-  if (!points.length) return null;
-  const maxMins = Math.max(...points.map((p) => p.scheduled_minutes), 1);
+const DrillDownModal: React.FC<{
+  practitioner: OccupancyPractitionerRow;
+  startDate: string;
+  endDate: string;
+  onClose: () => void;
+}> = ({ practitioner, startDate, endDate, onClose }) => {
+  const [items, setItems] = useState<OccupancyDrillDownItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    getOccupancyDrillDown({
+      start_date: startDate,
+      end_date: endDate,
+      practitioner_id: practitioner.practitioner_id,
+    }).then(res => {
+      setItems(res.results || (res as any));
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [startDate, endDate, practitioner]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Drill-down</p>
-            <h3 className="text-lg font-bold text-gray-900">{practitioner} — Daily Occupancy</h3>
+            <h3 className="text-lg font-bold text-gray-900">{practitioner.practitioner_name} — Appointments</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 text-2xl leading-none font-light transition-colors"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none font-light">×</button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="space-y-2">
-            {points.map((pt) => (
-              <div key={pt.date} className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 w-24 shrink-0">{formatDate(pt.date)}</span>
-                <div className="flex-1 h-5 bg-gray-100 rounded relative overflow-hidden">
-                  {/* Scheduled bar (background) */}
-                  <div
-                    className="absolute inset-y-0 left-0 bg-gray-200 rounded"
-                    style={{ width: `${(pt.scheduled_minutes / maxMins) * 100}%` }}
-                  />
-                  {/* Occupied bar (foreground) */}
-                  <div
-                    className={`absolute inset-y-0 left-0 rounded ${
-                      pt.occupancy_pct >= 80 ? 'bg-green-500'
-                      : pt.occupancy_pct >= 50 ? 'bg-yellow-400'
-                      : 'bg-red-400'
-                    }`}
-                    style={{ width: `${(pt.occupied_minutes / maxMins) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-gray-700 w-12 text-right">
-                  {pt.occupancy_pct.toFixed(1)}%
-                </span>
-                <span className="text-xs text-gray-400 w-20 text-right">
-                  {fmtMins(pt.occupied_minutes)} / {fmtMins(pt.scheduled_minutes)}
-                </span>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+             <div className="py-10 text-center text-sm text-gray-500">Loading appointments...</div>
+          ) : items.length === 0 ? (
+             <div className="py-10 text-center text-sm text-gray-500">No appointments found.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                  <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Time</th>
+                  <th className="px-4 py-2 text-left">Patient</th>
+                  <th className="px-4 py-2 text-left">Type</th>
+                  <th className="px-4 py-2 text-left">Status</th>
+                  <th className="px-4 py-2 text-left">Branch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(it => (
+                  <tr key={it.appointment_id} className="border-t border-gray-100">
+                    <td className="px-4 py-2">{formatDate(it.date)}</td>
+                    <td className="px-4 py-2">{it.time}</td>
+                    <td className="px-4 py-2 font-medium">{it.patient_name}</td>
+                    <td className="px-4 py-2 text-gray-600">{it.consultation_type}</td>
+                    <td className="px-4 py-2 text-gray-600">{it.status}</td>
+                    <td className="px-4 py-2 text-gray-600">{it.branch}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -111,19 +126,79 @@ const DailyTrendChart: React.FC<{
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export const Occupancy: React.FC = () => {
+  const [preset,     setPreset]     = useState('month');
   const [startDate,  setStartDate]  = useState(monthStart());
   const [endDate,    setEndDate]    = useState(todayISO());
+  const [branchId,       setBranchId]       = useState<string>('');
+  const [practitionerId, setPractitionerId] = useState<string>('');
+  
+  const [branches,       setBranches]       = useState<any[]>([]);
+  const [practitioners,  setPractitioners]  = useState<Practitioner[]>([]);
+
   const [data,       setData]       = useState<OccupancyResponse | null>(null);
   const [isLoading,  setIsLoading]  = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [hasRun,     setHasRun]     = useState(false);
   const [drillDown,  setDrillDown]  = useState<OccupancyPractitionerRow | null>(null);
+
+  React.useEffect(() => {
+    getClinicBranches().then((res) => setBranches(res.branches || [])).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    const bId = branchId ? parseInt(branchId) : null;
+    getPractitioners(bId).then((res) => {
+      setPractitioners(res.practitioners || []);
+      if (practitionerId && bId && !res.practitioners.some(p => p.id.toString() === practitionerId)) {
+        setPractitionerId('');
+      }
+    }).catch(() => {});
+  }, [branchId]);
+
+  const handlePresetChange = (selected: string) => {
+    setPreset(selected);
+    const d = new Date();
+    
+    const formatLocal = (dateObj: Date) => {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    if (selected === 'today') {
+      const todayStr = formatLocal(d);
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    } else if (selected === 'week') {
+      const day = d.getDay(); // 0 is Sunday, 1 is Monday
+      const diffToMonday = d.getDate() - day + (day === 0 ? -6 : 1);
+      
+      const start = new Date(d.getFullYear(), d.getMonth(), diffToMonday);
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+      
+      setStartDate(formatLocal(start));
+      setEndDate(formatLocal(end));
+    } else if (selected === 'month') {
+      const start = new Date(d.getFullYear(), d.getMonth(), 1);
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0); // 0 gets last day of previous month
+      
+      setStartDate(formatLocal(start));
+      setEndDate(formatLocal(end));
+    }
+  };
 
   const run = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getOccupancy({ start_date: startDate, end_date: endDate });
+      const result = await getOccupancy({
+        start_date: startDate,
+        end_date: endDate,
+        ...(branchId ? { branch_id: parseInt(branchId) } : {}),
+        ...(practitionerId ? { practitioner_id: parseInt(practitionerId) } : {}),
+      });
       setData(result);
       setHasRun(true);
       setDrillDown(null);
@@ -134,7 +209,33 @@ export const Occupancy: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, branchId, practitionerId]);
+
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const html = await printOccupancyReport({
+        start_date: startDate,
+        end_date: endDate,
+        ...(branchId ? { branch_id: parseInt(branchId) } : {}),
+        ...(practitionerId ? { practitioner_id: parseInt(practitionerId) } : {}),
+      });
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        setTimeout(() => win.print(), 250);
+      } else {
+        toast.error('Please allow popups to print reports.');
+      }
+    } catch (err: any) {
+      toast.error('Failed to generate print document');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
 
   // Filter daily trend for the drilled-down practitioner by matching their
   // appointments — the API returns a global daily trend; the per-practitioner
@@ -144,15 +245,99 @@ export const Occupancy: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Controls */}
-      <div className="shrink-0 bg-white border-b border-gray-200 px-6 py-4">
-        <DateRangePicker
-          startDate={startDate}
-          endDate={endDate}
-          onStartChange={setStartDate}
-          onEndChange={setEndDate}
-          onApply={run}
-          isLoading={isLoading}
-        />
+      <div className="shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1 w-full max-w-[180px]">
+          <label className="text-xs font-medium text-gray-600">Date Range</label>
+          <select
+            value={preset}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
+          >
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="custom">Custom...</option>
+          </select>
+        </div>
+
+        {preset === 'custom' && (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">From</label>
+              <input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">To</label>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-600">Branch</label>
+          <select
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white min-w-[150px] outline-none focus:ring-2 focus:ring-orange-400"
+          >
+            <option value="">All Branches</option>
+            {branches.map(b => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-600">Practitioner</label>
+          <select
+            value={practitionerId}
+            onChange={(e) => setPractitionerId(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white min-w-[150px] outline-none focus:ring-2 focus:ring-orange-400"
+          >
+            <option value="">All Practitioners</option>
+            {practitioners.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={run}
+          disabled={isLoading}
+          className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+        >
+          {isLoading ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />Running...</>
+          ) : (
+            'Run Report'
+          )}
+        </button>
+
+        {data && (
+          <button
+            onClick={handlePrint}
+            disabled={isPrinting}
+            className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ml-auto"
+          >
+            {isPrinting ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />Generating...</>
+            ) : (
+              <><Printer className="w-4 h-4" />Print</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Body */}
@@ -191,38 +376,42 @@ export const Occupancy: React.FC = () => {
             />
 
             {/* Summary KPI cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
               <StatCard
-                label="Overall Occupancy"
+                label="Occupancy %"
                 value={`${data.summary.overall_occupancy_pct.toFixed(1)}%`}
-                color="text-purple-700"
-                bg="bg-purple-50"
-                border="border-purple-200"
+                color="text-purple-700" bg="bg-purple-50" border="border-purple-200"
                 icon={<TrendingUp className="w-4 h-4" />}
               />
               <StatCard
-                label="Scheduled"
+                label="Utilization %"
+                value={`${data.summary.overall_utilization_pct.toFixed(1)}%`}
+                color="text-blue-700" bg="bg-blue-50" border="border-blue-200"
+                icon={<TrendingUp className="w-4 h-4" />}
+              />
+              <StatCard
+                label="Available"
                 value={fmtMins(data.summary.total_scheduled_minutes)}
-                color="text-gray-900"
-                bg="bg-gray-50"
-                border="border-gray-200"
+                color="text-gray-900" bg="bg-gray-50" border="border-gray-200"
                 icon={<CalendarDays className="w-4 h-4" />}
               />
               <StatCard
-                label="Occupied"
+                label="Booked"
                 value={fmtMins(data.summary.total_occupied_minutes)}
-                color="text-sky-700"
-                bg="bg-sky-50"
-                border="border-sky-200"
+                color="text-sky-700" bg="bg-sky-50" border="border-sky-200"
                 icon={<Clock className="w-4 h-4" />}
               />
               <StatCard
-                label="Appointments"
-                value={data.summary.total_appointments}
-                color="text-green-700"
-                bg="bg-green-50"
-                border="border-green-200"
+                label="Completed"
+                value={fmtMins(data.summary.total_completed_minutes)}
+                color="text-green-700" bg="bg-green-50" border="border-green-200"
                 icon={<Users className="w-4 h-4" />}
+              />
+              <StatCard
+                label="Cancel/DNA"
+                value={fmtMins(data.summary.total_cancelled_minutes + data.summary.total_dna_minutes)}
+                color="text-red-700" bg="bg-red-50" border="border-red-200"
+                icon={<AlertCircle className="w-4 h-4" />}
               />
             </div>
 
@@ -233,11 +422,12 @@ export const Occupancy: React.FC = () => {
                   <thead>
                     <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                       <th className="px-4 py-3 text-left font-semibold">Practitioner</th>
-                      <th className="px-4 py-3 text-right font-semibold">Scheduled</th>
-                      <th className="px-4 py-3 text-right font-semibold">Occupied</th>
-                      <th className="px-4 py-3 text-right font-semibold">Appts</th>
-                      <th className="px-4 py-3 text-right font-semibold">Services</th>
-                      <th className="px-4 py-3 font-semibold min-w-45">Occupancy</th>
+                      <th className="px-4 py-3 text-left font-semibold">Branch</th>
+                      <th className="px-4 py-3 text-right font-semibold">Available</th>
+                      <th className="px-4 py-3 text-right font-semibold">Booked</th>
+                      <th className="px-4 py-3 text-right font-semibold">Completed</th>
+                      <th className="px-4 py-3 text-right font-semibold">Cancel/DNA</th>
+                      <th className="px-4 py-3 font-semibold min-w-45">Occ / Util</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -248,19 +438,21 @@ export const Occupancy: React.FC = () => {
                         className={`border-t border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                       >
                         <td className="px-4 py-3 font-medium text-gray-900">{row.practitioner_name}</td>
+                        <td className="px-4 py-3 text-gray-600">{row.branch_name}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{fmtMins(row.scheduled_minutes)}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{fmtMins(row.occupied_minutes)}</td>
-                        <td className="px-4 py-3 text-right text-gray-700">{row.appointment_count}</td>
-                        <td className="px-4 py-3 text-right text-gray-700">{row.service_count}</td>
-                        <td className="px-4 py-3">
-                          <OccupancyBar pct={row.occupancy_pct} />
+                        <td className="px-4 py-3 text-right text-green-600">{fmtMins(row.completed_minutes)}</td>
+                        <td className="px-4 py-3 text-right text-red-600">{fmtMins(row.cancelled_minutes + row.dna_minutes)}</td>
+                        <td className="px-4 py-3 space-y-1">
+                          <OccupancyBar pct={row.occupancy_pct} label="Occ" />
+                          <OccupancyBar pct={row.utilization_pct} label="Util" colorClass="bg-blue-500" />
                         </td>
                         <td className="px-4 py-3">
                           <button
                             onClick={() => setDrillDown(row)}
                             className="text-xs text-purple-600 hover:text-purple-800 font-medium underline underline-offset-2 transition-colors"
                           >
-                            Trend ↗
+                            Details ↗
                           </button>
                         </td>
                       </tr>
@@ -270,12 +462,35 @@ export const Occupancy: React.FC = () => {
               </div>
             </div>
 
-            {/* Overall daily trend */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-purple-500" />
-                Daily Occupancy Trend (All Practitioners)
-              </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Branch Chart */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-purple-500" />
+                  Occupancy by Branch
+                </h3>
+                {!data.branch_chart || data.branch_chart.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No branch data available.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {data.branch_chart.map((b) => (
+                      <div key={b.branch_name}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-medium text-gray-700">{b.branch_name}</span>
+                        </div>
+                        <OccupancyBar pct={b.occupancy_pct} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Overall daily trend */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-purple-500" />
+                  Daily Occupancy Trend (All Practitioners)
+                </h3>
               {drillPoints.length === 0 ? (
                 <p className="text-xs text-gray-400 italic">No daily data available.</p>
               ) : (
@@ -326,15 +541,17 @@ export const Occupancy: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
           </>
         )}
       </div>
 
       {/* Drill-down modal */}
       {drillDown && (
-        <DailyTrendChart
-          points={drillPoints}
-          practitioner={drillDown.practitioner_name}
+        <DrillDownModal
+          practitioner={drillDown}
+          startDate={data?.start_date || startDate}
+          endDate={data?.end_date || endDate}
           onClose={() => setDrillDown(null)}
         />
       )}

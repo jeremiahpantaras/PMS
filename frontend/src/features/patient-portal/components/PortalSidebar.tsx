@@ -11,13 +11,11 @@ const fmt12 = (slot: string) => {
 
 interface PortalSidebarProps {
   portal:               PortalData;
-  selectedBranch:       PortalBranch | null;
   selectedPractitioner: PortalPractitioner | null;
   selectedService:      PortalService | null;
   selectedDate:         string;
   selectedSlot:         string;
   currentStep:          number;
-  onChangeBranch:       () => void;
 }
 
 const STEPS = [
@@ -29,13 +27,11 @@ const STEPS = [
 
 export const PortalSidebar: React.FC<PortalSidebarProps> = ({
   portal,
-  selectedBranch,
   selectedPractitioner,
   selectedService,
   selectedDate,
   selectedSlot,
   currentStep,
-  onChangeBranch,
 }) => {
   return (
     <aside className="w-80 shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-screen">
@@ -83,39 +79,6 @@ export const PortalSidebar: React.FC<PortalSidebarProps> = ({
           )}
         </div>
       </div>
-
-      {/* Selected branch banner */}
-      {selectedBranch && (
-        <div className="mx-4 mt-4 bg-primary-gradient rounded-xl p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs text-white/70 font-medium uppercase tracking-wide mb-0.5">
-                Selected Location
-              </p>
-              <p className="text-sm font-bold text-white leading-tight truncate">
-                {selectedBranch.name}
-              </p>
-              {(selectedBranch.city || selectedBranch.province) && (
-                <p className="text-xs text-white/70 mt-0.5">
-                  {[selectedBranch.city, selectedBranch.province].filter(Boolean).join(', ')}
-                </p>
-              )}
-              {selectedBranch.address && (
-                <p className="text-xs text-white/70 mt-0.5 truncate">
-                  {selectedBranch.address}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={onChangeBranch}
-              className="flex-shrink-0 flex items-center gap-1 text-xs font-medium text-white bg-white/20 hover:bg-white/30 px-2 py-1 rounded-lg transition-colors"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Change
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Steps */}
       <div className="p-6 border-b border-gray-100">

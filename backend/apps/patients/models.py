@@ -19,6 +19,15 @@ class Patient(TimeStampedModel, SoftDeleteModel):
         related_name='patients'
     )
 
+    home_branch = models.ForeignKey(
+        'clinics.Clinic',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='home_patients',
+        help_text='The specific clinic branch this patient belongs to.'
+    )
+
     first_name  = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True)
     last_name   = models.CharField(max_length=100)
@@ -272,8 +281,7 @@ class PortalLink(TimeStampedModel):
 
     @classmethod
     def get_or_create_for_clinic(cls, clinic):
-        main_clinic = clinic.main_clinic
-        obj, created = cls.objects.get_or_create(clinic=main_clinic)
+        obj, created = cls.objects.get_or_create(clinic=clinic)
         return obj, created
 
 

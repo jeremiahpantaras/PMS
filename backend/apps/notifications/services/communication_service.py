@@ -51,8 +51,8 @@ def _get_clinic_logo_url(clinic) -> str | None:
 def _get_portal_booking_url(clinic) -> str:
     """Build the branch-specific patient portal booking URL."""
     base = getattr(settings, 'PORTAL_BASE_URL', 'https://portal.mespms.com')
-    branch_code = clinic.branch_code or 'default'
-    return f"{base}/book/{branch_code}"
+    slug = clinic.slug if clinic.slug else (clinic.branch_code or 'default')
+    return f"{base}/book/{slug}"
 
 
 def _should_send(clinic, patient, channel: str) -> bool:

@@ -24,32 +24,32 @@ urlpatterns = [
     path('', include(router.urls)),
 
     path(
-        'public/portal/<str:token>/',
+        'public/portal/<str:token_or_slug>/',
         PublicPortalView.as_view(),
         name='public-portal',
     ),
     path(
-        'public/portal/<str:token>/book/',
+        'public/portal/<str:token_or_slug>/book/',
         PublicPortalBookView.as_view(),
         name='public-portal-book',
     ),
     path(
-        'public/portal/<str:token>/consent/',
+        'public/portal/<str:token_or_slug>/consent/',
         PublicPortalConsentCreateView.as_view(),
         name='public-portal-consent',
     ),
     path(
-        'public/portal/<str:token>/clinic_consent/',
+        'public/portal/<str:token_or_slug>/clinic_consent/',
         PublicClinicConsentDocumentCreateView.as_view(),
         name='public-portal-clinic-consent',
     ),
     path(
-        'public/portal/<str:token>/clinic_consent/form/',
+        'public/portal/<str:token_or_slug>/clinic_consent/form/',
         PublicClinicConsentFormView.as_view(),
         name='public-portal-clinic-consent-form',
     ),
     path(
-        'public/portal/<str:token>/slots/',
+        'public/portal/<str:token_or_slug>/slots/',
         PublicAvailableSlotsView.as_view(),
         name='public-portal-slots',
     ),

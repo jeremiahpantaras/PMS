@@ -34,8 +34,29 @@ from apps.appointments.filters import AppointmentFilter
 from apps.appointments.calendar_events import emit_calendar_event, get_main_clinic_id
 from django.core.cache import cache
 
+from rest_framework.exceptions import PermissionDenied
 import logging
 logger = logging.getLogger(__name__)
+
+def validate_practitioner_branch_access(user, requested_branch_id=None):
+    """
+    If the user is a PRACTITIONER (and not Admin/Manager), validate they have access
+    to the requested branch. If no branch is requested, return the list of allowed branches.
+    Raises PermissionDenied if the requested branch is unauthorized.
+    Returns: (list_of_allowed_branch_ids, bool_is_restricted_practitioner)
+    """
+    effective_roles = user.get_effective_roles()
+    if 'PRACTITIONER' in effective_roles and not user.is_admin and not user.is_manager:
+        practitioner_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+        if not practitioner_branches and user.clinic_branch_id:
+            practitioner_branches = [user.clinic_branch_id]
+            
+        if requested_branch_id is not None:
+            if requested_branch_id not in practitioner_branches:
+                raise PermissionDenied("You do not have permission to access this branch.")
+                
+        return practitioner_branches, True
+    return [], False
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
@@ -85,15 +106,25 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         # Filter by specific clinic branch
         clinic_branch_param = self.request.query_params.get('clinic_branch')
+        
         if clinic_branch_param:
             try:
                 branch_id = int(clinic_branch_param)
                 if branch_id in all_branch_ids:
+                    validate_practitioner_branch_access(user, branch_id)
                     queryset = queryset.filter(clinic_id=branch_id)
                 else:
                     return queryset.none()
             except (ValueError, TypeError):
                 pass
+        else:
+            # If no branch specified, enforce practitioner scope across all returned data
+            practitioner_branches, is_restricted = validate_practitioner_branch_access(user)
+            if is_restricted:
+                if practitioner_branches:
+                    queryset = queryset.filter(clinic_id__in=practitioner_branches)
+                else:
+                    return queryset.none()
 
         # Filter by practitioner
         practitioner_param = self.request.query_params.get('practitioner')
@@ -145,6 +176,11 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     # ── Audit hooks ───────────────────────────────────────────────────────────
     def perform_create(self, serializer):
         appointment = serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+        # ── Set patient's home_branch if not already set ──────────────────
+        if appointment.patient.home_branch is None:
+            appointment.patient.home_branch = appointment.clinic
+            appointment.patient.save(update_fields=['home_branch'])
 
         # ── Trigger booking confirmation (non-blocking) ───────────────────
         try:
@@ -1431,11 +1467,20 @@ class BlockAppointmentViewSet(viewsets.ModelViewSet):
             try:
                 branch_id = int(clinic_branch_param)
                 if branch_id in all_branch_ids:
+                    validate_practitioner_branch_access(user, branch_id)
                     queryset = queryset.filter(clinic_id=branch_id)
                 else:
                     return self.queryset.none()
             except (ValueError, TypeError):
                 pass
+        else:
+            # If no branch specified, enforce practitioner scope across all returned data
+            practitioner_branches, is_restricted = validate_practitioner_branch_access(user)
+            if is_restricted:
+                if practitioner_branches:
+                    queryset = queryset.filter(clinic_id__in=practitioner_branches)
+                else:
+                    return self.queryset.none()
 
         # Filter by date range
         start_date = self.request.query_params.get('start_date') or \
@@ -1541,11 +1586,20 @@ class CalendarNoteViewSet(viewsets.ModelViewSet):
             try:
                 branch_id = int(clinic_branch_param)
                 if branch_id in all_branch_ids:
+                    validate_practitioner_branch_access(user, branch_id)
                     qs = qs.filter(clinic_id=branch_id)
                 else:
                     return CalendarNote.objects.none()
             except (ValueError, TypeError):
                 pass
+        else:
+            # If no branch specified, enforce practitioner scope across all returned data
+            practitioner_branches, is_restricted = validate_practitioner_branch_access(user)
+            if is_restricted:
+                if practitioner_branches:
+                    qs = qs.filter(clinic_id__in=practitioner_branches)
+                else:
+                    return CalendarNote.objects.none()
 
         practitioner_param = self.request.query_params.get('practitioner')
         if practitioner_param:
