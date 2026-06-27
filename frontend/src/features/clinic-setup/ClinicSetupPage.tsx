@@ -3,7 +3,12 @@ import MalasakitLogo from '@/assets/malasakit/PrimaryLogo-Colored.svg';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import { PhLocationSelect } from '@/components/location/PhLocationSelect';
-import { getMyClinic, setupClinicProfile, getClinicBranches, createClinicBranch } from '@/features/clinics/clinic.api';
+import { 
+  getMyClinic, 
+  setupClinicProfile, 
+  getClinicBranches, 
+  createClinicBranch,
+} from '@/features/clinics/clinic.api';
 import type { ClinicProfileSetupPayload } from '@/features/clinics/clinic.api';
 import { ClinicLocationPicker } from '@/components/maps/ClinicLocationPicker';
 import type { ReverseGeocodeResult } from '@/components/maps/ClinicLocationPicker';
@@ -12,8 +17,9 @@ import {
   Building2, MapPin, Phone, Mail, Globe,
   Upload, X, ChevronRight, CheckCircle2, Loader2, Edit3, Bell,
   Users, Stethoscope, Plus, Briefcase, Clock,
-  DollarSign, AlertCircle, Minus,
+  DollarSign, AlertCircle, Minus, FileText
 } from 'lucide-react';
+import { BranchConsentFormModal } from './components/BranchConsentFormModal';
 import toast from 'react-hot-toast';
 import { invalidateClinicSettingsCache } from '@/hooks/useClinicSettings';
 import { formatPHPhone, isValidPHPhone } from '@/utils/phoneFormatter';
@@ -130,11 +136,18 @@ export const ClinicSetupPage: React.FC = () => {
   const [emailNotifEnabled, setEmailNotifEnabled] = useState(true);
   const [smsNotifEnabled,   setSmsNotifEnabled]   = useState(false);
 
+  // ── (Removed old global consent form state) ────────────────────────────────
+
   // ── Section 2: Branches state ──────────────────────────────────────────────
   const [branches,        setBranches]        = useState<ClinicBranch[]>([]);
   const [branchModalOpen, setBranchModalOpen] = useState(false);
   const [branchSaving,    setBranchSaving]    = useState(false);
   const [step2Skipped,    setStep2Skipped]    = useState(false);
+  const [consentModalOpen, setConsentModalOpen] = useState(false);
+  const [selectedConsentBranchId, setSelectedConsentBranchId] = useState<number | null>(null);
+
+  // We maintain a quick map of which branch has consent enabled/disabled for the List View
+  const [consentStatuses, setConsentStatuses] = useState<Record<number, { is_active: boolean; updated_at: string | null }>>({});
 
   // ── Section 3: Staff & Practitioners state ────────────────────────────
   const {
@@ -231,8 +244,11 @@ export const ClinicSetupPage: React.FC = () => {
         setEmailNotifEnabled(clinic.email_notifications_enabled ?? true);
         setSmsNotifEnabled(clinic.sms_notifications_enabled     ?? false);
         if (clinic.logo_url) setLogoPreview(clinic.logo_url);
-        // Populate existing branches (non-main only)
-        setBranches(branchRes.branches.filter((b) => !b.is_main_branch));
+        // Store the full branches list returned by backend directly
+        setBranches(branchRes.branches);
+        
+        // (Consent forms are now fetched individually in BranchConsentFormEditor)
+        
         // (step1Complete is derived automatically from form values)
       } catch {
         toast.error('Could not load clinic data. Please refresh.');
@@ -240,6 +256,46 @@ export const ClinicSetupPage: React.FC = () => {
     };
     load();
   }, []);
+
+  // ── Reload Consent Statuses ──────────────────────────────────────────────
+  const reloadConsentStatuses = useCallback(async (branchesToLoad: { id: number }[]) => {
+    // Dynamically import to avoid circular dependencies if any, but we can just use the api
+    const { getBranchConsentForm } = await import('@/features/clinics/clinic.api');
+    const newStatuses: Record<number, { is_active: boolean; updated_at: string | null }> = {};
+    
+    await Promise.allSettled(
+      branchesToLoad.map(async (b) => {
+        try {
+          const consent = await getBranchConsentForm(b.id);
+          if (consent && Object.keys(consent).length > 0) {
+            newStatuses[b.id] = {
+              is_active: consent.is_active || false,
+              updated_at: consent.updated_at || consent.created_at || null,
+            };
+          } else {
+            newStatuses[b.id] = { is_active: false, updated_at: null };
+          }
+        } catch (e: any) {
+          console.error(e);
+          newStatuses[b.id] = { is_active: false, updated_at: null };
+        }
+      })
+    );
+    setConsentStatuses(prev => ({ ...prev, ...newStatuses }));
+  }, []);
+
+  React.useEffect(() => {
+    if (branches.length > 0) {
+      reloadConsentStatuses(branches);
+    }
+  }, [branches, reloadConsentStatuses]);
+
+  const accessibleBranches = useMemo(() => {
+    return branches.map(b => ({
+      id: b.id,
+      name: b.is_main_branch ? `${b.name} (Main Branch)` : b.name
+    }));
+  }, [branches]);
 
   // ── Clinic form handlers (unchanged) ─────────────────────────────────────
   const handleChange = (
@@ -365,6 +421,8 @@ export const ClinicSetupPage: React.FC = () => {
       return;
     }
 
+    // (Consent validation moved to BranchConsentFormEditor)
+
     setIsFinishing(true);
     try {
       const payload: ClinicProfileSetupPayload = {
@@ -385,6 +443,9 @@ export const ClinicSetupPage: React.FC = () => {
       if (logoFile) payload.logo = logoFile;
 
       await setupClinicProfile(clinicId, payload);
+
+      // (Consent form saving is now handled in BranchConsentFormEditor separately)
+
       invalidateClinicSettingsCache();
       if (user && tokens) {
         setAuth({ ...user, clinic_setup_complete: true }, tokens);
@@ -645,6 +706,8 @@ export const ClinicSetupPage: React.FC = () => {
                 </div>
               </label>
             </div>
+
+            {/* (Consent form setup moved to a dedicated section) */}
 
             <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">Fields marked <span className="text-red-500">*</span> are required</p>
           </form>
@@ -973,6 +1036,81 @@ export const ClinicSetupPage: React.FC = () => {
           )}
         </div>
 
+        {/* ══ SECTION 5 — CLINIC CONSENT FORMS ══ */}
+        <div className="bg-white rounded-lg border border-[#EAECEF] p-5">
+          <div className="flex items-start justify-between mb-5">
+            <SectionHeader
+              step={5}
+              icon={<FileText className="w-4 h-4 text-white" />}
+              title="Clinic Consent Forms"
+              subtitle="Configure standard consent forms required for online bookings per branch."
+              done={true}
+            />
+          </div>
+
+          {clinicId && (
+            <div className="overflow-hidden border border-gray-200 rounded-lg">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold text-gray-600">Branch Name</th>
+                    <th className="px-4 py-3 font-semibold text-gray-600">Status</th>
+                    <th className="px-4 py-3 font-semibold text-gray-600">Updated By</th>
+                    <th className="px-4 py-3 font-semibold text-gray-600">Updated At</th>
+                    <th className="px-4 py-3 font-semibold text-gray-600 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {accessibleBranches.map((branch) => {
+                    const status = consentStatuses[branch.id];
+                    const isActive = status?.is_active ?? false;
+                    const updatedAt = status?.updated_at 
+                      ? new Date(status.updated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                      : 'Never';
+
+                    return (
+                      <tr key={branch.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900">{branch.name}</td>
+                        <td className="px-4 py-3">
+                          {isActive ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              Enabled
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                              Disabled
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">
+                          System {/* Mocked for now */}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">
+                          {updatedAt}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedConsentBranchId(branch.id);
+                              setConsentModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0575E6] bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" /> Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* ══ SAVE CLINIC SETUP ══ */}
         <div ref={saveRef} className="bg-white rounded-lg border border-[#EAECEF] p-5">
           <div className="flex items-center justify-between">
@@ -1037,6 +1175,19 @@ export const ClinicSetupPage: React.FC = () => {
           />
         )}
       </Suspense>
+
+      <Suspense fallback={null}>
+        {consentModalOpen && (
+          <BranchConsentFormModal
+            isOpen={consentModalOpen}
+            onClose={() => setConsentModalOpen(false)}
+            accessibleBranches={accessibleBranches}
+            initialBranchId={selectedConsentBranchId}
+            onSuccess={() => reloadConsentStatuses(accessibleBranches)}
+          />
+        )}
+      </Suspense>
+
     </div>
   );
 };

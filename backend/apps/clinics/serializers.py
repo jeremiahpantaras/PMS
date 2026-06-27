@@ -194,33 +194,27 @@ class LocationSerializer(serializers.ModelSerializer):
 
 class ClinicConsentFormSerializer(serializers.ModelSerializer):
     clinic_name = serializers.CharField(source='clinic.name', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ClinicConsentForm
         fields = [
             'id', 'clinic', 'clinic_name', 'title',
             'header_content', 'body_content', 'is_active',
-            'created_at', 'updated_at',
+            'created_at', 'updated_at', 'created_by_name', 'updated_by_name'
         ]
-        read_only_fields = ['id', 'clinic_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'clinic_name', 'created_at', 'updated_at', 'created_by_name', 'updated_by_name']
 
-    def validate(self, attrs):
-        # Ensure only one active consent form per clinic
-        if attrs.get('is_active', False):
-            clinic = attrs.get('clinic') or (self.instance.clinic if self.instance else None)
-            if clinic:
-                existing = ClinicConsentForm.objects.filter(
-                    clinic=clinic,
-                    is_active=True,
-                )
-                if self.instance:
-                    existing = existing.exclude(pk=self.instance.pk)
-                if existing.exists():
-                    raise serializers.ValidationError(
-                        {'is_active': 'Only one consent form can be active per clinic. Deactivate the existing one first.'}
-                    )
-        return attrs
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip() or obj.created_by.email
+        return "System"
 
+    def get_updated_by_name(self, obj):
+        if obj.updated_by:
+            return f"{obj.updated_by.first_name} {obj.updated_by.last_name}".strip() or obj.updated_by.email
+        return "System"
 
 class ClinicConsentFormCreateSerializer(serializers.ModelSerializer):
     class Meta:

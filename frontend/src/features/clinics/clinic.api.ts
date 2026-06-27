@@ -75,6 +75,23 @@ export interface ClinicProfile {
 }
 
 // ── NEW: Payload for clinic profile setup ─────────────────────────────────────
+export interface ClinicConsentFormPayload {
+  title: string;
+  header_content: string;
+  body_content: string;
+  is_active: boolean;
+}
+
+export interface ClinicConsentFormResponse extends ClinicConsentFormPayload {
+  id: number;
+  clinic: number;
+  clinic_name: string;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+}
+
 export interface ClinicProfileSetupPayload {
   name?:            string;
   email?:           string;
@@ -172,5 +189,58 @@ export const setupClinicProfile = async (
     form,
     { headers: { 'Content-Type': 'multipart/form-data' } },
   );
+  return res.data;
+};
+
+/**
+ * GET /api/clinic-consent-forms/active/
+ * Returns the active clinic consent form if it exists.
+ */
+export const getActiveClinicConsentForm = async (): Promise<ClinicConsentFormResponse> => {
+  const res = await axiosInstance.get<ClinicConsentFormResponse>('/clinic-consent-forms/active/');
+  return res.data;
+};
+
+/**
+ * POST /api/clinic-consent-forms/
+ * Creates a new clinic consent form.
+ */
+export const createClinicConsentForm = async (
+  payload: ClinicConsentFormPayload
+): Promise<ClinicConsentFormResponse> => {
+  const res = await axiosInstance.post<ClinicConsentFormResponse>('/clinic-consent-forms/', payload);
+  return res.data;
+};
+
+/**
+ * PATCH /api/clinic-consent-forms/{id}/
+ * Updates an existing clinic consent form.
+ */
+export const updateClinicConsentForm = async (
+  id: number,
+  payload: Partial<ClinicConsentFormPayload>
+): Promise<ClinicConsentFormResponse> => {
+  const res = await axiosInstance.patch<ClinicConsentFormResponse>(`/clinic-consent-forms/${id}/`, payload);
+  return res.data;
+};
+
+/**
+ * GET /api/clinics/{branchId}/consent_form/
+ * Returns the consent form for a specific branch.
+ */
+export const getBranchConsentForm = async (branchId: number): Promise<ClinicConsentFormResponse> => {
+  const res = await axiosInstance.get<ClinicConsentFormResponse>(`/clinics/${branchId}/consent_form/`);
+  return res.data;
+};
+
+/**
+ * PATCH /api/clinics/{branchId}/consent_form/
+ * Creates or updates the consent form for a specific branch.
+ */
+export const updateBranchConsentForm = async (
+  branchId: number,
+  payload: ClinicConsentFormPayload,
+): Promise<ClinicConsentFormResponse> => {
+  const res = await axiosInstance.patch<ClinicConsentFormResponse>(`/clinics/${branchId}/consent_form/`, payload);
   return res.data;
 };

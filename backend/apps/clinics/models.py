@@ -286,10 +286,10 @@ class ClinicConsentForm(TimeStampedModel):
     Content is stored as HTML for rich text support.
     """
 
-    clinic = models.ForeignKey(
+    clinic = models.OneToOneField(
         Clinic,
         on_delete=models.CASCADE,
-        related_name='consent_forms',
+        related_name='consent_form',
     )
     title = models.CharField(
         max_length=255,
@@ -308,7 +308,23 @@ class ClinicConsentForm(TimeStampedModel):
     )
     is_active = models.BooleanField(
         default=False,
-        help_text='Only one consent form can be active per clinic',
+        help_text='If true, this branch requires this consent form to be signed',
+    )
+    created_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_consent_forms',
+        help_text='User who initially created the form'
+    )
+    updated_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_consent_forms',
+        help_text='User who last modified the form'
     )
 
     class Meta:
@@ -321,14 +337,6 @@ class ClinicConsentForm(TimeStampedModel):
     def __str__(self):
         status = 'ACTIVE' if self.is_active else 'INACTIVE'
         return f"{self.clinic.name} - {self.title} ({status})"
-
-    def save(self, *args, **kwargs):
-        if self.is_active:
-            ClinicConsentForm.objects.filter(
-                clinic=self.clinic,
-                is_active=True,
-            ).exclude(pk=self.pk).update(is_active=False)
-        super().save(*args, **kwargs)
 
 
 class ClinicCommunicationSettings(TimeStampedModel):

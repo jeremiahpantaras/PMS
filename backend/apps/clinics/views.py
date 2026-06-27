@@ -48,6 +48,11 @@ class ClinicViewSet(viewsets.ModelViewSet):
                     Q(id=main_clinic.id) | Q(parent_clinic=main_clinic)
                 )
             return self.queryset
+        
+        if user.is_manager:
+            allowed_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+            return self.queryset.filter(Q(id=user.clinic_id) | Q(id__in=allowed_branches))
+            
         return self.queryset.filter(id=user.clinic_id) if user.clinic else self.queryset.none()
 
     # ── GET /api/clinics/branches/ ────────────────────────────────────────────
@@ -58,7 +63,7 @@ class ClinicViewSet(viewsets.ModelViewSet):
             return Response({'branches': []})
 
         main_clinic = user.clinic.main_clinic
-        cache_key   = f'clinic_branches_{main_clinic.id}'
+        cache_key   = f'clinic_branches_{main_clinic.id}_user_{user.id}'
         cached      = cache.get(cache_key)
         if cached is not None:
             return Response(cached)
@@ -66,6 +71,13 @@ class ClinicViewSet(viewsets.ModelViewSet):
         branches    = Clinic.objects.filter(
             Q(id=main_clinic.id) | Q(parent_clinic=main_clinic)
         ).filter(is_deleted=False, is_active=True).order_by('-is_main_branch', 'name')
+
+        if not user.is_admin:
+            if user.is_manager:
+                allowed_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+                branches = branches.filter(id__in=allowed_branches)
+            else:
+                branches = branches.filter(id=user.clinic_id)
 
         serializer = ClinicBranchSerializer(branches, many=True)
         result = {
@@ -168,6 +180,52 @@ class ClinicViewSet(viewsets.ModelViewSet):
         serializer = ClinicSerializer(clinic, context={'request': request})
         return Response(serializer.data)
 
+    # ── GET/PATCH /api/clinics/{id}/consent_form/ ─────────────────────────────
+    @action(detail=True, methods=['get', 'patch'], url_path='consent_form')
+    def consent_form(self, request, pk=None):
+        """Manage the consent form strictly for this specific branch."""
+        branch = self.get_object()
+
+        # RBAC Check: Manager must have access to this branch
+        user = request.user
+        if not user.is_admin:
+            if user.is_manager:
+                allowed_branches = list(user.branch_accesses.values_list('branch_id', flat=True))
+                if branch.id not in allowed_branches:
+                    return Response({'detail': 'You do not have permission to manage this branch.'}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                # Practitioners cannot edit consent forms
+                if request.method != 'GET':
+                    return Response({'detail': 'Practitioners cannot edit consent forms.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # GET Request
+        if request.method == 'GET':
+            try:
+                consent = branch.consent_form
+                return Response(ClinicConsentFormSerializer(consent).data)
+            except ClinicConsentForm.DoesNotExist:
+                return Response({}, status=status.HTTP_200_OK)
+
+        # PATCH Request
+        if request.method == 'PATCH':
+            try:
+                consent = branch.consent_form
+                serializer = ClinicConsentFormCreateSerializer(consent, data=request.data, partial=True)
+            except ClinicConsentForm.DoesNotExist:
+                serializer = ClinicConsentFormCreateSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                save_kwargs = {
+                    'clinic': branch,
+                    'updated_by': request.user
+                }
+                if not getattr(serializer.instance, 'created_by_id', None):
+                    save_kwargs['created_by'] = request.user
+                
+                serializer.save(**save_kwargs)
+                return Response(ClinicConsentFormSerializer(serializer.instance).data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class PractitionerViewSet(viewsets.ModelViewSet):
     queryset           = Practitioner.objects.filter(is_deleted=False).select_related('user', 'clinic')
@@ -200,8 +258,8 @@ class LocationViewSet(viewsets.ModelViewSet):
 
 class ClinicConsentFormViewSet(viewsets.ModelViewSet):
     """
-    CRUD operations for clinic consent forms.
-    Each clinic can have one active consent form at a time.
+    Legacy CRUD operations for clinic consent forms.
+    Retained for compatibility. Operates on the main clinic's consent form.
     """
 
     queryset = ClinicConsentForm.objects.all()
@@ -231,7 +289,7 @@ class ClinicConsentFormViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='active')
     def active_consent(self, request):
-        """Get the active consent form for the current user's clinic."""
+        """Get the active consent form for the current user's clinic (Main Clinic fallback)."""
         user = request.user
         if not user.clinic:
             return Response({'detail': 'No clinic associated.'}, status=status.HTTP_404_NOT_FOUND)
