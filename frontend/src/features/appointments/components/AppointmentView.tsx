@@ -2151,10 +2151,7 @@ const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = 
             const result = await createRecurringAppointments({
               service_id: data.service_id,
               duration_minutes: data.duration_minutes,
-              frequency: data.frequency,
-              repetitions: data.repetitions,
-              selected_days: data.selected_days,
-              start_date: data.start_date,
+              dates: data.dates,
               practitioner_id: data.practitioner_id,
               start_time: data.start_time,
               patient_id: appointment!.patient,

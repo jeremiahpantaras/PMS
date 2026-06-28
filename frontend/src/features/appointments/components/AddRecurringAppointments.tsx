@@ -16,10 +16,7 @@ interface Props {
 export interface RecurringAppointmentData {
   service_id: number;
   duration_minutes: number;
-  frequency: 'WEEKLY' | 'MONTHLY' | 'YEARLY';
-  repetitions: number;
-  selected_days: number[]; // 0=Monday, 6=Sunday
-  start_date: string;
+  dates: string[];
   practitioner_id: number | null;
   start_time: string;
 }
@@ -207,13 +204,35 @@ export const AddRecurringAppointments: React.FC<Props> = ({
   const handleSave = async () => {
     if (!appointment || !selectedServiceId || selectedDays.length === 0 || repetitions < 1) return;
     setIsSaving(true);
+
+    let finalDates: string[] = [];
+
+    // If slots are fresh, take ONLY the available previewed dates
+    if (!slotsStale && availableSlots.length > 0) {
+      finalDates = availableSlots
+        .filter(slot => slot.status === 'AVAILABLE')
+        .map(slot => slot.date);
+    } else {
+      // Otherwise fallback to generating the dates exactly like the preview
+      const nextDayDate = addDays(new Date(appointment.date), 1);
+      const startDate   = format(nextDayDate, 'yyyy-MM-dd');
+      const end         = calculateEndDate(startDate, frequency, repetitions);
+      const datesInterval = eachDayOfInterval({ start: new Date(startDate), end });
+  
+      const filteredDates = datesInterval.filter(date => {
+        const dow         = date.getDay();
+        const adjustedDay = dow === 0 ? 6 : dow - 1;
+        return selectedDays.includes(adjustedDay);
+      });
+      finalDates = filteredDates.map(d => format(d, 'yyyy-MM-dd'));
+    }
+
+    console.log('[DEBUG Frontend] Payload sent: generated dates', finalDates);
+
     const recurringData: RecurringAppointmentData = {
       service_id:       Number(selectedServiceId),
       duration_minutes: duration,
-      frequency,
-      repetitions,
-      selected_days:    selectedDays,
-      start_date:       format(addDays(new Date(appointment.date), 1), 'yyyy-MM-dd'),
+      dates:            finalDates,
       practitioner_id:  appointment.practitioner || null,
       start_time:       startTime.substring(0, 5),
     };

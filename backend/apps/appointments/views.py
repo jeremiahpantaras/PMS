@@ -892,10 +892,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         Body: {
             service_id: number,
             duration_minutes: number,
-            frequency: "WEEKLY" | "MONTHLY" | "YEARLY",
-            repetitions: number,
-            selected_days: number[],  // 0=Monday, 6=Sunday
-            start_date: "2024-01-15",  // Start date for recurring
+            dates: string[],  // ["2024-01-15", "2024-01-22", ...]
             practitioner_id: number | null,
             start_time: "09:00",  // HH:MM format
             patient_id: number,
@@ -913,28 +910,18 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         
         service_id = request.data.get('service_id')
         duration_minutes = request.data.get('duration_minutes', 60)
-        frequency = request.data.get('frequency', 'WEEKLY')
-        repetitions = request.data.get('repetitions', 4)
-        selected_days = request.data.get('selected_days', [])
-        start_date_str = request.data.get('start_date')
+        dates = request.data.get('dates', [])
         practitioner_id = request.data.get('practitioner_id')
         start_time_str = request.data.get('start_time')
         patient_id = request.data.get('patient_id')
         clinic_id = request.data.get('clinic_id')
         
+        logger.info(f"[DEBUG Backend] Payload received for create_recurring: dates={dates}, start_time={start_time_str}")
+
         # Validation
-        if not all([service_id, start_date_str, start_time_str, patient_id, clinic_id]):
+        if not all([service_id, dates, start_time_str, patient_id, clinic_id]):
             return Response(
-                {'error': 'service_id, start_date, start_time, patient_id, and clinic_id are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Parse start date
-        try:
-            start_date_obj = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return Response(
-                {'error': 'Invalid date format. Use YYYY-MM-DD.'},
+                {'error': 'service_id, dates, start_time, patient_id, and clinic_id are required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -983,43 +970,24 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             except Service.DoesNotExist:
                 pass
         
-        # Generate dates based on frequency and selected days
+        # Parse dates
         generated_dates = []
-        current_date = start_date_obj
+        for d_str in dates:
+            try:
+                dt_obj = datetime.strptime(d_str, '%Y-%m-%d').date()
+                generated_dates.append(dt_obj)
+            except ValueError:
+                pass
         
-        # Map frontend day values (0=Monday, 6=Sunday) to Python weekday (0=Monday, 6=Sunday)
-        # They're the same, so we can use directly
-        
-        if frequency == 'WEEKLY':
-            # For weekly, find the next date that matches one of the selected days
-            # Start from start_date and find dates up to 52 weeks ahead
-            max_weeks = min(repetitions * 2, 52)  # Safety limit
-            for week in range(max_weeks):
-                for day_offset in range(7):
-                    check_date = start_date_obj + timedelta(weeks=week, days=day_offset)
-                    if check_date.weekday() in selected_days:
-                        if len(generated_dates) < repetitions:
-                            generated_dates.append(check_date)
-                if len(generated_dates) >= repetitions:
-                    break
-        elif frequency == 'MONTHLY':
-            # For monthly, find the same day of month for each selected day
-            from dateutil.relativedelta import relativedelta
-            for i in range(repetitions):
-                check_date = start_date_obj + relativedelta(months=i)
-                if check_date.weekday() in selected_days:
-                    generated_dates.append(check_date)
-        elif frequency == 'YEARLY':
-            # For yearly
-            for i in range(min(repetitions, 5)):  # Limit yearly to 5 years
-                check_date = start_date_obj.replace(year=start_date_obj.year + i)
-                if check_date.weekday() in selected_days:
-                    generated_dates.append(check_date)
-        
+        logger.info(f"[DEBUG Backend] Total generated/parsed dates: {len(generated_dates)}")
+        logger.info(f"[DEBUG Backend] Generated dates: {[str(d) for d in generated_dates]}")
+
         # Create appointments
         created_appointments = []
         # Resolve clinic group once for efficient emits
         main_clinic_id = get_main_clinic_id(request.user)
+        logger.info(f"[DEBUG Backend] Appointments queued for insert: {len(generated_dates)}")
+        
         for appt_date in generated_dates:
             appointment = Appointment.objects.create(
                 clinic=clinic,
@@ -1045,6 +1013,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                     emit_calendar_event(main_clinic_id, 'APPOINTMENT_CREATED', dict(data))
             except Exception:
                 logger.exception('Failed to emit APPOINTMENT_CREATED for recurring appt #%s', getattr(appointment, 'id', '?'))
+        
+        logger.info(f"[DEBUG Backend] Appointments successfully inserted: {len(created_appointments)}")
         
         # Serialize the created appointments
         serializer = AppointmentSerializer(created_appointments, many=True, context={'request': request})

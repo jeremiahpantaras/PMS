@@ -528,7 +528,7 @@ export const Diary: React.FC = () => {
 
   // ── handleRebookDrop — creates a new appointment at the given slot using rebook data ──
   const handleRebookDrop = async (slot: {
-    date: Date; hour: number; minutes: number;
+    date: Date; hour: number; minutes: number; practitionerId?: number | null;
   }) => {
     if (!rebookData || !user) return;
     const { hour, minutes } = slot;
@@ -539,7 +539,7 @@ export const Diary: React.FC = () => {
     const data: CreateAppointmentData = {
       clinic:           clinicId as number,
       patient:          rebookData.patient,
-      practitioner:     rebookData.practitioner ?? undefined,
+      practitioner:     slot.practitionerId ?? rebookData.practitioner ?? undefined,
       service:          rebookData.service ?? undefined,
       appointment_type: rebookData.appointment_type,
       date:             format(slot.date, 'yyyy-MM-dd'),
@@ -554,7 +554,7 @@ export const Diary: React.FC = () => {
       await createAppointment(data);
       setAppointmentRefreshKey(prev => prev + 1);
       toast.success(`Rebooked for ${format(slot.date, 'MMM d')} at ${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
-      // Keep rebook mode active so user can place another booking
+      exitRebook();
     } catch (err: unknown) {
       const detail = err && typeof err === 'object' && 'response' in err
         ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail

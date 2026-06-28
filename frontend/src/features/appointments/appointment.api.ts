@@ -286,10 +286,7 @@ export const checkRecurringAvailability = async (
 export interface CreateRecurringAppointmentsParams {
   service_id: number;
   duration_minutes: number;
-  frequency: 'WEEKLY' | 'MONTHLY' | 'YEARLY';
-  repetitions: number;
-  selected_days: number[];
-  start_date: string;
+  dates: string[];
   practitioner_id: number | null;
   start_time: string;
   patient_id: number;
