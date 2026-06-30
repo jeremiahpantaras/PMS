@@ -26,10 +26,14 @@ import { Loader2 } from 'lucide-react';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmtMins = (mins: number): string => {
-  if (mins < 60) return `${mins}m`;
+  if (mins === 0) return '0 minutes';
+  if (mins < 60) return `${mins} minute${mins !== 1 ? 's' : ''}`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  const hStr = `${h} hour${h !== 1 ? 's' : ''}`;
+  if (m === 0) return hStr;
+  const mStr = `${m} minute${m !== 1 ? 's' : ''}`;
+  return `${hStr} ${mStr}`;
 };
 
 const OccupancyBar: React.FC<{ pct: number; label?: string; colorClass?: string }> = ({ pct, label, colorClass }) => {

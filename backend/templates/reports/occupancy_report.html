@@ -100,6 +100,7 @@
     </style>
 </head>
 <body>
+    {% load email_tags %}
 
     <div class="header">
         <h1>Occupancy & Utilization Report</h1>
@@ -125,20 +126,20 @@
             <tr>
                 <th>Occupancy %</th>
                 <th>Utilization %</th>
-                <th class="text-right">Available (Mins)</th>
-                <th class="text-right">Booked (Mins)</th>
-                <th class="text-right">Completed (Mins)</th>
-                <th class="text-right">Cancel/DNA (Mins)</th>
+                <th class="text-right">Available</th>
+                <th class="text-right">Booked</th>
+                <th class="text-right">Completed</th>
+                <th class="text-right">Cancel/DNA</th>
             </tr>
         </thead>
         <tbody>
             <tr>
                 <td class="font-bold">{{ summary.overall_occupancy_pct }}%</td>
                 <td class="font-bold">{{ summary.overall_utilization_pct }}%</td>
-                <td class="text-right">{{ summary.total_scheduled_minutes }}</td>
-                <td class="text-right">{{ summary.total_occupied_minutes }}</td>
-                <td class="text-right">{{ summary.total_completed_minutes }}</td>
-                <td class="text-right">{{ summary.total_cancelled_minutes|add:summary.total_dna_minutes }}</td>
+                <td class="text-right">{{ summary.total_scheduled_minutes|format_duration }}</td>
+                <td class="text-right">{{ summary.total_occupied_minutes|format_duration }}</td>
+                <td class="text-right">{{ summary.total_completed_minutes|format_duration }}</td>
+                <td class="text-right">{{ summary.total_cancelled_minutes|add:summary.total_dna_minutes|format_duration }}</td>
             </tr>
         </tbody>
     </table>
@@ -163,11 +164,11 @@
             <tr>
                 <td class="font-bold">{{ row.practitioner_name }}</td>
                 <td>{{ row.branch_name|default:"-" }}</td>
-                <td class="text-right">{{ row.scheduled_minutes }}</td>
-                <td class="text-right">{{ row.occupied_minutes }}</td>
-                <td class="text-right">{{ row.completed_minutes }}</td>
-                <td class="text-right">{{ row.cancelled_minutes }}</td>
-                <td class="text-right">{{ row.dna_minutes }}</td>
+                <td class="text-right">{{ row.scheduled_minutes|format_duration }}</td>
+                <td class="text-right">{{ row.occupied_minutes|format_duration }}</td>
+                <td class="text-right">{{ row.completed_minutes|format_duration }}</td>
+                <td class="text-right">{{ row.cancelled_minutes|format_duration }}</td>
+                <td class="text-right">{{ row.dna_minutes|format_duration }}</td>
                 <td class="text-right font-bold">{{ row.occupancy_pct }}%</td>
                 <td class="text-right font-bold">{{ row.utilization_pct }}%</td>
             </tr>

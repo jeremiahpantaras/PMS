@@ -15,10 +15,11 @@ def connect_signals():
     Deferred import prevents AppRegistryNotReady errors.
     """
     from apps.appointments.models import Appointment
-    from apps.patients.models import PortalBooking
+    from apps.patients.models import PortalBooking, Patient
     from apps.notifications.services.appointment_notifications import (
         notify_new_booking,
         notify_new_portal_booking,
+        notify_new_client,
     )
 
     # ── 1. Diary Appointment created / confirmed ──────────────────────────────
@@ -42,3 +43,9 @@ def connect_signals():
     def on_portal_booking_saved(sender, instance, created, **kwargs):
         if created:
             notify_new_portal_booking(instance)
+
+    # ── 3. New Patient registered ─────────────────────────────────────────────
+    @receiver(post_save, sender=Patient, weak=False)
+    def on_patient_saved(sender, instance, created, **kwargs):
+        if created:
+            notify_new_client(instance)

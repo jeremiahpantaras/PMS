@@ -15,6 +15,9 @@ export const notificationsApi = {
     is_read?: boolean;
     notification_type?: string;
     page?: number;
+    date_from?: string;
+    date_to?: string;
+    branch?: number;
   }): Promise<NotificationListResponse> => {
     const { data } = await axiosInstance.get(`${BASE}/`, { params });
     return data;

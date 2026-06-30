@@ -58,6 +58,8 @@ def notify_new_booking(appointment) -> None:
             message=message,
             link_url=link_url,
             appointment=appointment,
+            patient=patient,
+            practitioner=appointment.practitioner,
             clinic_branch=branch,
         )
 
@@ -108,12 +110,13 @@ def notify_new_portal_booking(portal_booking) -> None:
 
         create_notification(
             clinic=branch,
-            notification_type='NEW_BOOKING',
+            notification_type='ONLINE_BOOKING',
             title=title,
             message=message,
             link_url=link_url,
             appointment=None,
-            clinic_branch=branch,
+            practitioner=portal_booking.practitioner,
+            clinic_branch=portal_booking.branch or branch,
         )
 
         logger.info(
@@ -125,6 +128,43 @@ def notify_new_portal_booking(portal_booking) -> None:
         logger.exception(
             "notify_new_portal_booking failed for portal_booking %s: %s",
             getattr(portal_booking, 'id', '?'), exc,
+        )
+
+
+# ─── 2b. New Client Notification ─────────────────────────────────────────────
+
+def notify_new_client(patient) -> None:
+    """
+    Fire when a new Patient is registered in the clinic.
+    Creates ONE clinic-wide notification.
+    """
+    try:
+        branch = patient.clinic
+
+        patient_name = patient.get_full_name() or "Unknown Patient"
+        title = f"New Client: {patient_name}"
+        message = f"{patient_name} was registered as a new client."
+        link_url = f"/patients/{patient.id}"
+
+        create_notification(
+            clinic=branch,
+            notification_type='NEW_CLIENT',
+            title=title,
+            message=message,
+            link_url=link_url,
+            patient=patient,
+            clinic_branch=branch,
+        )
+
+        logger.info(
+            "notify_new_client: created clinic-wide notification for patient %s",
+            patient.id,
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "notify_new_client failed for patient %s: %s",
+            getattr(patient, 'id', '?'), exc,
         )
 
 

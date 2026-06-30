@@ -18,6 +18,10 @@ class NotificationSerializer(serializers.ModelSerializer):
     )
 
     appointment_id     = serializers.IntegerField(source='appointment.id',   read_only=True, allow_null=True)
+    patient_id         = serializers.IntegerField(source='patient.id',       read_only=True, allow_null=True)
+    patient_name       = serializers.SerializerMethodField()
+    practitioner_id    = serializers.IntegerField(source='practitioner.id',  read_only=True, allow_null=True)
+    practitioner_name  = serializers.SerializerMethodField()
     clinic_branch_id   = serializers.IntegerField(source='clinic_branch.id', read_only=True, allow_null=True)
     clinic_branch_name = serializers.CharField(
         source='clinic_branch.name', read_only=True, allow_null=True,
@@ -37,6 +41,10 @@ class NotificationSerializer(serializers.ModelSerializer):
             'message',
             'link_url',
             'appointment_id',
+            'patient_id',
+            'patient_name',
+            'practitioner_id',
+            'practitioner_name',
             'clinic_branch_id',
             'clinic_branch_name',
             'is_read',
@@ -44,6 +52,16 @@ class NotificationSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+
+    def get_patient_name(self, obj) -> str | None:
+        if obj.patient:
+            return obj.patient.get_full_name()
+        return None
+        
+    def get_practitioner_name(self, obj) -> str | None:
+        if obj.practitioner and obj.practitioner.user:
+            return obj.practitioner.user.get_full_name()
+        return None
 
     def _get_read_map(self):
         """

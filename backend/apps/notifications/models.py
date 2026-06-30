@@ -17,6 +17,8 @@ class Notification(TimeStampedModel):
 
     NOTIFICATION_TYPE_CHOICES = [
         ('NEW_BOOKING',   'New Appointment Booking'),
+        ('NEW_CLIENT',    'New Client'),
+        ('ONLINE_BOOKING','New Online Booking'),
         ('DAILY_SUMMARY', 'Daily Appointments Summary'),
     ]
 
@@ -38,9 +40,25 @@ class Notification(TimeStampedModel):
     message  = models.TextField()
     link_url = models.CharField(max_length=500, blank=True)
 
-    # Optional FK — for NEW_BOOKING
+    # Optional FKs
     appointment = models.ForeignKey(
         'appointments.Appointment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications',
+    )
+    
+    patient = models.ForeignKey(
+        'patients.Patient',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications',
+    )
+    
+    practitioner = models.ForeignKey(
+        'clinics.Practitioner',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

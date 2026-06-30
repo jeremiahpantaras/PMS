@@ -82,6 +82,8 @@ def create_notification(
     message: str,
     link_url: str = '',
     appointment=None,
+    patient=None,
+    practitioner=None,
     clinic_branch=None,
 ) -> Notification:
     """
@@ -105,6 +107,8 @@ def create_notification(
         message=message,
         link_url=link_url,
         appointment=appointment,
+        patient=patient,
+        practitioner=practitioner,
         clinic_branch=clinic_branch,
     )
 

@@ -42,22 +42,49 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """
         Return all notifications for the user's main clinic.
-        New users automatically see every historical notification.
+        Filters by RBAC role, and custom query params (date range, branch).
         """
         user = self.request.user
         if not user.clinic:
             return Notification.objects.none()
 
-        # Resolve to main clinic
         main_clinic = user.clinic.main_clinic
 
         qs = (
             Notification.objects
             .filter(clinic=main_clinic)
-            .select_related('appointment', 'clinic_branch')
+            .select_related('appointment', 'clinic_branch', 'patient', 'practitioner')
         )
+        
+        # 1. RBAC Filtering
+        if not user.is_admin:
+            if user.is_manager:
+                managed_branches = user.get_managed_branches()
+                qs = qs.filter(clinic_branch__in=managed_branches)
+            else:
+                qs = qs.filter(clinic_branch=user.clinic_branch)
+                
+                if user.is_practitioner:
+                    from django.db.models import Q
+                    try:
+                        practitioner = user.practitioner_profile
+                        qs = qs.filter(Q(practitioner=practitioner) | Q(practitioner__isnull=True))
+                    except Exception:
+                        qs = qs.none()
 
-        # Optional filter: ?is_read=true / ?is_read=false
+        # 2. Custom UI Filters
+        date_from = self.request.query_params.get('date_from')
+        date_to   = self.request.query_params.get('date_to')
+        branch_id = self.request.query_params.get('branch')
+        
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        if branch_id:
+            qs = qs.filter(clinic_branch_id=branch_id)
+
+        # 3. Read Status Filter: ?is_read=true / ?is_read=false
         is_read_param = self.request.query_params.get('is_read')
         if is_read_param is not None:
             read_ids = NotificationRead.objects.filter(
