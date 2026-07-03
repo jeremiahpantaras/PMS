@@ -16,7 +16,6 @@ export function RebookPage() {
   const { token } = useParams<{ token: string }>();
   const [pageState, setPageState] = useState<PageState>('loading');
   const [details, setDetails] = useState<RebookingDetails | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export function RebookPage() {
   const handleConfirm = async (date: string, startTime: string, endTime: string) => {
     if (!token) return;
     setErrorMsg('');
-    setSubmitting(true);
     try {
       await submitRebooking(token, { date, start_time: startTime, end_time: endTime });
       setPageState('success');
@@ -50,8 +48,6 @@ export function RebookPage() {
       } else {
         setErrorMsg('Something went wrong. Please try again.');
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -60,7 +56,6 @@ export function RebookPage() {
     if (!window.confirm('Are you sure you want to cancel your appointment?')) {
       return;
     }
-    setSubmitting(true);
     setErrorMsg('');
     try {
       await cancelRebooking(token);
@@ -75,8 +70,6 @@ export function RebookPage() {
       } else {
         setErrorMsg('Something went wrong. Please try again.');
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 

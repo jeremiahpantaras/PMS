@@ -14,8 +14,7 @@ import type { Practitioner } from '@/features/clinics/clinic.api';
 import { CaseModal, type CaseFormData } from './CaseModal';
 import { usePatientProfileContext } from './context/PatientProfileContext';
 import {
-  getPatientCases,
-  createPatientCase as apiCreatePatientCase,
+    createPatientCase as apiCreatePatientCase,
   updatePatientCase as apiUpdatePatientCase,
   deletePatientCase as apiDeletePatientCase,
   assignNoteToCase,
@@ -728,14 +727,14 @@ export const PatientCasesNotesPage = () => {
                   </select>
                 )}
               </div>
-              {selectedCase?.primaryPractitionerName && (
-                <p className="text-xs text-gray-500 mt-0.5">Primary: {selectedCase.primaryPractitionerName}</p>
+              {selectedCase?.primary_practitioner_name && (
+                <p className="text-xs text-gray-500 mt-0.5">Primary: {selectedCase.primary_practitioner_name}</p>
               )}
               {selectedCase?.description && (
                 <p className="text-xs text-gray-500 mt-0.5 truncate">{selectedCase.description}</p>
               )}
-              {selectedCase?.referredBy && (
-                <p className="text-xs text-gray-500 mt-0.5">Referral: {selectedCase.referredBy}</p>
+              {selectedCase?.referred_by && (
+                <p className="text-xs text-gray-500 mt-0.5">Referral: {selectedCase.referred_by}</p>
               )}
             </div>
 

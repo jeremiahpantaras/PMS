@@ -158,9 +158,10 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
+    const parsedValue = value === '' ? '' : Number(value);
 
     if (name === 'practitioner' && formData.service) {
-      const newPracId = value === '' ? null : Number(value);
+      const newPracId = parsedValue === '' ? null : parsedValue;
       const newPractitioner = practitioners.find(p => p.id == newPracId);
       const currentService = allServices.find(s => s.id === Number(formData.service));
       if (
@@ -169,13 +170,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         newPractitioner.discipline !== undefined &&
         currentService.discipline !== newPractitioner.discipline
       ) {
-        setFormData(prev => ({ ...prev, [name]: value, service: '' }));
+        setFormData(prev => ({ ...prev, [name as keyof FormData]: parsedValue, service: '' }));
         setErrors(prev => ({ ...prev, service: '' }));
         return;
       }
     }
 
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name as keyof FormData]: parsedValue }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 

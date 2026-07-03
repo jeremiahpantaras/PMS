@@ -38,15 +38,7 @@ const BUCKET_LABELS: Record<string, string> = {
   '90_plus': '90+ Days',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  OPEN: 'text-gray-700',
-  PARTIALLY_PAID: 'text-teal-700',
-  PAID: 'text-green-700',
-  WRITTEN_OFF: 'text-red-700',
-  PENDING: 'text-yellow-700',
-  OVERDUE: 'text-red-700',
-  UNBILLED: 'text-purple-700',
-};
+
 
 function buildPrintHtml(data: AgeingDebtsResponse): string {
   const { summary, debts, generated_at } = data;
@@ -135,7 +127,7 @@ export const AgeingDebtsReport: React.FC = () => {
   const [error,          setError]          = useState<string | null>(null);
   const [hasRun,         setHasRun]         = useState(false);
   const [showAddModal,    setShowAddModal]    = useState(false);
-  const [editEntry,      setEditEntry]       = useState<AgeingDebtItem | null>(null);
+  const [editEntry,      setEditEntry]       = useState<any | null>(null);
   const [searchQuery,     setSearchQuery]     = useState('');
   const [filterStatus,    setFilterStatus]    = useState('ALL');
   const [filterBucket,    setFilterBucket]    = useState('ALL');
@@ -159,11 +151,11 @@ export const AgeingDebtsReport: React.FC = () => {
     openPrintWindow(buildPrintHtml(data), 'Ageing Debts Report');
   };
 
-  const handleEntryCreated = (entry: any) => {
+  const handleEntryCreated = (_entry: any) => {
     runReport();
   };
 
-  const handleEntryUpdated = (entry: any) => {
+  const handleEntryUpdated = (_entry: any) => {
     runReport();
   };
 
@@ -172,7 +164,7 @@ export const AgeingDebtsReport: React.FC = () => {
     runReport();
   };
 
-  const handlePaymentRecorded = (entry: any) => {
+  const handlePaymentRecorded = (_entry: any) => {
     setEditEntry(null);
     runReport();
   };
@@ -194,9 +186,6 @@ export const AgeingDebtsReport: React.FC = () => {
     return true;
   });
 
-  const currentOutstanding = debts
-    .filter(d => d.source === 'debt_entry' && d.status !== 'PAID' && d.status !== 'WRITTEN_OFF')
-    .reduce((sum, d) => sum + d.balance_due, 0);
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-5">

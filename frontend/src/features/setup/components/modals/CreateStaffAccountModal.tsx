@@ -279,7 +279,7 @@ export const CreateStaffAccountModal: React.FC<CreateStaffAccountModalProps> = (
         gender:        editingStaff.gender         ?? 'Male',
         roles:         displayRoles,
         clinic_branch: editingStaff.clinic_branch  ?? null,
-        branch_ids:    editingStaff.manager_branches ? editingStaff.manager_branches.map(b => b.id) : [],
+        branch_ids:    editingStaff.manager_branches ? editingStaff.manager_branches.map((b: any) => b.id) : [],
         // Availability
         duty_days:        (editingStaff.duty_days ?? editingStaff.availability?.duty_days ?? DEFAULT_DUTY_DAYS) as DutyDay[],
         lunch_start_time: editingStaff.lunch_start_time ?? editingStaff.availability?.lunch_start_time ?? '12:00',

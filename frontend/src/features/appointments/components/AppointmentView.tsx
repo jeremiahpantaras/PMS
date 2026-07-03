@@ -24,15 +24,13 @@ import {
   getLinkedCaseId,
   setLinkedCaseId,
   clearLinkedCase,
-  type PatientCase,
-  type PatientCaseStatus,
 } from '@/features/patients/patientCases.storage';
 import {
   getPatientCases,
   createPatientCase as apiCreatePatientCase,
   updatePatientCase as apiUpdatePatientCase,
 } from '@/features/patients/patientCases.api';
-import type { PatientCase as ApiPatientCase } from '@/types/patient';
+import type { PatientCase, PatientCaseStatus, PatientCasePayer } from '@/types/patient';
 import { CaseModal, type CaseFormData } from '@/features/patients/CaseModal';
 import type { Practitioner } from '@/features/clinics/clinic.api';
 
@@ -256,7 +254,7 @@ const ClinicalCaseWorkspace = React.forwardRef<
 >(({ appointment, patientCases, practitioners, loadingPractitioners, onCasesChanged, onDirtyChange }, ref) => {
   const queryClient = useQueryClient();
   const [selectedCaseId,  setSelectedCaseId]  = useState<string>(patientCases[0]?.id ? String(patientCases[0].id) : '');
-  const [editPayer,       setEditPayer]        = useState<string>(patientCases[0]?.payer ?? '');
+  const [editPayer,       setEditPayer]        = useState<PatientCasePayer | ''>(patientCases[0]?.payer ?? '');
   const [editStatus,      setEditStatus]       = useState<PatientCaseStatus>(patientCases[0]?.status ?? 'OPEN');
   const [editAlertNotes,  setEditAlertNotes]   = useState<string>(patientCases[0]?.alert_notes ?? '');
   const [saveError,       setSaveError]        = useState<string | null>(null);
@@ -474,7 +472,7 @@ const ClinicalCaseWorkspace = React.forwardRef<
             {/* Editable: Payer */}
             <div>
               <label className="block text-xs text-gray-500 mb-1.5">Payer</label>
-              <select value={editPayer} onChange={e => setEditPayer(e.target.value)} className={fieldCls}>
+              <select value={editPayer} onChange={e => setEditPayer(e.target.value as PatientCasePayer)} className={fieldCls}>
                 <option value="">— Select payer —</option>
                 <option value="PRIVATE">Private Pay</option>
                 <option value="HMO">HMO</option>
@@ -1323,7 +1321,7 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
   }, [isOpen, cancelEdit]);
 
   // casesVersion increments trigger re-renders, which re-fetches from API below.
-  const { data: apiPatientCases = [] } = useQuery<ApiPatientCase[]>({
+  const { data: apiPatientCases = [] } = useQuery<PatientCase[]>({
     queryKey: ['patient-cases', appointment?.patient],
     queryFn: () => getPatientCases(appointment!.patient),
     enabled: !!appointment?.patient,
@@ -1353,15 +1351,15 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
 
 const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = {};
   patientCases.forEach((caseItem: PatientCase) => {
-    const notes = getCaseNotes(appointment.patient, caseItem.id, patientNotes);
-    const noteCount = getCaseNoteCount(appointment.patient, caseItem.id, patientNotes);
+    const notes = getCaseNotes(appointment.patient, String(caseItem.id), patientNotes);
+    const noteCount = getCaseNoteCount(appointment.patient, String(caseItem.id), patientNotes);
     const latestNoteDate = notes
       .map((note) => note.updated_at || note.date)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 
     caseMetrics[caseItem.id] = {
       noteCount,
-      lastUpdated: latestNoteDate || caseItem.createdAt,
+      lastUpdated: latestNoteDate || caseItem.created_at,
     };
   });
 

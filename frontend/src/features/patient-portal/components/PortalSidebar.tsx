@@ -1,6 +1,6 @@
 import React from 'react';
-import { MapPin, Phone, Mail, CheckCircle, RefreshCw } from 'lucide-react';
-import type { PortalData, PortalBranch, PortalPractitioner, PortalService } from '../types/portal';
+import { MapPin, Phone, Mail, CheckCircle } from 'lucide-react';
+import type { PortalData, PortalPractitioner, PortalService } from '../types/portal';
 
 const fmt12 = (slot: string) => {
   const [h, m] = slot.split(':').map(Number);

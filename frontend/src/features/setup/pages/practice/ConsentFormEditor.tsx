@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { FileText, Loader2, Edit } from 'lucide-react';
-import { getClinicBranches, getMyClinic } from '@/features/clinics/clinic.api';
+import { getClinicBranches } from '@/features/clinics/clinic.api';
 import type { ClinicBranch } from '@/types/clinic';
 import { BranchConsentFormModal } from '@/features/clinic-setup/components/BranchConsentFormModal';
 import { BranchConsentFormViewModal } from '@/features/clinic-setup/components/BranchConsentFormViewModal';
@@ -9,8 +9,7 @@ export const ConsentFormEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // Branches state
-  const [clinicId, setClinicId] = useState<number | null>(null);
-  const [clinicName, setClinicName] = useState<string>('');
+  
   const [branches, setBranches] = useState<ClinicBranch[]>([]);
   
   // Consent status mapping
@@ -126,9 +125,6 @@ export const ConsentFormEditor: React.FC = () => {
               {accessibleBranches.map((branch) => {
                 const status = consentStatuses[branch.id];
                 const isActive = status?.is_active ?? false;
-                const updatedAt = status?.updated_at 
-                  ? new Date(status.updated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                  : 'Never';
 
                 return (
                   <tr key={branch.id} className="hover:bg-gray-50/50 transition-colors">

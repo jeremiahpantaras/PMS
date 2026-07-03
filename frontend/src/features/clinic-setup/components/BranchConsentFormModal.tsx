@@ -3,8 +3,6 @@ import { Eye, Loader2, AlertCircle, X, ChevronDown, CheckCircle } from 'lucide-r
 import toast from 'react-hot-toast';
 import { getBranchConsentForm, updateBranchConsentForm } from '@/features/clinics/clinic.api';
 import ClinicConsentFormViewer from '@/features/patient-portal/components/ClinicConsentFormViewer';
-import { useAuthStore } from '@/store/auth.store';
-import type { ClinicBranch } from '@/types/clinic';
 
 interface BranchConsentFormModalProps {
   isOpen: boolean;
@@ -23,7 +21,6 @@ export const BranchConsentFormModal: React.FC<BranchConsentFormModalProps> = ({
   initialBranchId,
   onSuccess
 }) => {
-  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
@@ -35,8 +32,7 @@ export const BranchConsentFormModal: React.FC<BranchConsentFormModalProps> = ({
   const [previewOpen, setPreviewOpen] = useState(false);
 
   // Determine RBAC context
-  const isOwner = user?.role === 'OWNER';
-  const isManager = user?.role === 'MANAGER';
+
   const hasMultipleAccessibleBranches = accessibleBranches.length > 1;
 
   // Load consent data when branch changes

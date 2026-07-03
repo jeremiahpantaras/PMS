@@ -7,7 +7,6 @@ import { AccountSettingsCard }  from './components/AccountSettingsCard';
 import { useProfile }           from './hooks/useProfile';
 import { useAuth }              from '@/hooks/useAuth';
 import { Loader2 }              from 'lucide-react';
-import type { User }            from '@/types/auth';
 
 export const Profile: React.FC = () => {
   const { user: authUser } = useAuth();
@@ -18,7 +17,6 @@ export const Profile: React.FC = () => {
     isSaving,
     isResettingPw: _isResettingPw,
     isUpdatingPw,
-    syncUser,
     saveProfile,
     saveAvatar,
     deleteAvatar,

@@ -8,7 +8,7 @@ import {
   writeOffDebtEntry,
   deleteAgeingDebtEntry,
 } from '../../../reports.api';
-import type { AgeingDebtEntryItem } from '../../reports.api';
+import type { AgeingDebtEntryItem } from '../../../reports.api';
 
 const CATEGORY_OPTIONS = [
   { value: 'CONSULTATION',  label: 'Consultation' },

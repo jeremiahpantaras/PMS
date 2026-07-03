@@ -35,6 +35,8 @@ export interface StaffMember {
   password_changed: boolean;
   permission_group?: number | null;
   permission_group_name?: string | null;
+  manager_branches?: any[];
+  manager_branches_ids?: any[];
 
   // Additional staff fields
   position?: string;

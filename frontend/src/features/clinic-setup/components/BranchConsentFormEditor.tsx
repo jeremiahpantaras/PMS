@@ -159,8 +159,12 @@ export const BranchConsentFormEditor: React.FC<BranchConsentFormEditorProps> = (
           isOpen={previewOpen}
           onClose={() => setPreviewOpen(false)}
           clinicName={branchName}
-          headerHtml={headerContent}
-          bodyHtml={bodyContent}
+          headerContent={headerContent}
+          bodyContent={bodyContent}
+          title="Clinic Consent Form"
+          patientFullName="John Doe"
+          patientEmail="john@example.com"
+          onSigned={() => {}}
         />
       )}
     </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createAgeingDebtEntry } from '../../../reports.api';
-import type { AgeingDebtEntryItem } from '../../reports.api';
+import type { AgeingDebtEntryItem } from '../../../reports.api';
 
 const CATEGORY_OPTIONS = [
   { value: 'CONSULTATION',  label: 'Consultation' },
@@ -25,7 +25,7 @@ export const AddAgeingDebtModal: React.FC<AddAgeingDebtModalProps> = ({
   onCreated,
 }) => {
   const [patientId, setPatientId] = useState('');
-  const [patientSearch, setPatientSearch] = useState('');
+  
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -38,7 +38,6 @@ export const AddAgeingDebtModal: React.FC<AddAgeingDebtModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setPatientId('');
-      setPatientSearch('');
       setInvoiceNumber('');
       setInvoiceDate('');
       setDueDate('');

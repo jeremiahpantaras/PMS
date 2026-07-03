@@ -30,6 +30,8 @@ export interface Appointment {
   reminder_sent:    boolean;
   reminder_sent_at: string | null;
   has_invoice:      boolean; // Whether this appointment has an invoice
+  confirmation_sent?: boolean;
+  rebook_followup_sent?: boolean;
 
   dna_followup_sent:    boolean;
   dna_followup_sent_at: string | null;

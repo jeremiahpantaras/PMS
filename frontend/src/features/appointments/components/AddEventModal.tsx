@@ -586,7 +586,7 @@ export const AddEventModal: React.FC<AddEventModalProps> = ({
                     </div>
                     <p className="text-sm font-medium text-gray-700">No practitioners found</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {participantSearch ? 'Try a different search term' : 'No practitioners available in this clinic'}
+                      No practitioners available in this clinic
                     </p>
                   </div>
                 ) : (

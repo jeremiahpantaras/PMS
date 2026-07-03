@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CheckCircle, Clock, FolderKanban, Loader2, Pencil, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EditClinicalNoteModal } from '@/features/clinical-template/components/EditClinicalNoteModal';

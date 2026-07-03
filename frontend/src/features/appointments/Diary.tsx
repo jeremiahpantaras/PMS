@@ -410,10 +410,7 @@ export const Diary: React.FC = () => {
     setView('day');
   };
 
-  const selectedPractitionerName = useMemo(
-    () => practitioners.find(p => p.id === selectedPractitioner)?.name,
-    [practitioners, selectedPractitioner],
-  );
+
   const selectedBranchName = useMemo(
     () => branches.find(b => b.id === selectedClinicBranch)?.name,
     [branches, selectedClinicBranch],
@@ -663,7 +660,7 @@ export const Diary: React.FC = () => {
 
               {/* Individual Branch Tabs */}
               {branches.map((branch) => {
-                const isUnauthorized = isRestrictedPractitioner && practitionerBranchIds && !practitionerBranchIds.includes(branch.id);
+                const isUnauthorized = Boolean(isRestrictedPractitioner && practitionerBranchIds && !practitionerBranchIds.includes(branch.id));
                 
                 return (
                   <button

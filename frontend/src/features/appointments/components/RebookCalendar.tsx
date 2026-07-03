@@ -5,7 +5,7 @@ import {
   startOfWeek, endOfWeek,
   addDays, isSameMonth, isSameDay,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Clock, X, Coffee, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, X, Loader2 } from 'lucide-react';
 import { getRebookingSlots, type RebookingDetails } from '@/services/rebook.api';
 
 interface RebookCalendarProps {
@@ -14,10 +14,6 @@ interface RebookCalendarProps {
   onConfirm: (date: string, startTime: string, endTime: string) => void;
   onCancel: () => void;
 }
-
-const DAY_MAP: Record<number, string> = {
-  0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat',
-};
 
 const fmt12 = (slot: string): string => {
   const [h, m] = slot.split(':').map(Number);

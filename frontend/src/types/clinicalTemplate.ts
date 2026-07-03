@@ -85,6 +85,8 @@ export interface ClinicalNote {
   appointment_time?: string | null;
   appointment_service?: string | null;
   appointment_practitioner?: string | null;
+  patient_case?: number | null;
+  patient_case_id?: number | null;
   clinic: number;
   template: number | null;
   template_name: string | null;
