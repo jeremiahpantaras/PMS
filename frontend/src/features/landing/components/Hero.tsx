@@ -5,33 +5,33 @@ import LeafSVG from '@/assets/malasakit/Leaf.svg';
 
 export const Hero: React.FC = () => {
   return (
-    <section className="relative min-h-screen bg-primary-gradient overflow-hidden">
+    <section className="relative min-h-screen bg-primary-gradient overflow-hidden flex flex-col justify-center lg:block">
       {/* Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-36 sm:pt-40 lg:pt-48 pb-20">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-36 sm:pt-40 lg:pt-48 pb-10 lg:pb-20 w-full">
         <div className="flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-8">
           {/* Left - Text Content */}
-          <div className="flex-1 text-left max-w-xl lg:max-w-2xl">
-            <h1 className="text-xl sm:text-5xl md:text-6xl lg:text-8xl font-bold text-white leading-[1.1] font-display">
+          <div className="flex-1 text-center lg:text-left max-w-xl lg:max-w-2xl">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-bold text-white leading-[1.1] font-display">
               Empowering Filipino{' '}
-              <span className="text-xl sm:text-5xl md:text-6xl lg:text-8xl font-bold text-white leading-[1.1] font-display">Health Providers</span>
+              <span className="block lg:inline text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-bold text-white leading-[1.1] font-display">Health Providers</span>
             </h1>
 
-            <p className="mt-6 sm:mt-8 text-base sm:text-lg text-white/80 max-w-md leading-relaxed font-body">
+            <p className="mt-6 sm:mt-8 text-base sm:text-lg text-white/80 max-w-md mx-auto lg:mx-0 leading-relaxed font-body">
               Streamline your clinic operations with our all-in-one platform. Manage appointments,
               patient records, and billing effortlessly.
             </p>
 
             {/* CTA Buttons */}
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
+            <div className="mt-10 flex flex-col sm:flex-row justify-center lg:justify-start gap-4">
               <Link
                 to="/register"
-                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-care-blue bg-white rounded-md hover:bg-gray-50 active:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 font-body"
+                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-care-blue bg-white rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 font-body"
               >
                 Start Trial
               </Link>
               <button
                 onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-white bg-trust-harbor border-2 border-white/20 rounded-md hover:bg-trust-harbor/90 active:bg-trust-harbor/80 transition-all shadow-lg hover:shadow-xl font-body"
+                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-white bg-trust-harbor border-2 border-white/20 rounded-xl hover:bg-trust-harbor/90 active:bg-trust-harbor/80 transition-all shadow-lg hover:shadow-xl font-body"
               >
                 Watch Demo
               </button>
@@ -40,20 +40,20 @@ export const Hero: React.FC = () => {
         </div>
       </div>
 
-      {/* Right - Doctor + Leaf composition (direct child of section for correct absolute positioning) */}
-      <div className="hidden lg:flex absolute right-0 bottom-0 items-end pointer-events-none z-10">
+      {/* Right - Doctor + Leaf composition */}
+      <div className="flex relative lg:absolute mt-8 lg:mt-0 right-0 bottom-0 items-end justify-center lg:justify-end pointer-events-none z-10 w-full">
         {/* Doctor Image */}
         <img
           src={DoctorImage}
           alt="Filipino healthcare professional"
-          className="h-[80vh] w-auto object-contain object-bottom drop-shadow-2xl"
+          className="h-[45vh] sm:h-[55vh] lg:h-[80vh] w-auto object-contain object-bottom drop-shadow-2xl"
           loading="eager"
         />
-        {/* Leaf Shape — sits to the right of the doctor, partially off-screen */}
+        {/* Leaf Shape */}
         <img
           src={LeafSVG}
           alt=""
-          className="h-[68vh] w-auto -ml-5 opacity-90"
+          className="h-[38vh] sm:h-[45vh] lg:h-[68vh] w-auto -ml-3 sm:-ml-5 opacity-90"
           aria-hidden="true"
         />
       </div>

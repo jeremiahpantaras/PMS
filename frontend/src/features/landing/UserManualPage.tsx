@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 // Image Imports
 import Step1Img from '@/assets/manual/getting-started/step1-landing-page-navbar.png';
@@ -14,6 +15,8 @@ import Step8Img from '@/assets/manual/getting-started/step8-save-clinic-setup.pn
 import Step9Img from '@/assets/manual/getting-started/step9-owner-dashboard.png';
 
 export const UserManualPage: React.FC = () => {
+  const [isTocOpen, setIsTocOpen] = useState(false);
+
   // Ensure the page starts at the top when navigated to
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -37,9 +40,27 @@ export const UserManualPage: React.FC = () => {
             {/* Table of Contents (Sidebar) */}
             <div className="w-full lg:w-1/4 shrink-0">
               <div className="sticky top-32 bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
-                <h3 className="text-lg font-semibold text-trust-harbor mb-4 font-heading border-b border-gray-200 pb-2">Table of Contents</h3>
-                <nav className="space-y-2">
-                  <a href="#getting-started" className="block text-care-blue font-medium hover:text-care-blue/80 transition-colors font-body text-sm">
+                {/* Mobile Toggle Button */}
+                <button 
+                  onClick={() => setIsTocOpen(!isTocOpen)}
+                  className="flex lg:hidden items-center justify-between w-full text-lg font-semibold text-trust-harbor font-heading border-b border-gray-200 pb-2"
+                >
+                  Table of Contents
+                  {isTocOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </button>
+                
+                {/* Desktop Header */}
+                <h3 className="hidden lg:block text-lg font-semibold text-trust-harbor mb-4 font-heading border-b border-gray-200 pb-2">
+                  Table of Contents
+                </h3>
+
+                {/* Nav Links - Hidden on mobile unless open */}
+                <nav className={`space-y-2 lg:block ${isTocOpen ? 'block mt-4' : 'hidden'}`}>
+                  <a 
+                    href="#getting-started" 
+                    onClick={() => setIsTocOpen(false)}
+                    className="block text-care-blue font-medium hover:text-care-blue/80 transition-colors font-body text-sm"
+                  >
                     1. Getting Started
                   </a>
                   {/* Future chapters can be added here easily */}
