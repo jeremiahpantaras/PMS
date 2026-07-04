@@ -23,7 +23,16 @@ export const NoteEditor: React.FC = () => {
 
   useEffect(() => {
     if (note?.decrypted_content) {
-      setFormValues(note.decrypted_content);
+      const mergedValues = { ...note.decrypted_content };
+      if (note.chart_annotation_data) {
+        Object.entries(note.chart_annotation_data).forEach(([fieldId, annotationData]: [string, any]) => {
+          mergedValues[fieldId] = {
+            canvas_image: mergedValues[fieldId] || null,
+            doodle_data: annotationData.doodle_data || [],
+          };
+        });
+      }
+      setFormValues(mergedValues);
     }
   }, [note]);
 
@@ -88,6 +97,7 @@ export const NoteEditor: React.FC = () => {
 
     setIsSigning(true);
     try {
+      await saveNote({ content: formValues });
       await signNote();
       toast.success('Note signed successfully');
       navigate('/clinical-notes');

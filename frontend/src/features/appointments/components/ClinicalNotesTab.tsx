@@ -34,7 +34,7 @@ const getContentPreview = (content: Record<string, any> | null): string => {
   if (!content) return '';
   const values = Object.values(content);
   for (const val of values) {
-    if (typeof val === 'string' && val.trim().length > 0) {
+    if (typeof val === 'string' && val.trim().length > 0 && !val.startsWith('data:image/')) {
       return val.length > 120 ? val.slice(0, 120) + '…' : val;
     }
   }
