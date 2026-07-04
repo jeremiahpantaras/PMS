@@ -260,20 +260,25 @@ const NoteDetailCard = ({ note, onEdit }: NoteDetailCardProps) => {
                             : chartValue && typeof chartValue === 'object' && 'canvas_image' in chartValue
                               ? (chartValue as { canvas_image: string | null }).canvas_image
                               : null;
+                        
+                        const chartType = (field.chartType as 'body' | 'head' | 'hand' | 'feet') || 'body';
+                        const fallbackImageMap: Record<string, string> = {
+                          body: '/src/assets/charts/body-chart.webp',
+                          head: '/src/assets/charts/head-chart.webp',
+                          hand: '/src/assets/charts/hand-chart.webp',
+                          feet: '/src/assets/charts/feet-chart.webp',
+                        };
+                        const fallbackImage = fallbackImageMap[chartType] || fallbackImageMap.body;
+                        const finalImage = canvasImage || fallbackImage;
+
                         return (
                           <div key={field.id || fieldIndex}>
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">{field.label}</p>
-                            {canvasImage ? (
-                              <img
-                                src={canvasImage}
-                                alt="chart annotation"
-                                className="w-full rounded-lg border border-gray-200"
-                              />
-                            ) : (
-                              <div className="border border-dashed border-gray-200 rounded-lg p-3 text-center">
-                                <p className="text-xs text-gray-400">No annotations recorded</p>
-                              </div>
-                            )}
+                            <img
+                              src={finalImage}
+                              alt="chart annotation"
+                              className="w-full rounded-lg border border-gray-200"
+                            />
                           </div>
                         );
                       }

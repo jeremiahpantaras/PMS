@@ -173,6 +173,7 @@ export const ChartDrawingCanvas: React.FC<ChartDrawingCanvasProps> = ({
   // ── Disabled / Read-only mode ─────────────────────────────────────────────
   if (disabled) {
     const savedImg = value?.canvas_image;
+    const finalImg = savedImg || chartImageMap[chartType];
     return (
       <div>
         {label && (
@@ -181,18 +182,9 @@ export const ChartDrawingCanvas: React.FC<ChartDrawingCanvasProps> = ({
             {required && <span className="text-red-500 ml-1">*</span>}
           </p>
         )}
-        {savedImg ? (
-          <img
-            src={savedImg}
-            alt={`${name} annotation`}
-            className="w-full rounded-xl border border-gray-200"
-            style={{ display: 'block' }}
-          />
-        ) : (
-          <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
-            <p className="text-sm text-gray-400">{name} — No annotations recorded</p>
-          </div>
-        )}
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+          <img src={finalImg} alt={name || 'Chart Annotation'} className="max-w-full h-auto block" />
+        </div>
         {helpText && <p className="text-xs text-gray-400 mt-1 italic">{helpText}</p>}
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>

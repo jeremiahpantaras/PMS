@@ -92,7 +92,16 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
         
         // Set content from note
         if (noteData.decrypted_content) {
-          setContent(noteData.decrypted_content);
+          const mergedValues = { ...noteData.decrypted_content };
+          if (noteData.chart_annotation_data) {
+            Object.entries(noteData.chart_annotation_data).forEach(([fieldId, annotationData]: [string, any]) => {
+              mergedValues[fieldId] = {
+                canvas_image: mergedValues[fieldId] || null,
+                doodle_data: annotationData.doodle_data || [],
+              };
+            });
+          }
+          setContent(mergedValues);
         }
       }
     } catch {
@@ -131,12 +140,12 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
 
     setSaving(true);
     try {
-      console.log('[EditClinicalNoteModal] Updating note with:', {
+      console.log('[ClinicalNote Edit] Incoming Request:', JSON.stringify({
         noteId,
         date: noteDate,
         appointment: selectedAppointment,
         content: content,
-      });
+      }, null, 2));
 
       await updateNote(noteId, {
         date: noteDate,

@@ -124,6 +124,13 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
                     return avatar.url
                 return str(avatar)
         return None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'[ClinicalNote] Response: {representation}')
+        return representation
     
     def validate(self, attrs):
         """Auto-populate clinic and practitioner from appointment if not provided"""
@@ -142,6 +149,9 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
                 print('[ClinicalNoteSerializer] Appointment not found!')
                 pass
         
+        if not appointment and getattr(self.instance, 'appointment', None):
+            appointment = self.instance.appointment
+            
         if appointment:
             # Check if a clinical note already exists for this appointment
             existing_note = ClinicalNote.objects.filter(
@@ -154,13 +164,19 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {'detail': 'A clinical note already exists for this appointment. Please edit the existing note instead.'}
                 )
+
+            # If it's an ID, fetch the object
+            if isinstance(appointment, int) or isinstance(appointment, str):
+                try:
+                    appointment = Appointment.objects.get(id=appointment)
+                except Appointment.DoesNotExist:
+                    raise serializers.ValidationError({'appointment': 'Invalid appointment ID'})
             
-            # Auto-populate practitioner from appointment if not provided
+            # Auto-populate practitioner if missing
             if not attrs.get('practitioner') and hasattr(appointment, 'practitioner'):
                 attrs['practitioner'] = appointment.practitioner
-            # Auto-populate clinic from appointment if not provided
+            # Auto-populate clinic from appointment if missing
             if not attrs.get('clinic') and hasattr(appointment, 'clinic'):
-                print(f'[ClinicalNoteSerializer] Setting clinic from appointment: {appointment.clinic}')
                 attrs['clinic'] = appointment.clinic
             # Auto-populate patient from appointment if not provided
             if not attrs.get('patient') and hasattr(appointment, 'patient'):
@@ -170,10 +186,8 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
                 attrs['date'] = appointment.date
         
         if request and request.user:
-            print(f'[ClinicalNoteSerializer] Request user clinic: {request.user.clinic}')
             # Auto-set clinic from user if still not set
             if not attrs.get('clinic') and hasattr(request.user, 'clinic'):
-                print(f'[ClinicalNoteSerializer] Setting clinic from user: {request.user.clinic}')
                 attrs['clinic'] = request.user.clinic
             # All clinical notes are final - no draft status needed
             if 'is_draft' not in attrs:
@@ -185,13 +199,31 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
             if attrs.get('template') and not attrs.get('template_version'):
                 attrs['template_version'] = attrs['template'].version
         
-        print(f'[ClinicalNoteSerializer] Final clinic in attrs: {attrs.get("clinic")}')
+        # Determine if content was explicitly provided in this request
+        has_content = False
+        final_content = None
         
-        # Ensure content is not None - default to empty dict
-        if 'content' not in attrs or attrs.get('content') is None:
-            attrs['content'] = {}
+        if 'content' in attrs:
+            final_content = attrs.pop('content') # Remove from attrs to avoid DRF internal issues
+            has_content = True
+        elif hasattr(self, 'initial_data') and 'content' in self.initial_data:
+            final_content = self.initial_data['content']
+            has_content = True
+
+        validated = super().validate(attrs)
         
-        return super().validate(attrs)
+        # Only inject extracted_content if it was actually provided!
+        # This prevents PATCH requests (like assign to case) from overwriting with {}
+        if has_content:
+            import json
+            try:
+                # Deep copy by JSON serialize/deserialize
+                final_content = json.loads(json.dumps(final_content))
+            except Exception:
+                pass
+            validated['extracted_content'] = final_content if final_content is not None else {}
+            
+        return validated
     
     def get_decrypted_content(self, obj):
         """Return decrypted content (only if user has permission)"""
@@ -207,15 +239,38 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
         
         return None
     
+    def _apply_content(self, instance, content):
+        """Helper to apply content payload uniformly across create and update"""
+        if content is not None:
+            cleaned_content, chart_annotation_data = self._extract_chart_annotations(content)
+            instance.set_content(cleaned_content)
+            instance.last_autosave = timezone.now()
+            
+            # Explicitly set chart annotation data, even if empty dict, 
+            # so that it clears out removed strokes.
+            if chart_annotation_data or chart_annotation_data == {}:
+                instance.chart_annotation_data = chart_annotation_data
+
     def create(self, validated_data):
         """Create note with encrypted content"""
-        import logging
-        logger = logging.getLogger(__name__)
+        # Pop the content that we safely extracted in validate()
+        content = validated_data.pop('extracted_content', {})
+        # Also pop 'content' just in case DRF left it there
+        validated_data.pop('content', None)
         
-        content = validated_data.pop('content', {})
-        
-        # Log for debugging
-        logger.info(f"Creating ClinicalNote with: patient={validated_data.get('patient')}, practitioner={validated_data.get('practitioner')}, template={validated_data.get('template')}, date={validated_data.get('date')}, clinic={validated_data.get('clinic')}")
+        print(f'\n{"="*60}')
+        print(f'[CREATE TRACE] Step 5: Inside create()')
+        print(f'[CREATE TRACE]   content type={type(content).__name__}')
+        if isinstance(content, dict):
+            print(f'[CREATE TRACE]   content keys={list(content.keys())}')
+            print(f'[CREATE TRACE]   content key count={len(content)}')
+            for k, v in content.items():
+                vtype = type(v).__name__
+                vpreview = repr(v)[:100] if not isinstance(v, dict) else f'dict with keys {list(v.keys())}'
+                print(f'[CREATE TRACE]   content["{k}"] = ({vtype}) {vpreview}')
+        else:
+            print(f'[CREATE TRACE]   content value={repr(content)[:200]}')
+        print(f'{"="*60}\n')
         
         # Auto-populate fields from appointment if not set
         appointment = validated_data.get('appointment')
@@ -256,24 +311,47 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
             template = validated_data.get('template')
             if template and not validated_data.get('template_version'):
                 validated_data['template_version'] = template.version
-        
-        # Log final validated data
-        logger.info(f"Final validated_data: clinic={validated_data.get('clinic')}, template_version={validated_data.get('template_version')}, practitioner={validated_data.get('practitioner')}")
-
-        # Extract chart annotation data from content before encrypting
-        content, chart_annotation_data = self._extract_chart_annotations(content)
 
         # Create instance
         instance = ClinicalNote(**validated_data)
 
-        # Set encrypted content
-        instance.set_content(content)
+        # Apply unified content assignment logic
+        self._apply_content(instance, content)
 
-        # Persist chart annotation data
-        if chart_annotation_data:
-            instance.chart_annotation_data = chart_annotation_data
+        print(f'[CREATE TRACE] Step 6: After _apply_content()')
+        print(f'[CREATE TRACE]   instance.encrypted_content length={len(instance.encrypted_content) if instance.encrypted_content else 0}')
+        print(f'[CREATE TRACE]   instance.chart_annotation_data={instance.chart_annotation_data}')
 
         instance.save()
+
+        # ---------------------------------------------------------
+        # CLINICAL NOTE PERSISTENCE AUDIT
+        # ---------------------------------------------------------
+        saved_note = ClinicalNote.objects.get(pk=instance.pk)
+        
+        submitted_keys = set(content.keys()) if content else set()
+        saved_content = saved_note.content
+        saved_keys = set(saved_content.keys()) if saved_content else set()
+        
+        missing_keys = submitted_keys - saved_keys
+        
+        print(f'\n{"="*60}')
+        print(f'[CREATE TRACE] Step 7: Database Verification')
+        print(f'[CREATE TRACE]   Submitted keys: {submitted_keys}')
+        print(f'[CREATE TRACE]   Saved content keys: {saved_keys}')
+        print(f'[CREATE TRACE]   Missing keys: {missing_keys}')
+        print(f'[CREATE TRACE]   saved_note.encrypted_content length: {len(saved_note.encrypted_content) if saved_note.encrypted_content else 0}')
+        print(f'[CREATE TRACE]   saved_note.chart_annotation_data: {saved_note.chart_annotation_data}')
+        
+        content_persisted = (len(missing_keys) == 0 and len(submitted_keys) > 0)
+        
+        if content_persisted:
+            print(f'[CREATE TRACE]   ✓ ALL CONTENT PERSISTED ({len(saved_keys)} fields)')
+        else:
+            print(f'[CREATE TRACE]   ✗ CONTENT NOT PERSISTED')
+            print(f'[CREATE TRACE]   submitted {len(submitted_keys)} keys, saved {len(saved_keys)} keys')
+        print(f'{"="*60}\n')
+        # ---------------------------------------------------------
 
         # Log creation
         self._create_audit_log(instance, 'CREATED')
@@ -282,7 +360,10 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Update note with encrypted content"""
-        content = validated_data.pop('content', None)
+        # Pop the content that we safely extracted in validate()
+        content = validated_data.pop('extracted_content', None)
+        # Also pop 'content' just in case DRF left it there
+        validated_data.pop('content', None)
 
         # Prevent editing signed notes
         if instance.is_signed:
@@ -292,15 +373,20 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # Update content if provided
-        if content is not None:
-            content, chart_annotation_data = self._extract_chart_annotations(content)
-            instance.set_content(content)
-            instance.last_autosave = timezone.now()
-            if chart_annotation_data:
-                instance.chart_annotation_data = chart_annotation_data
+        # Apply unified content assignment logic
+        self._apply_content(instance, content)
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[ClinicalNote Edit] Before Save: instance.encrypted_content={instance.encrypted_content}")
 
         instance.save()
+
+        logger.info(f"[ClinicalNote Edit] After Save: instance.encrypted_content={instance.encrypted_content}")
+        
+        # Database Reload
+        saved_note = ClinicalNote.objects.get(pk=instance.pk)
+        logger.info(f"[ClinicalNote Edit] Database Reload: content={saved_note.content}")
 
         # Log update
         self._create_audit_log(instance, 'UPDATED')

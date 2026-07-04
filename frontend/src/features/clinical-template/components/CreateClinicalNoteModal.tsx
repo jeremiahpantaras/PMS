@@ -197,7 +197,7 @@ export const CreateClinicalNoteModal: React.FC<CreateClinicalNoteModalProps> = (
         noteData.practitioner = practitionerId;
       }
 
-      console.log('[CreateClinicalNoteModal] Full noteData to send:', JSON.stringify(noteData, null, 2));
+      console.log('[ClinicalNote Create] Incoming Request:', JSON.stringify(noteData, null, 2));
 
       await createNote(noteData);
       console.log('[CreateClinicalNoteModal] Note created successfully!');

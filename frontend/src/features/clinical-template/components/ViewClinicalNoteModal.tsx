@@ -327,21 +327,25 @@ export const ViewClinicalNoteModal: React.FC<ViewClinicalNoteModalProps> = ({
                                  field.chartType === 'head'
                                   ? 'Head Chart'
                                   : 'Body Chart';
+                            
+                            const chartType = (field.chartType as 'body' | 'head' | 'hand' | 'feet') || 'body';
+                            const fallbackImageMap: Record<string, string> = {
+                              body: '/src/assets/charts/body-chart.webp',
+                              head: '/src/assets/charts/head-chart.webp',
+                              hand: '/src/assets/charts/hand-chart.webp',
+                              feet: '/src/assets/charts/feet-chart.webp',
+                            };
+                            const fallbackImage = fallbackImageMap[chartType] || fallbackImageMap.body;
+                            const finalImage = canvasImage || fallbackImage;
+
                             return (
-                              <div key={field.id || fieldIndex} className="mb-3 last:mb-0">
-                                <p className="text-xs font-medium text-gray-600 mb-1">{field.label}</p>
-                                {canvasImage ? (
-                                  <img
-                                    src={canvasImage}
-                                    alt={`${chartName} annotation`}
-                                    className="w-full rounded-xl border border-gray-200"
-                                    style={{ display: 'block' }}
-                                  />
-                                ) : (
-                                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
-                                    <p className="text-sm text-gray-400">{chartName} — No annotations recorded</p>
-                                  </div>
-                                )}
+                              <div key={field.id || fieldIndex} className="mb-4">
+                                <p className="text-sm font-semibold text-gray-700 mb-2">{field.label}</p>
+                                <img
+                                  src={finalImage}
+                                  alt={chartName}
+                                  className="w-full rounded-lg border border-gray-200 shadow-sm"
+                                />
                               </div>
                             );
                           }

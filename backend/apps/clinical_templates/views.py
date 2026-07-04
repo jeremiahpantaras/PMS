@@ -153,8 +153,17 @@ class ClinicalNoteViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Override create to log what's being saved"""
-        print(f'[ClinicalNoteViewSet] CREATE request data: {request.data}')
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'[ClinicalNote Create] Request.data: {request.data}')
         return super().create(request, *args, **kwargs)
+        
+    def update(self, request, *args, **kwargs):
+        """Override update to log what's being saved"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'[ClinicalNote Edit] Request.data: {request.data}')
+        return super().update(request, *args, **kwargs)
     
     @action(detail=True, methods=['post'])
     def sign(self, request, pk=None):
