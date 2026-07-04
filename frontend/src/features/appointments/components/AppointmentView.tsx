@@ -1465,11 +1465,23 @@ const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = 
                     if (tab.isDropdown) {
                       setShowAppointmentDropdown(!showAppointmentDropdown);
                     } else if (tab.key === 'clinical_notes') {
-                      // Redirect to PatientCasesNotesPage and trigger note creation for this appointment
+                      // Redirect to PatientCasesNotesPage and either open existing note or create a new one
                       onClose();
-                      navigate(`/patients/${appointment.patient}/cases`, { 
-                        state: { openCreateNoteForAppointment: appointment.id } 
-                      });
+                      const existingNote = patientNotes.find(note => note.appointment === appointment.id);
+                      if (existingNote) {
+                        navigate(`/patients/${appointment.patient}/cases`, { 
+                          state: { 
+                            preselectedCaseId: getLinkedCaseId(appointment.id)
+                          } 
+                        });
+                      } else {
+                        navigate(`/patients/${appointment.patient}/cases`, { 
+                          state: { 
+                            openCreateNoteForAppointment: appointment.id,
+                            preselectedCaseId: getLinkedCaseId(appointment.id)
+                          } 
+                        });
+                      }
                     } else {
                       setActiveTab(tab.key);
                       if (isEditing) cancelEdit();

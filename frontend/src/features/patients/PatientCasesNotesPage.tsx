@@ -405,10 +405,24 @@ export const PatientCasesNotesPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const state = location.state as { openCreateNoteForAppointment?: number } | null;
+    const state = location.state as { openCreateNoteForAppointment?: number; openNoteId?: number; preselectedCaseId?: string } | null;
+    let shouldClearState = false;
+
+    if (state?.preselectedCaseId) {
+      setSelectedCaseId(Number(state.preselectedCaseId));
+      shouldClearState = true;
+    }
+
     if (state?.openCreateNoteForAppointment) {
       setCreateNoteAppointmentId(state.openCreateNoteForAppointment);
       setIsCreateNoteOpen(true);
+      shouldClearState = true;
+    } else if (state?.openNoteId) {
+      setEditingNoteId(state.openNoteId);
+      shouldClearState = true;
+    }
+
+    if (shouldClearState) {
       // Clear the state to prevent re-opening on refresh
       navigate(location.pathname, { replace: true, state: {} });
     }

@@ -69,6 +69,9 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
       setPatientName(noteData.patient_name);
       setNoteDate(noteData.date);
       setSelectedAppointment(noteData.appointment);
+      if (noteData.patient_case) {
+        setSelectedCaseId(noteData.patient_case);
+      }
 
       // Fetch templates and appointments in parallel
       const [templatesData, appointmentsData] = await Promise.all([
