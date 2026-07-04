@@ -51,8 +51,7 @@ export const Navbar: React.FC = () => {
     { label: 'About', id: 'about' },
     { label: 'Features', id: 'features' },
     { label: 'Pricing', id: 'plans' },
-    { label: 'FAQ', id: 'faq' },
-    { label: 'User Manual', path: '/user-manual' }
+    { label: 'FAQ', id: 'faq' }
   ];
 
   const handleNavLinkClick = (link: { label: string; id?: string; path?: string }) => {

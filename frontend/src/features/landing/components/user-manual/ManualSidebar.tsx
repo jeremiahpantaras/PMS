@@ -28,7 +28,7 @@ export const ManualSidebar: React.FC<ManualSidebarProps> = ({ activeChapterId })
         </h3>
 
         {/* Nav Links */}
-        <nav className={`space-y-6 lg:block ${isMobileOpen ? 'block mt-6' : 'hidden'}`}>
+        <nav className={`space-y-6 lg:block overflow-y-auto max-h-[70vh] pr-2 custom-scrollbar ${isMobileOpen ? 'block mt-6' : 'hidden'}`}>
           {structure.map((part, index) => (
             <div key={index} className="space-y-2">
               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider font-body mb-2">
