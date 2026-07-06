@@ -1221,26 +1221,18 @@ class UserViewSet(viewsets.ModelViewSet):
                 actor.branch_accesses.values_list('branch_id', flat=True)
             )
 
-            # Support both single clinic_branch and list branch_ids in payload
-            requested_branch_ids = set()
-            raw_branch_ids = request.data.get('branch_ids', [])
-            if raw_branch_ids:
-                requested_branch_ids = set(map(int, raw_branch_ids))
-            elif request.data.get('clinic_branch'):
-                requested_branch_ids = {int(request.data['clinic_branch'])}
-
-            if requested_branch_ids and not requested_branch_ids.issubset(manager_branch_ids):
-                illegal = requested_branch_ids - manager_branch_ids
-                return Response(
-                    {'detail': f'You do not have authority over branch(es): {list(illegal)}.'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-
-            # If Manager has exactly 1 branch and none is requested, auto-assign it
-            if not requested_branch_ids and len(manager_branch_ids) == 1:
-                # Inject the auto-assigned branch into request data for downstream use
+            # Phase 8: Forcefully inherit Branch Manager's clinic branch.
+            # We ignore any clinic_branch sent from the frontend to prevent tampering.
+            manager_branch = getattr(request.user, 'clinic_branch_id', None)
+            if manager_branch:
+                request.data['clinic_branch'] = manager_branch
+                request.data['branch_ids'] = [manager_branch]
+            elif manager_branch_ids:
                 auto_branch = list(manager_branch_ids)[0]
                 request.data['clinic_branch'] = auto_branch
+                request.data['branch_ids'] = [auto_branch]
+            else:
+                return Response({'detail': 'Manager has no assigned branches.'}, status=status.HTTP_403_FORBIDDEN)
 
         # ── Validate branch before touching the serializer ──────────────────
         branch_id    = request.data.get('clinic_branch')
@@ -1278,6 +1270,12 @@ class UserViewSet(viewsets.ModelViewSet):
                     or derive_permission_group_for_roles(roles, request.user.clinic)
                 )
 
+                logger.info(f"Creator: {request.user.email}")
+                logger.info(f"Creator Role: {request.user.role}")
+                logger.info(f"Creator Branch: {request.user.clinic_branch_id}")
+                logger.info(f"Incoming Payload: {request.data}")
+                logger.info(f"Assigned Branch: {branch.id if branch else None}")
+
                 user = User.objects.create_user(
                     email=serializer.validated_data['email'],
                     password=temp_password,
@@ -1294,6 +1292,11 @@ class UserViewSet(viewsets.ModelViewSet):
                     must_change_password=True,
                     temp_password_expires_at=temp_expires,
                 )
+
+                logger.info("Practitioner successfully created.")
+                logger.info(f"Creator Branch: {request.user.clinic_branch_id}")
+                logger.info(f"Assigned Branch: {user.clinic_branch_id}")
+                logger.info(f"User ID: {user.id}")
 
                 # ── Sync UserBranchAccess for Manager (ADMIN_ASSISTANT) ──────
                 # The serializer validates branch_ids but this view bypasses
@@ -1452,6 +1455,10 @@ class UserViewSet(viewsets.ModelViewSet):
                     {"detail": "Managers cannot modify another Manager's account."},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+            # Prevent Managers from changing a user's branch
+            request.data.pop('clinic_branch', None)
+            request.data.pop('branch_ids', None)
 
         partial     = kwargs.pop('partial', False)
         old_email   = instance.email  # capture before any mutation
