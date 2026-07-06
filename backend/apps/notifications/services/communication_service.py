@@ -40,7 +40,7 @@ def _get_clinic_logo_url(clinic) -> str | None:
                 return url
             backend_url = getattr(
                 settings, 'BACKEND_URL',
-                os.environ.get('BACKEND_URL', 'http://localhost:8000'),
+                os.environ.get('BACKEND_URL', 'https://malasakit-webservice.onrender.com'),
             )
             return f"{backend_url.rstrip('/')}{url}"
         except Exception:
