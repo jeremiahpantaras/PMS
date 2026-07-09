@@ -72,10 +72,9 @@ export const ArrivalsList: React.FC<ArrivalsListProps> = ({ calendarReadyDate })
     refetchInterval: 30000,
   });
 
-  // Don't show anything until calendar is ready
-  if (!isCalendarReady) {
+    if (!isCalendarReady) {
     return (
-      <div className="text-center text-gray-400 text-sm py-4">
+      <div className="text-center text-gray-400 text-[10px] py-2">
         Loading arrivals...
       </div>
     );
@@ -100,7 +99,7 @@ export const ArrivalsList: React.FC<ArrivalsListProps> = ({ calendarReadyDate })
 
   if (arrivals.length === 0) {
     return (
-      <div className="text-center text-gray-400 text-sm py-4">
+      <div className="text-center text-gray-400 text-[10px] py-2">
         No arrivals for {format(today, 'MMM d')}
       </div>
     );
@@ -109,29 +108,29 @@ export const ArrivalsList: React.FC<ArrivalsListProps> = ({ calendarReadyDate })
   return (
     <div>
       {/* Current date display */}
-      <div className="text-xs text-gray-500 mb-3">
-        {format(today, 'EEEE, MMMM d, yyyy')}
+      <div className="text-[9px] text-gray-500 mb-1.5 uppercase tracking-wide">
+        {format(today, 'MMM d, yyyy')}
       </div>
-      <div className={`space-y-2 ${hasMore ? 'max-h-48 overflow-y-auto' : ''}`}>
+      <div className={`space-y-1.5 ${hasMore ? 'max-h-48 overflow-y-auto' : ''}`}>
       {displayArrivals.map((appointment) => (
         <div
           key={appointment.id}
-          className="p-3 rounded-lg border border-purple-100 bg-purple-50"
+          className="p-2 rounded border border-purple-100 bg-purple-50"
         >
           <div className="flex justify-between items-start">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">
+              <p className="text-[11px] font-semibold text-gray-900 truncate">
                 {appointment.practitioner_name ?? 'Unassigned'}
               </p>
-              <p className="text-xs text-gray-500 truncate mt-1">
+              <p className="text-[9px] text-gray-500 truncate">
                 {appointment.patient_name}
               </p>
             </div>
-            <div className="flex-shrink-0 ml-2">
-              <p className="text-xs font-medium text-purple-600">
+            <div className="flex-shrink-0 ml-1.5 text-right">
+              <p className="text-[9px] font-medium text-purple-600">
                 Arrived
               </p>
-              <p className="text-[10px] text-purple-500">
+              <p className="text-[8px] text-purple-500">
                 {fmtArrivalTime(appointment.arrival_time)}
               </p>
             </div>
@@ -139,7 +138,7 @@ export const ArrivalsList: React.FC<ArrivalsListProps> = ({ calendarReadyDate })
         </div>
       ))}
       {hasMore && (
-        <p className="text-xs text-gray-400 text-center pt-2">
+        <p className="text-[9px] text-gray-400 text-center pt-1.5">
           +{arrivals.length - 3} more arrivals
         </p>
       )}

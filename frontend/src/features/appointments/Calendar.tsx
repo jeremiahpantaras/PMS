@@ -700,7 +700,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
   // Calculate block appointment position based on current view
   // For Day view with filtered slots, offset is based on duty_start_time
   // For Week view, offset is always 6 AM (all hours shown)
-  // Uses h-6 (1.5rem) per 15-minute slot for Nookal-style grid
+  // Uses h-5 (1.25rem) per 15-minute slot for Nookal-style grid
   const getBlockAppointmentStyle = (block: BlockAppointment, forDayView = false) => {
     const [sH, sM] = block.start_time.split(':').map(Number);
     const [eH, eM] = block.end_time.split(':').map(Number);
@@ -722,10 +722,10 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     }
     
     const durationSlots = Math.max(endSlotIndex - startSlotIndex, 1);
-    // h-6 = 1.5rem per slot
+    // h-5 = 1.25rem per slot
     return {
-      top:    `${startSlotIndex * 1.5}rem`,
-      height: `${durationSlots * 1.5}rem`,
+      top:    `${startSlotIndex * 1.25}rem`,
+      height: `${durationSlots * 1.25}rem`,
     };
   };
 
@@ -745,8 +745,8 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     }
     const durationSlots = Math.max(endSlotIndex - startSlotIndex, 1);
     return {
-      top:    `${startSlotIndex * 1.5}rem`,
-      height: `${durationSlots * 1.5}rem`,
+      top:    `${startSlotIndex * 1.25}rem`,
+      height: `${durationSlots * 1.25}rem`,
     };
   };
 
@@ -1038,7 +1038,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
   // Calculate appointment position based on current view
   // For Day view with filtered slots, offset is based on duty_start_time
   // For Week view, offset is always 6 AM (all hours shown)
-  // Uses h-6 (1.5rem) per 15-minute slot for Nookal-style grid
+  // Uses h-5 (1.25rem) per 15-minute slot for Nookal-style grid
   const getAppointmentStyle = (apt: Appointment, forDayView = false) => {
     const [sH, sM] = apt.start_time.split(':').map(Number);
     const [eH, eM] = apt.end_time.split(':').map(Number);
@@ -1054,15 +1054,15 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       startSlotIndex = (sH - 6) * 4 + Math.floor(sM / 15);
     }
 
-    // h-6 = 1.5rem per slot
+    // h-5 = 1.25rem per slot
     return {
-      top:    `${startSlotIndex * 1.5}rem`,
-      height: `${durationSlots * 1.5}rem`,
+      top:    `${startSlotIndex * 1.25}rem`,
+      height: `${durationSlots * 1.25}rem`,
     };
   };
 
   // ── Time column label ─────────────────────────────────────────────────────
-  // Time label with consistent h-6 height for 15-min grid alignment
+  // Time label with consistent h-5 height for 15-min grid alignment
   const renderTimeLabel = (slot: typeof timeSlots[0], i: number) => {
     const isLunch = slot.isLunchBreak;
     if (isLunch) {
@@ -1072,13 +1072,13 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       return (
         <div
           key={i}
-          className={`h-6 px-2 text-right flex items-center justify-end
+          className={`h-5 px-1 text-right flex items-start justify-end pt-0.5
             ${slot.quarter === 0 ? 'border-t border-amber-400' : 'border-t border-amber-300'}
             bg-amber-100`}
         >
           {isFirstLunchSlot && (
-            <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide whitespace-nowrap">
-              Lunch Break
+            <span className="text-[8px] font-bold text-amber-700 uppercase tracking-tighter whitespace-nowrap">
+              Lunch
             </span>
           )}
         </div>
@@ -1087,9 +1087,9 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     return (
       <div
         key={i}
-        className={`h-6 px-3 text-xs font-medium text-right flex items-center justify-end
-          ${slot.quarter === 0 ? 'border-t border-gray-300' : 'border-t border-gray-100'}
-          bg-gray-50 text-gray-500`}
+        className={`h-5 px-1.5 text-[9px] tracking-tighter font-medium text-right flex items-start justify-end pt-0.5
+          ${slot.quarter === 0 ? 'border-t border-gray-300 text-gray-500' : 'border-t border-gray-100 text-gray-400'}
+          bg-gray-50`}
       >
         {slot.label}
       </div>
@@ -1573,7 +1573,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         ? Math.floor((sH * 60 + sM - timeToMinutes(practitionerAvailability.duty_start_time)) / 15)
         : (sH - 6) * 4 + Math.floor(sM / 15);
       const durationSlots = Math.max(((eH * 60 + eM) - (sH * 60 + sM)) / 15, 1);
-      baseStyle = { top: `${startSlot * 1.5}rem`, height: `${durationSlots * 1.5}rem` };
+      baseStyle = { top: `${startSlot * 1.25}rem`, height: `${durationSlots * 1.25}rem` };
     } else {
       baseStyle = getAppointmentStyle(apt, forDayView);
     }
@@ -1588,7 +1588,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       overflow:     'hidden',
       borderRadius: '0',
       border:       resizeOvr ? '2px solid rgba(255,255,255,0.7)' : '1px solid transparent',
-      padding:      compact ? '2px 6px' : '6px 8px',
+      padding:      compact ? '1px 3px' : '2px 4px',
       cursor:       canDrag ? (dragState.isDragging ? 'grabbing' : 'grab') : 'pointer',
       transition:   resizeOvr ? 'none' : 'filter 0.15s, opacity 0.15s, transform 0.15s',
       opacity:      isDragged ? 0.35 : 1,
@@ -1624,14 +1624,14 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         )}
         <div>
           <div
-            className="text-xs font-semibold truncate"
+            className="text-[10px] font-semibold truncate"
             style={col.useHex ? { color: col.textColor } : {}}
           >
             <span className={!col.useHex ? col.text : ''}>{apt.patient_name}</span>
           </div>
           {!compact && (
             <div
-              className="text-xs truncate mt-0.5"
+              className="text-[9px] truncate"
               style={col.useHex ? { color: col.subTextColor } : {}}
             >
               <span className={!col.useHex ? 'text-white/80' : ''}>
@@ -1641,7 +1641,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           )}
           {compact && (
             <div
-              className="text-xs truncate"
+              className="text-[9px] truncate"
               style={col.useHex ? { color: col.subTextColor } : {}}
             >
               <span className={!col.useHex ? 'text-white/80' : ''}>{formatTime12Hour(displayStart)}</span>
@@ -1707,7 +1707,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         ? Math.floor((sH * 60 + sM - timeToMinutes(practitionerAvailability.duty_start_time)) / 15)
         : (sH - 6) * 4 + Math.floor(sM / 15);
       const durationSlots = Math.max(((eH * 60 + eM) - (sH * 60 + sM)) / 15, 1);
-      baseStyle = { top: `${startSlot * 1.5}rem`, height: `${durationSlots * 1.5}rem` };
+      baseStyle = { top: `${startSlot * 1.25}rem`, height: `${durationSlots * 1.25}rem` };
     } else {
       baseStyle = getBlockAppointmentStyle(block, forDayView);
     }
@@ -1826,7 +1826,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         ? Math.floor((sH * 60 + sM - timeToMinutes(practitionerAvailability.duty_start_time)) / 15)
         : (sH - 6) * 4 + Math.floor(sM / 15);
       const durationSlots = Math.max(((eH * 60 + eM) - (sH * 60 + sM)) / 15, 1);
-      baseNoteStyle = { top: `${startSlot * 1.5}rem`, height: `${durationSlots * 1.5}rem` };
+      baseNoteStyle = { top: `${startSlot * 1.25}rem`, height: `${durationSlots * 1.25}rem` };
     } else {
       baseNoteStyle = getNoteStyle(note, forDayView);
     }
@@ -2014,7 +2014,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           onMouseEnter={() => handleMouseEnter(slot)}
           onMouseUp={() => handleSlotMouseUp(date, slot)}
           onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
-          className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
+          className={`h-5 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
             ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
         >
           {isFirstLunchSlot && showLunchLabel && (
@@ -2068,7 +2068,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         onMouseEnter={() => handleMouseEnter(slot)}
         onMouseUp={() => handleSlotMouseUp(date, slot)}
         onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
-        className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex
+        className={`h-5 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex
           ${borderClass}
           ${slotBgClass}`}
         title={slotTitle}
@@ -2132,7 +2132,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           onMouseEnter={() => handleMouseEnter(slot)}
           onMouseUp={() => handleSlotMouseUp(date, slot)}
           onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
-          className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
+          className={`h-5 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500
             ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
         />
       );
@@ -2161,7 +2161,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         onMouseEnter={() => handleMouseEnter(slot)}
         onMouseUp={() => handleSlotMouseUp(date, slot)}
         onDoubleClick={(e) => handleDoubleClick(date, slot, e.currentTarget as HTMLElement)}
-        className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
+        className={`h-5 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
       >
         <div className="w-[90%] h-full relative">
           {isSelected && <div className="absolute inset-0 bg-sky-200 pointer-events-none" />}
@@ -2285,7 +2285,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             </div>
 
             {/* Practitioner column headers */}
-            <div className="flex-shrink-0 grid grid-cols-[80px_1fr_1fr] border-b border-gray-200">
+            <div className="flex-shrink-0 grid grid-cols-[55px_1fr_1fr] border-b border-gray-200">
               <div className="bg-gray-50 border-r border-gray-200" />
               {/* Prac A header */}
               <div className="py-3 px-4 bg-sky-50 border-r border-gray-200 text-center">
@@ -2319,7 +2319,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
 
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto min-h-0">
-              <div className="grid grid-cols-[80px_1fr_1fr]">
+              <div className="grid grid-cols-[55px_1fr_1fr]">
                 {/* Time column */}
                 <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
                   {timeSlots.map((slot, i) => renderTimeLabel(slot, i))}
@@ -2371,7 +2371,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     // is provided. Renders one column per practitioner side-by-side.
     if (!selectedPractitionerId && multiPractitioners && multiPractitioners.length > 0) {
       const pCount   = multiPractitioners.length;
-      const gridCols = `80px repeat(${pCount}, minmax(0, 1fr))`;
+      const gridCols = `55px repeat(${pCount}, minmax(0, 1fr))`;
       const minWidth = 80 + pCount * 180;
       const dayAppts  = getAppointmentsForDate(currentDate);
       const dayBlocks = getBlockAppointmentsForDate(currentDate);
@@ -2406,7 +2406,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               onMouseEnter={() => handleMouseEnter(slot)}
               onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
               onDoubleClick={(e) => handleColumnDoubleClick(date, slot, practId, e.currentTarget as HTMLElement)}
-              className={`h-6 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500 ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
+              className={`h-5 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500 ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
             >
               {isFirstLunchSlot && (
                 <div className="absolute inset-0 flex items-center px-2 z-10 pointer-events-none">
@@ -2440,7 +2440,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             onMouseEnter={() => handleMouseEnter(slot)}
             onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
             onDoubleClick={(e) => handleColumnDoubleClick(date, slot, practId, e.currentTarget as HTMLElement)}
-            className={`h-6 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
+            className={`h-5 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
           >
             <div className="w-[90%] h-full relative">
               {isSelected && <div className="absolute inset-0 bg-sky-200 pointer-events-none" />}
@@ -2490,8 +2490,8 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               {multiPractitioners.map((p, idx) => {
                 const colors = COL_HEADER_COLORS[idx % COL_HEADER_COLORS.length];
                 return (
-                  <div key={String(p.id)} className={`py-3 px-3 ${colors.bg} border-l border-gray-200 text-center`}>
-                    <div className={`text-sm font-bold ${colors.text} truncate`}>{p.name}</div>
+                  <div key={String(p.id)} className={`py-1.5 px-1.5 ${colors.bg} border-l border-gray-200 text-center`}>
+                    <div className={`text-[11px] font-bold ${colors.text} truncate`}>{p.name}</div>
                     {p.specialization && (
                       <div className={`text-xs ${colors.sub} truncate mt-0.5`}>{p.specialization}</div>
                     )}
@@ -2626,7 +2626,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               const slotsToRender = isDayAvailable ? dayViewTimeSlots : timeSlots;
               const { aptStyles, blockStyles, noteStyles } = computeColumnLayout(dayAppts, dayBlocks, dayNotes);
               return (
-                <div className="grid grid-cols-[80px_1fr]">
+                <div className="grid grid-cols-[55px_1fr]">
                   {/* Time column */}
                   <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
                     {slotsToRender.map((slot, i) => renderTimeLabel(slot, i))}
@@ -2677,7 +2677,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       const nameA = comparePractitionerNames?.[0] ?? 'Practitioner A';
       const nameB = comparePractitionerNames?.[1] ?? 'Practitioner B';
       // 14 data columns (2 per day) + 1 time col
-      const gridCols = `80px repeat(14, 1fr)`;
+      const gridCols = `55px repeat(14, 1fr)`;
 
       return (
         <div {...calendarWrapperProps} className="h-full flex flex-col">
@@ -2806,6 +2806,249 @@ const CalendarComponent: React.FC<CalendarProps> = ({
       );
     }
 
+    // ── MULTI-PRACTITIONER WEEK VIEW ─────────────────────────────────────────
+    if (!numericPractitionerId && multiPractitioners && multiPractitioners.length > 0) {
+      const pCount = multiPractitioners.length;
+      const gridCols = `55px repeat(${7 * pCount}, minmax(0, 1fr))`;
+      const minWidth = 0;
+
+      // Per-column slot renderer for Week View multi-practitioner
+      const renderColumnSlot = (
+        slot: typeof timeSlots[0],
+        date: Date,
+        i: number,
+        avail: PractitionerAvailability | undefined,
+        colKey: string,
+        hasEvents: boolean,
+        practId: number | null,
+      ) => {
+        const { isAvailable, isLunch, dayAvailable } = evalSlotAvailability(slot, date, avail);
+        const isSelected   = isSlotSelected(slot);
+        const isDropTarget = dragState.isDragging;
+
+        if (isLunch && dayAvailable && avail) {
+          const [lH, lM] = avail.lunch_start_time.split(':').map(Number);
+          const isFirstLunchSlot = slot.hour === lH && slot.minutes === lM;
+          return (
+            <div
+              key={`${colKey}-${i}`}
+              data-slot-date={format(date, 'yyyy-MM-dd')}
+              data-slot-hour={slot.hour}
+              data-slot-minute={slot.minutes}
+              onMouseDown={() => handleMouseDown(date, slot)}
+              onMouseEnter={() => handleMouseEnter(slot)}
+              onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
+              onDoubleClick={(e) => handleColumnDoubleClick(date, slot, practId, e.currentTarget as HTMLElement)}
+              className={`h-5 relative select-none bg-amber-400 cursor-pointer border-r border-amber-500 ${slot.quarter === 0 ? 'border-t border-amber-500' : 'border-t border-amber-400'}`}
+            >
+              {isFirstLunchSlot && (
+                <div className="absolute inset-0 flex items-center px-2 z-10 pointer-events-none">
+                  <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wide whitespace-nowrap">Lunch</span>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        let slotBgClass = '';
+        if (!isAvailable) {
+          slotBgClass = 'bg-trust-harbor/30';
+        } else if (isSelected) {
+          slotBgClass = 'bg-sky-200 hover:bg-sky-300';
+        } else if (isDropTarget) {
+          slotBgClass = 'bg-white hover:bg-emerald-100';
+        } else {
+          slotBgClass = 'bg-white hover:bg-sky-50';
+        }
+
+        const borderClass = slot.quarter === 0 ? 'border-t border-gray-300' : 'border-t border-gray-100';
+
+        return (
+          <div
+            key={`${colKey}-${i}`}
+            data-slot-date={format(date, 'yyyy-MM-dd')}
+            data-slot-hour={slot.hour}
+            data-slot-minute={slot.minutes}
+            onMouseDown={() => handleMouseDown(date, slot)}
+            onMouseEnter={() => handleMouseEnter(slot)}
+            onMouseUp={() => handleColumnSlotMouseUp(date, slot, practId)}
+            onDoubleClick={(e) => handleColumnDoubleClick(date, slot, practId, e.currentTarget as HTMLElement)}
+            className={`h-5 transition-colors relative select-none cursor-pointer border-r border-gray-200 flex ${borderClass} ${slotBgClass}`}
+          >
+            <div className="w-[90%] h-full relative">
+              {isSelected && <div className="absolute inset-0 bg-sky-200 pointer-events-none" />}
+              {isDropTarget && <div className="absolute inset-0 border-b border-dashed border-emerald-300 pointer-events-none" />}
+            </div>
+            {hasEvents && (
+              <div
+                className="w-[10%] h-full cursor-pointer border-l border-gray-100/80 hover:bg-blue-50/60 transition-colors duration-100 flex items-center justify-center group/strip"
+                onMouseDown={e => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onSlotAction) {
+                    onSlotAction({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15, practitionerId: practId });
+                  } else {
+                    openModal({ date, time: slot.time, hour: slot.hour, minutes: slot.minutes, duration: 15 });
+                  }
+                }}
+                title="Click to add appointment, block, or note"
+              >
+                <span className="text-[9px] text-gray-300 group-hover/strip:text-blue-400 font-bold leading-none select-none transition-colors">+</span>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div {...calendarWrapperProps} className="h-full flex flex-col">
+          <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 overflow-hidden">
+
+            {dragState.isDragging && (
+              <div className="flex-shrink-0 bg-emerald-50 border-b border-emerald-200 px-4 py-2 text-xs text-emerald-700 font-medium text-center animate-pulse">
+                🗓 Hover a time slot and release to reschedule
+              </div>
+            )}
+
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto min-h-0 overflow-x-auto [scrollbar-gutter:stable]">
+              
+              {/* Sticky headers container */}
+              <div
+                className="sticky top-0 z-20 border-b border-gray-200 bg-gray-50"
+                style={{ display: 'grid', gridTemplateColumns: gridCols, minWidth: `${minWidth}px` }}
+              >
+                {/* Top left corner for time */}
+                <div className="border-r border-gray-200 flex items-center justify-center bg-gray-50 flex-col py-2" style={{ gridRow: '1 / span 2' }}>
+                  <span className="text-xs font-semibold text-gray-500">Wk</span>
+                </div>
+
+                {/* Day headers row */}
+                {weekDays.map(day => {
+                  const isAvailableDay = isDutyDay(day);
+                  return (
+                    <div
+                      key={`day-${day.toISOString()}`}
+                      className={`py-2 text-center border-l border-gray-200 ${!isAvailableDay ? 'bg-trust-harbor/20' : 'bg-white'}`}
+                      style={{ gridColumn: `span ${pCount}` }}
+                    >
+                      <div className={`text-xs font-medium uppercase ${!isAvailableDay ? 'text-trust-harbor' : 'text-gray-500'}`}>{format(day, 'EEE')}</div>
+                      <div className={`text-sm font-semibold mt-1 ${!isAvailableDay ? 'text-trust-harbor' : ''} ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-5 h-5 text-[11px] rounded-full flex items-center justify-center mx-auto text-xs' : 'text-gray-700'}`}>
+                        {format(day, 'd')}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Practitioner sub-headers row */}
+                {weekDays.map(day => (
+                  <React.Fragment key={`prac-${day.toISOString()}`}>
+                    {multiPractitioners.map((p, idx) => {
+                      const colors = COL_HEADER_COLORS[idx % COL_HEADER_COLORS.length];
+                      return (
+                        <div key={`${day.toISOString()}-${p.id}`} className={`py-1 px-1 ${colors.bg} border-l border-gray-200 text-center border-t`}>
+                          <div className={`text-[10px] font-bold ${colors.text} truncate`}>{p.name}</div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Grid body */}
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, minWidth: `${minWidth}px` }}>
+                {/* Time column */}
+                <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
+                  {timeSlots.map((slot, i) => renderTimeLabel(slot, i))}
+                </div>
+                {/* Practitioner columns per day */}
+                {weekDays.map(day => {
+                  const dayAppts  = getAppointmentsForDate(day);
+                  const allDayBlocks = getBlockAppointmentsForDate(day);
+                  const allDayNotes  = getNotesForDate(day);
+
+                  return (
+                    <React.Fragment key={`grid-${day.toISOString()}`}>
+                      {multiPractitioners.map((p) => {
+                        const practId  = typeof p.id === 'number' ? p.id : null;
+                        const colAppts = practId != null ? dayAppts.filter(a => a.practitioner === practId) : [];
+                        const colNotes = allDayNotes.filter(
+                          n => n.practitioner === null || n.practitioner === undefined || n.practitioner === practId,
+                        );
+                        const colBlocks = allDayBlocks.filter(b =>
+                          b.practitioner_id === null ||
+                          b.practitioner_id === practId ||
+                          (practId != null && b.participant_practitioner_ids?.includes(practId))
+                        );
+
+                        const { aptStyles, blockStyles, noteStyles } = computeColumnLayout(colAppts, colBlocks, colNotes);
+                        
+                        return (
+                          <div
+                            key={`${day.toISOString()}-${p.id}`}
+                            className="border-l border-gray-200 relative"
+                            onMouseUp={() => handleColumnMouseUp(day, practId)}
+                          >
+                            {timeSlots.map((slot, i) => {
+                              const slotMin  = slot.hour * 60 + slot.minutes;
+                              const occupied = [...colAppts, ...colBlocks, ...colNotes].some(ev => {
+                                const [sh, sm] = ev.start_time.split(':').map(Number);
+                                const [eh, em] = ev.end_time.split(':').map(Number);
+                                return sh * 60 + sm < slotMin + 15 && eh * 60 + em > slotMin;
+                              });
+                              return renderColumnSlot(slot, day, i, p.availability, `${day.toISOString()}-${p.id}`, occupied, practId);
+                            })}
+                            {colAppts.map(apt   => renderTimelineCard(apt, true, false, aptStyles.get(apt.id)))}
+                            {colBlocks.map(block => renderBlockTimelineCard(block, true, false, blockStyles.get(block.id)))}
+                            {colNotes.map(note   => renderNoteTimelineCard(note, true, false, noteStyles.get(note.id)))}
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Stats footer — one DayStatsBlock per column */}
+            <div
+              className="shrink-0 border-t border-gray-200 overflow-x-auto pb-18"
+              style={{ display: 'grid', gridTemplateColumns: gridCols, minWidth: `${minWidth}px` }}
+            >
+              <div className="bg-gray-50 border-r border-gray-200" />
+              {weekDays.map(day => {
+                const dayAppts  = getAppointmentsForDate(day);
+                return (
+                  <React.Fragment key={`stats-${day.toISOString()}`}>
+                    {multiPractitioners.map((p) => {
+                      const practId  = typeof p.id === 'number' ? p.id : null;
+                      const colAppts = practId != null ? dayAppts.filter(a => a.practitioner === practId) : [];
+                      return (
+                        <DayStatsBlock
+                          key={`${day.toISOString()}-${p.id}`}
+                          date={day}
+                          appointments={colAppts}
+                          availability={p.availability}
+                          compact
+                        />
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+          {sharedModals}
+          {dragOverlays}
+          {rescheduleModal}
+          {hoverCardOverlay}
+          {blockHoverCardOverlay}
+          {noteHoverCardOverlay}
+          {noteModalOverlay}
+        </div>
+      );
+    }
+
     return (
       <div {...calendarWrapperProps} className="h-full flex flex-col">
         <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -2819,7 +3062,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           {/* ── Scrollable body (header is sticky inside to stay aligned with columns) ── */}
           <div className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]">
             {/* Sticky day-header row — lives inside scroll container so columns always align */}
-            <div className="sticky top-0 z-20 grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-200 bg-gray-50">
+            <div className="sticky top-0 z-20 grid grid-cols-[55px_repeat(7,1fr)] border-b border-gray-200 bg-gray-50">
               <div className="p-4 border-r border-gray-200 bg-gray-50" />
               {weekDays.map(day => {
                 const isAvailableDay = isDutyDay(day);
@@ -2829,7 +3072,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                     className={`p-4 text-center border-l border-gray-200 ${!isAvailableDay ? 'bg-trust-harbor/20' : 'bg-white'}`}
                   >
                     <div className={`text-xs font-medium uppercase ${!isAvailableDay ? 'text-trust-harbor' : 'text-gray-500'}`}>{format(day, 'EEE')}</div>
-                    <div className={`text-sm font-semibold mt-1 ${!isAvailableDay ? 'text-trust-harbor' : ''} ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto text-xs' : 'text-gray-700'}`}>
+                    <div className={`text-sm font-semibold mt-1 ${!isAvailableDay ? 'text-trust-harbor' : ''} ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-5 h-5 text-[11px] rounded-full flex items-center justify-center mx-auto text-xs' : 'text-gray-700'}`}>
                       {format(day, 'd')}
                     </div>
                     {!isAvailableDay && (
@@ -2840,7 +3083,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               })}
             </div>
 
-            <div className="grid grid-cols-[80px_repeat(7,1fr)]">
+            <div className="grid grid-cols-[55px_repeat(7,1fr)]">
               {/* Time column */}
               <div className="border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
                 {timeSlots.map((slot, i) => renderTimeLabel(slot, i))}
@@ -2891,7 +3134,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             </div>
           </div>
           {/* ── Weekly statistics footer row ── */}
-          <div className="shrink-0 border-t border-gray-200 grid grid-cols-[80px_repeat(7,1fr)] pb-18">
+          <div className="shrink-0 border-t border-gray-200 grid grid-cols-[55px_repeat(7,1fr)] pb-18">
             <div className="bg-gray-50 border-r border-gray-200" />
             {weekDays.map(day => (
               <DayStatsBlock
@@ -2996,7 +3239,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
                       <div className="flex items-center justify-between mb-1">
                         <div className={`text-sm font-medium
                           ${!isSameMonth(day, currentDate) ? 'text-gray-400' : !isAvailableDay ? 'text-purple-600' : 'text-gray-700'}
-                          ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold' : ''}`}
+                          ${isSameDay(day, new Date()) ? 'bg-sky-600 text-white w-5 h-5 text-[11px] rounded-full flex items-center justify-center text-xs font-bold' : ''}`}
                         >
                           {format(day, 'd')}
                         </div>

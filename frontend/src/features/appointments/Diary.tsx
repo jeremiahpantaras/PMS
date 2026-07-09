@@ -589,11 +589,11 @@ export const Diary: React.FC = () => {
     [isAdmin, isPractitioner, isStaff, compareMode, isDuplicateComparePractitioner, view],
   );
 
-  // Day View + specific branch = multi-practitioner split column mode.
+  // Day or Week View + specific branch = multi-practitioner split column mode.
   // Active when no practitioner filter is applied: selecting a practitioner
   // exits split mode and renders a solo view for that practitioner only.
-  const isDayBranchSplit = useMemo(
-    () => view === 'day' && selectedClinicBranch !== null && !calendarCompareMode && practitionerOptions.length > 0 && !selectedPractitioner,
+  const isMultiPractitionerMode = useMemo(
+    () => (view === 'day' || view === 'week') && selectedClinicBranch !== null && !calendarCompareMode && practitionerOptions.length > 0 && !selectedPractitioner,
     [view, selectedClinicBranch, calendarCompareMode, practitionerOptions, selectedPractitioner],
   );
 
@@ -645,7 +645,7 @@ export const Diary: React.FC = () => {
                 disabled={loadingBranches || isRestrictedPractitioner}
                 title={isRestrictedPractitioner ? "Practitioners can only view their assigned branches." : undefined}
                 className={`
-                  relative flex items-center gap-2 px-6 py-3 text-sm font-medium whitespace-nowrap
+                  relative flex items-center gap-1.5 px-4 py-2 text-[11px] font-medium whitespace-nowrap
                   transition-all duration-200 border-b-2
                   ${selectedClinicBranch === null
                     ? 'bg-white text-care-blue border-care-blue shadow-sm'
@@ -654,7 +654,7 @@ export const Diary: React.FC = () => {
                   ${(loadingBranches || isRestrictedPractitioner) ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
                 `}
               >
-                <Building2 className="w-4 h-4" />
+                <Building2 className="w-3 h-3" />
                 <span>All Branches</span>
               </button>
 
@@ -670,7 +670,7 @@ export const Diary: React.FC = () => {
                     }}
                     disabled={loadingBranches || isUnauthorized}
                     className={`
-                      relative flex items-center gap-2 px-6 py-3 text-sm font-medium whitespace-nowrap
+                      relative flex items-center gap-1.5 px-4 py-2 text-[11px] font-medium whitespace-nowrap
                       transition-all duration-200 border-b-2
                       ${selectedClinicBranch === branch.id
                         ? 'bg-white text-care-blue border-care-blue shadow-sm'
@@ -679,14 +679,14 @@ export const Diary: React.FC = () => {
                       ${(loadingBranches || isUnauthorized) ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
                     `}
                   >
-                    <Building2 className="w-4 h-4" />
+                    <Building2 className="w-3 h-3" />
                     <span>{branch.name}</span>
                     {branch.is_main_branch && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-medium">
                         Main
                       </span>
                     )}
-                    <span className="text-xs text-gray-400">• {branch.city}</span>
+                    <span className="text-[10px] text-gray-400">• {branch.city}</span>
                   </button>
                 );
               })}
@@ -698,11 +698,11 @@ export const Diary: React.FC = () => {
         <div className="flex-1 flex overflow-hidden">
 
           {/* Left Sidebar */}
-          <div className="w-56 flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+          <div className="w-40 flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
             {/* Current Month Mini Calendar */}
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 text-center">
-                {format(currentMonth, 'MMMM yyyy')}
+            <div className="p-2 border-b border-gray-200">
+              <h3 className="text-[11px] font-semibold text-gray-700 mb-1.5 text-center uppercase tracking-wider">
+                {format(currentMonth, 'MMM yyyy')}
               </h3>
               <MiniCalendar
                 date={currentMonth}
@@ -712,9 +712,9 @@ export const Diary: React.FC = () => {
             </div>
 
             {/* Next Month Mini Calendar */}
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 text-center">
-                {format(nextMonth, 'MMMM yyyy')}
+            <div className="p-2 border-b border-gray-200">
+              <h3 className="text-[11px] font-semibold text-gray-700 mb-1.5 text-center uppercase tracking-wider">
+                {format(nextMonth, 'MMM yyyy')}
               </h3>
               <MiniCalendar
                 date={nextMonth}
@@ -724,8 +724,8 @@ export const Diary: React.FC = () => {
             </div>
 
             {/* Arrivals Section */}
-            <div className="p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Today's Arrivals</h3>
+            <div className="p-2">
+              <h3 className="text-[11px] font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">Arrivals</h3>
               <ArrivalsList calendarReadyDate={calendarReadyDate} />
             </div>
           </div>
@@ -1070,7 +1070,7 @@ export const Diary: React.FC = () => {
                 view={view}
                 currentDate={currentDate}
                 onDateChange={handleDateChange}
-                selectedPractitionerId={isDayBranchSplit || compareMode ? null : selectedPractitioner}
+                selectedPractitionerId={isMultiPractitionerMode || compareMode ? null : selectedPractitioner}
                 selectedClinicBranchId={selectedClinicBranch}
                 refreshKey={eventRefreshKey}
                 appointmentRefreshKey={appointmentRefreshKey}
@@ -1098,7 +1098,7 @@ export const Diary: React.FC = () => {
                     : undefined
                 }
                 multiPractitioners={
-                  isDayBranchSplit
+                  isMultiPractitionerMode
                     ? practitionerOptions.map(p => ({
                         id: p.id,
                         name: p.name,
@@ -1287,14 +1287,14 @@ const MiniCalendar: React.FC<MiniCalendarProps> = ({ date, selectedDate, onDateS
   const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
-    <div className="text-xs">
-      <div className="grid grid-cols-7 gap-1 mb-2">
+    <div className="text-[10px]">
+      <div className="grid grid-cols-7 gap-0.5 mb-2">
         {weekDays.map((d, i) => (
-          <div key={i} className="text-center font-medium text-gray-500 py-1">{d}</div>
+          <div key={i} className="text-center font-medium text-gray-500 py-0.5">{d}</div>
         ))}
       </div>
       {weeks.map((week, wi) => (
-        <div key={wi} className="grid grid-cols-7 gap-1 mb-1">
+        <div key={wi} className="grid grid-cols-7 gap-0.5 mb-1">
           {week.map((day, di) => {
             if (day === null) return <div key={di} className="aspect-square" />;
             const dayDate  = new Date(date.getFullYear(), date.getMonth(), day);
@@ -1311,7 +1311,7 @@ const MiniCalendar: React.FC<MiniCalendarProps> = ({ date, selectedDate, onDateS
                 key={di}
                 onClick={() => onDateSelect(dayDate)}
                 className={`
-                  aspect-square flex items-center justify-center rounded-md transition-all hover:bg-gray-100
+                  aspect-square flex items-center justify-center rounded transition-all hover:bg-gray-100
                   ${isSelected ? 'bg-care-blue text-white hover:bg-care-blue/90' : ''}
                   ${isToday && !isSelected ? 'bg-care-blue/10 text-care-blue font-semibold' : ''}
                   ${!isSelected && !isToday ? 'text-gray-700' : ''}
