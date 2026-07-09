@@ -8,7 +8,7 @@ from django.http import JsonResponse
 
 from apps.accounts.views import AuthViewSet, UserViewSet, RoleViewSet, PermissionViewSet, PermissionGroupViewSet
 from apps.clinics.views import ClinicViewSet, PractitionerViewSet, LocationViewSet, ClinicConsentFormViewSet
-from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, CalendarNoteViewSet, PublicRebookingLinkView, PublicRebookingSlotsView, PublicAppointmentConfirmView
+from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, CalendarNoteViewSet, PublicRebookingLinkView, PublicRebookingSlotsView, PublicAppointmentConfirmView, TriggerRemindersWebhookView
 from apps.records.views import ClinicalNoteViewSet, NoteTemplateViewSet, OutcomeMeasureViewSet, AttachmentViewSet
 from apps.billing.views import (
     AgeingDebtEntryViewSet,
@@ -104,6 +104,9 @@ urlpatterns = [
 
     # Public email confirmation (no auth required)
     path('api/appointments/confirm-email/<uuid:token>/', PublicAppointmentConfirmView.as_view(), name='public-confirm-email'),
+
+    # External Cron Webhook
+    path('api/appointments/trigger-reminders/', TriggerRemindersWebhookView.as_view(), name='trigger-reminders'),
 ]
 
 if settings.DEBUG:

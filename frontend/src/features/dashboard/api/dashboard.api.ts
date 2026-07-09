@@ -5,6 +5,9 @@ export interface DashboardMetricsResponse {
   today_appointments:  number;
   today_completed:     number;
   today_pending:       number;
+  today_confirmed?:    number;
+  today_declined?:     number;
+  today_awaiting?:     number;
   today_occupancy_pct: number;
   month_revenue:       number;
   active_patients:     number;

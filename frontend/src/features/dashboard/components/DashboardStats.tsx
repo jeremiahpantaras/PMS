@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Calendar, UserPlus, XCircle } from 'lucide-react';
+import { Users, Calendar, UserPlus, XCircle, CheckCircle } from 'lucide-react';
 import type { DashboardStats as StatsType } from '../types/dashboard.types';
 
 interface DashboardStatsProps {
@@ -60,12 +60,24 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
       borderColor: 'border-red-200',
       trend: stats.todayCancellations > 5 ? 'high' : 'normal'
     },
+    {
+      id: 'confirmations',
+      title: "Confirmations",
+      value: `${stats.todayConfirmed || 0} Confirmed`,
+      subtitle: `${stats.todayAwaiting || 0} Pending · ${stats.todayDeclined || 0} Declined`,
+      icon: CheckCircle,
+      gradient: 'from-emerald-500 to-emerald-600',
+      bgColor: 'bg-emerald-50',
+      iconColor: 'text-emerald-600',
+      borderColor: 'border-emerald-200',
+      trend: 'normal'
+    },
   ];
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 animate-pulse min-h-[160px]">
             <div className="h-10 w-10 bg-gray-200 rounded-xl mb-3"></div>
             <div className="h-3 bg-gray-200 rounded w-2/3 mb-2"></div>
@@ -78,7 +90,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {cards.map((card) => {
         const Icon = card.icon;
         return (

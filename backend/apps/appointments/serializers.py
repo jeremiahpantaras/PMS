@@ -43,6 +43,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'date', 'start_time', 'end_time', 'duration_minutes',
             'chief_complaint', 'notes', 'patient_notes',
             'reminder_sent', 'reminder_sent_at', 'has_invoice',
+            'confirmation_sent', 'confirmation_sent_at', 'confirmation_status',
+            'patient_reply', 'patient_reply_at',
             'dna_followup_sent', 'dna_followup_sent_at',
             'created_by', 'created_by_name',
             'updated_by', 'updated_by_name',

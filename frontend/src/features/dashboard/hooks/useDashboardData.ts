@@ -48,6 +48,9 @@ export const useDashboardData = () => {
             todayBookings:      metrics.today_appointments,
             todayNewClients:    patientStats.new_this_month,
             todayCancellations: 0, // loaded via metrics if needed
+            todayConfirmed:     metrics.today_confirmed,
+            todayDeclined:      metrics.today_declined,
+            todayAwaiting:      metrics.today_awaiting,
           },
           bookingsByType: analytics.bookings_per_type.map((item, i) => ({
             type:  item.type,

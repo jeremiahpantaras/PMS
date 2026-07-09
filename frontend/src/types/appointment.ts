@@ -31,6 +31,10 @@ export interface Appointment {
   reminder_sent_at: string | null;
   has_invoice:      boolean; // Whether this appointment has an invoice
   confirmation_sent?: boolean;
+  confirmation_sent_at?: string | null;
+  confirmation_status?: 'PENDING' | 'CONFIRMED' | 'DECLINED';
+  patient_reply?: string;
+  patient_reply_at?: string | null;
   rebook_followup_sent?: boolean;
 
   dna_followup_sent:    boolean;

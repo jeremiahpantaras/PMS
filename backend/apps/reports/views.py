@@ -795,6 +795,9 @@ class ReportViewSet(viewsets.ModelViewSet):
             'today_pending':      today_appointments.filter(
                 status__in=['SCHEDULED', 'CONFIRMED']
             ).count(),
+            'today_confirmed':    today_appointments.filter(confirmation_status='CONFIRMED').count(),
+            'today_declined':     today_appointments.filter(confirmation_status='DECLINED').count(),
+            'today_awaiting':     today_appointments.filter(confirmation_status='PENDING').count(),
             'today_occupancy_pct': today_occupancy_pct,
             'month_revenue':     float(month_revenue),
             'active_patients':   Patient.objects.filter(

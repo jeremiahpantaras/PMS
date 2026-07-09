@@ -142,10 +142,10 @@ CELERY_ENABLE_UTC        = True
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {
-    # 8:00 AM Asia/Manila = 00:00 UTC (UTC+8)
+    # 8:00 AM Asia/Manila (Since CELERY_TIMEZONE is Asia/Manila, we use local hour=8)
     'send-appointment-reminders-daily': {
         'task': 'apps.appointments.tasks.send_appointment_reminders_task',
-        'schedule': crontab(hour=0, minute=0),
+        'schedule': crontab(hour=8, minute=0),
     },
 }
 

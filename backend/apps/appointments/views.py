@@ -2066,3 +2066,74 @@ class PublicAppointmentConfirmView(APIView):
             'clinic_name': appt.clinic.name if appt.clinic else '',
             'patient_name': appt.patient.get_full_name() if appt.patient else '',
         }, status=status.HTTP_200_OK)
+
+
+class TriggerRemindersWebhookView(APIView):
+    """
+    GET /api/appointments/trigger-reminders/?secret=<your_secret>
+    POST /api/appointments/trigger-reminders/ (with Bearer token)
+    
+    A secure webhook endpoint designed to be called by an external cron service
+    (like cron-job.org) to execute the daily appointment reminders.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return self._handle_trigger(request)
+        
+    def post(self, request):
+        return self._handle_trigger(request)
+
+    def _handle_trigger(self, request):
+        from django.conf import settings
+        from django.core.management import call_command
+        import os
+        
+        # 1. Verify Secret Token
+        expected_secret = os.getenv('CRON_SECRET')
+        if not expected_secret:
+            logger.error("CRON_SECRET environment variable is not set!")
+            return Response(
+                {'detail': 'Server misconfiguration.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Allow passing the secret either in the Authorization Header OR as a URL parameter
+        provided_secret = None
+        
+        # Check Header
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            provided_secret = auth_header.split('Bearer ')[1]
+            
+        # Fallback to Query Parameter
+        if not provided_secret:
+            provided_secret = request.query_params.get('secret')
+
+        if not provided_secret:
+            return Response(
+                {'detail': 'Missing secret token.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if provided_secret != expected_secret:
+            return Response(
+                {'detail': 'Invalid cron secret.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 2. Execute the Management Command
+        logger.info("Webhook triggered: Starting appointment reminders...")
+        try:
+            call_command('send_appointment_reminders', email_only=True)
+            return Response(
+                {'detail': 'Reminders triggered successfully.'},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.exception("Failed to run send_appointment_reminders via webhook")
+            return Response(
+                {'detail': 'Failed to execute command.', 'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

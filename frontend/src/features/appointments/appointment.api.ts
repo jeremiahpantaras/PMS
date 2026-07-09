@@ -33,6 +33,7 @@ export interface AppointmentEditPayload {
   notes?:           string;
   patient_notes?:   string;
   arrival_status?:  'NO_STATUS' | 'ARRIVED' | 'DNA';  // ← NEW
+  confirmation_status?: 'PENDING' | 'CONFIRMED' | 'DECLINED';
 }
 
 export interface AppointmentCancelPayload {

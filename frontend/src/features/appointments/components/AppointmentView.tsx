@@ -44,6 +44,7 @@ import {
   rescheduleAppointment as apiRescheduleAppointment,
 } from '../appointment.api';
 import toast from 'react-hot-toast';
+import axiosInstance from '@/lib/axios';
 import { useAppointmentEdit }     from '../hooks/useAppointmentEdit';
 import { usePractitioners }       from '@/features/clinics/hooks/usePractitioners';
 import { useAppointmentServices } from '../hooks/useAppointmentServices';
@@ -1331,6 +1332,15 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
     ? apiPatientCases
     : [];
 
+  const { data: communicationLogs = [], isLoading: isLoadingLogs } = useQuery({
+    queryKey: ['communication_logs', appointment?.id],
+    queryFn: async () => {
+      const res = await axiosInstance.get(`/api/notifications/communication-logs/?appointment=${appointment!.id}`);
+      return res.data.results || res.data;
+    },
+    enabled: !!appointment && activeTab === 'communications',
+  });
+
   if (!isOpen || !appointment) return null;
 
   const statusColors  = APPOINTMENT_STATUS_COLORS[appointment.status]
@@ -2090,53 +2100,107 @@ const caseMetrics: Record<string, { noteCount: number; lastUpdated: string }> = 
 
             {/* ── Communications Tab ── */}
             {activeTab === 'communications' && (
-              <div className="space-y-4">
-                <div className="bg-sky-50 border border-sky-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide mb-3">
-                    Appointment Communications
-                  </p>
-                  <div className="space-y-3">
-                    {/* Confirmation */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Confirmation Sent</span>
-                      {appointment.confirmation_sent ? (
-                        <span className="text-xs text-green-600 font-medium">Yes</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">No</span>
-                      )}
+              <div className="space-y-6">
+                
+                {/* Manual Staff Actions */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">
+                    Appointment Status
+                  </h4>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {appointment.confirmation_status === 'CONFIRMED' ? 'Confirmed' : 
+                         appointment.confirmation_status === 'DECLINED' ? 'Declined' : 'Awaiting Confirmation'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {appointment.confirmation_status === 'CONFIRMED' ? 'The patient has confirmed their attendance.' :
+                         appointment.confirmation_status === 'DECLINED' ? 'The patient has declined this appointment.' :
+                         'Waiting for the patient to reply to their reminder.'}
+                      </p>
                     </div>
-                    {/* Reminder */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Reminder Sent</span>
-                      {appointment.reminder_sent ? (
-                        <span className="text-xs text-green-600 font-medium">Yes</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">No</span>
-                      )}
-                    </div>
-                    {/* DNA Follow-up */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">DNA Follow-up Sent</span>
-                      {appointment.dna_followup_sent ? (
-                        <span className="text-xs text-green-600 font-medium">Yes</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">No</span>
-                      )}
-                    </div>
-                    {/* Rebook Follow-up */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Rebook Follow-up Sent</span>
-                      {appointment.rebook_followup_sent ? (
-                        <span className="text-xs text-green-600 font-medium">Yes</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">No</span>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const updated = await apiEditAppointment(appointment.id, { confirmation_status: 'CONFIRMED' });
+                            onUpdated?.(updated);
+                            toast.success('Appointment confirmed manually');
+                          } catch (e) {
+                            toast.error('Failed to confirm');
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                          appointment.confirmation_status === 'CONFIRMED'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                        }`}
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const updated = await apiEditAppointment(appointment.id, { confirmation_status: 'DECLINED' });
+                            onUpdated?.(updated);
+                            toast.success('Appointment declined manually');
+                          } catch (e) {
+                            toast.error('Failed to decline');
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                          appointment.confirmation_status === 'DECLINED'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
+                        }`}
+                      >
+                        Decline
+                      </button>
                     </div>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400">
-                  For detailed communication logs, visit the Communications section in Manage.
-                </p>
+
+                {/* Communication Timeline */}
+                <div className="bg-sky-50 border border-sky-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide mb-4">
+                    Communication Log
+                  </p>
+                  
+                  {isLoadingLogs ? (
+                    <div className="flex justify-center py-4">
+                      <RefreshCw className="w-5 h-5 text-sky-400 animate-spin" />
+                    </div>
+                  ) : communicationLogs.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-2 text-center">No communications recorded yet.</p>
+                  ) : (
+                    <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2.5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-sky-200 before:to-transparent">
+                      {communicationLogs.map((log: any, idx: number) => (
+                        <div key={log.id || idx} className="relative flex items-start gap-4">
+                          <div className="absolute left-0 md:left-1/2 w-5 h-5 rounded-full bg-white border-2 border-sky-400 -translate-x-2 md:-translate-x-2.5 mt-1" />
+                          <div className="pl-6 md:pl-0 w-full">
+                            <div className="bg-white rounded-lg p-3 shadow-sm border border-sky-100">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-semibold text-gray-900">{log.comm_type} ({log.channel})</span>
+                                <span className="text-[10px] text-gray-500">{format(new Date(log.created_at), 'MMM d, h:mm a')}</span>
+                              </div>
+                              <p className="text-xs text-gray-600">To: {log.recipient}</p>
+                              {log.subject && <p className="text-xs font-medium text-gray-800 mt-1">{log.subject}</p>}
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{log.body_preview}</p>
+                              <div className="mt-2 flex items-center justify-between">
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                  log.status === 'SENT' || log.status === 'DELIVERED' ? 'bg-emerald-50 text-emerald-600' :
+                                  log.status === 'FAILED' ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {log.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

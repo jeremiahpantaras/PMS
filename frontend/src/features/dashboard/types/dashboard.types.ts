@@ -7,6 +7,9 @@ export interface DashboardStats {
   todayBookings: number;
   todayNewClients: number;
   todayCancellations: number;
+  todayConfirmed?: number;
+  todayDeclined?: number;
+  todayAwaiting?: number;
 }
 
 export interface BookingByType {

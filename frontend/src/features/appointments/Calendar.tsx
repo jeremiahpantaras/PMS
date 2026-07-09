@@ -165,6 +165,20 @@ interface CalendarSlot {
   isLunchBreak: boolean;
 }
 
+// Helper: render communication status indicator (Nookal style)
+const renderCommunicationIndicator = (apt: Appointment) => {
+  if (apt.confirmation_status === 'CONFIRMED') {
+    return <span className="w-2 h-2 rounded-[2px] bg-[#10B981] inline-block mr-1 flex-shrink-0 shadow-sm" title="Confirmed" />;
+  }
+  if (apt.confirmation_status === 'DECLINED') {
+    return <span className="w-2 h-2 rounded-[2px] bg-[#EF4444] inline-block mr-1 flex-shrink-0 shadow-sm" title="Declined" />;
+  }
+  if (apt.reminder_sent) {
+    return <span className="w-2 h-2 rounded-[2px] bg-[#F97316] inline-block mr-1 flex-shrink-0 shadow-sm" title="Reminder Sent" />;
+  }
+  return null;
+};
+
 const DragGhost: React.FC<DragGhostProps> = ({ appointment, position }) => (
   <div
     className="fixed pointer-events-none z-[9999] opacity-90 shadow-2xl"
@@ -176,7 +190,10 @@ const DragGhost: React.FC<DragGhostProps> = ({ appointment, position }) => (
     }}
   >
     <div className="bg-sky-500 text-white rounded-lg px-3 py-2 text-xs font-semibold shadow-lg border-2 border-sky-300">
-      <div className="truncate">{appointment.patient_name}</div>
+      <div className="truncate flex items-center">
+        {renderCommunicationIndicator(appointment)}
+        {appointment.patient_name}
+      </div>
       <div className="text-sky-200 mt-0.5 truncate">
         {formatTime12Hour(appointment.start_time)} · {appointment.service_name ?? appointment.appointment_type}
       </div>
@@ -1653,9 +1670,10 @@ const CalendarComponent: React.FC<CalendarProps> = ({
         )}
         <div>
           <div
-            className="text-[10px] font-semibold truncate"
+            className="text-[10px] font-semibold truncate flex items-center"
             style={col.useHex ? { color: col.textColor } : {}}
           >
+            {renderCommunicationIndicator(apt)}
             <span className={!col.useHex ? col.text : ''}>{apt.patient_name}</span>
           </div>
           {!compact && (
