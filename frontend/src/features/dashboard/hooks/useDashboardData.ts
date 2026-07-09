@@ -43,9 +43,7 @@ export const useDashboardData = () => {
             todayOccupancy: {
               current:    metrics.today_completed,
               total:      metrics.today_appointments,
-              percentage: metrics.today_appointments > 0
-                ? Math.round((metrics.today_completed / metrics.today_appointments) * 100)
-                : 0,
+              percentage: metrics.today_occupancy_pct ?? 0,
             },
             todayBookings:      metrics.today_appointments,
             todayNewClients:    patientStats.new_this_month,

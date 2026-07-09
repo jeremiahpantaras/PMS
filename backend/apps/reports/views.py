@@ -767,12 +767,35 @@ class ReportViewSet(viewsets.ModelViewSet):
             clinic_id__in=all_branch_ids, invoice_date__gte=month_start, is_deleted=False
         ).aggregate(total=Sum('total_amount'))['total'] or 0
 
+        from apps.appointments.occupancy_service import get_occupancy_stats
+        from apps.clinics.models import Practitioner
+        
+        active_practitioners = Practitioner.objects.filter(
+            clinic_id__in=all_branch_ids, is_accepting_patients=True, is_deleted=False
+        )
+        
+        # We only need today's data
+        # For get_occupancy_stats we pass (clinic_id, start_date, end_date, practitioner_ids)
+        # Wait, get_occupancy_stats takes clinic_id, not practitioner QS directly!
+        occ_stats = get_occupancy_stats(clinic.id, today, today, [p.id for p in active_practitioners])
+        
+        total_avail = 0
+        total_occ = 0
+        today_str = today.strftime('%Y-%m-%d')
+        if today_str in occ_stats:
+            for p_id, p_stats in occ_stats[today_str].items():
+                total_avail += p_stats.get('available_minutes', 0)
+                total_occ += p_stats.get('occupied_minutes', 0)
+                
+        today_occupancy_pct = min(100.0, float(total_occ / total_avail * 100)) if total_avail > 0 else 0.0
+
         metrics = {
             'today_appointments': today_appointments.count(),
             'today_completed':    today_appointments.filter(status='COMPLETED').count(),
             'today_pending':      today_appointments.filter(
                 status__in=['SCHEDULED', 'CONFIRMED']
             ).count(),
+            'today_occupancy_pct': today_occupancy_pct,
             'month_revenue':     float(month_revenue),
             'active_patients':   Patient.objects.filter(
                 clinic=clinic, is_active=True, is_deleted=False
@@ -2121,58 +2144,8 @@ class ReportViewSet(viewsets.ModelViewSet):
     # ── 1. Occupancy Report ───────────────────────────────────────────────────
 
     def _calculate_daily_availability(self, prac, dt, day_blocks):
-        day_name = dt.strftime('%a')
-        duty_days = prac.duty_days or ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-        if day_name not in duty_days:
-            return 0
-            
-        working_ranges = []
-        if prac.duty_schedule and day_name in prac.duty_schedule:
-            for block in prac.duty_schedule[day_name]:
-                start_str = block.get('start')
-                end_str = block.get('end')
-                if start_str and end_str:
-                    sh, sm = map(int, start_str.split(':'))
-                    eh, em = map(int, end_str.split(':'))
-                    working_ranges.append((sh * 60 + sm, eh * 60 + em))
-        else:
-            if not prac.duty_start_time or not prac.duty_end_time:
-                return 0
-            sh = prac.duty_start_time.hour * 60 + prac.duty_start_time.minute
-            eh = prac.duty_end_time.hour * 60 + prac.duty_end_time.minute
-            working_ranges.append((sh, eh))
-            
-            if prac.lunch_start_time and prac.lunch_end_time:
-                lsh = prac.lunch_start_time.hour * 60 + prac.lunch_start_time.minute
-                leh = prac.lunch_end_time.hour * 60 + prac.lunch_end_time.minute
-                
-                new_ranges = []
-                for r_start, r_end in working_ranges:
-                    if leh <= r_start or lsh >= r_end:
-                        new_ranges.append((r_start, r_end))
-                    else:
-                        if r_start < lsh:
-                            new_ranges.append((r_start, lsh))
-                        if r_end > leh:
-                            new_ranges.append((leh, r_end))
-                working_ranges = new_ranges
-
-        for b in day_blocks:
-            bsh = b.start_time.hour * 60 + b.start_time.minute
-            beh = b.end_time.hour * 60 + b.end_time.minute
-            
-            new_ranges = []
-            for r_start, r_end in working_ranges:
-                if beh <= r_start or bsh >= r_end:
-                    new_ranges.append((r_start, r_end))
-                else:
-                    if r_start < bsh:
-                        new_ranges.append((r_start, bsh))
-                    if r_end > beh:
-                        new_ranges.append((beh, r_end))
-            working_ranges = new_ranges
-            
-        return sum(max(0, r_end - r_start) for r_start, r_end in working_ranges)
+        from apps.appointments.occupancy_service import calculate_daily_availability
+        return calculate_daily_availability(prac, dt, day_blocks)
 
     def _build_occupancy_data(self, request):
         """
@@ -2267,7 +2240,11 @@ class ReportViewSet(viewsets.ModelViewSet):
             if p_id not in prac_data:
                 continue # Edge case
                 
-            dur = appt.duration_minutes or 0
+            dur = 0
+            if appt.start_time and appt.end_time:
+                s_mins = appt.start_time.hour * 60 + appt.start_time.minute
+                e_mins = appt.end_time.hour * 60 + appt.end_time.minute
+                dur = max(0, e_mins - s_mins)
             
             prac_data[p_id]['occupied_minutes'] += dur
             prac_data[p_id]['appointment_count'] += 1

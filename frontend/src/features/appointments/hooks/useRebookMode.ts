@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Appointment } from '@/types';
 
 export interface RebookData {
+  clinic:           number;
   patient:          number;
   practitioner:     number | null;
   service:          number | null;
@@ -25,6 +26,7 @@ export const useRebookMode = () => {
     const duration = Math.max((endH * 60 + endM) - (startH * 60 + startM), 15);
 
     setRebookData({
+      clinic:           appointment.clinic,
       patient:          appointment.patient,
       practitioner:     appointment.practitioner,
       service:          appointment.service,

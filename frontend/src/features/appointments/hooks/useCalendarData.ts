@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useAppointments } from './useAppointments';
 import { useBlockAppointments } from './useBlockAppointments';
 import { useNotes } from './useNotes';
+import { useDailyStats } from './useDailyStats';
 
 interface UseCalendarDataParams {
   startDate: Date;
@@ -40,6 +41,12 @@ export const useCalendarData = ({
     practitionerId,
   });
 
+  const statsState = useDailyStats({
+    startDate,
+    endDate,
+    clinicBranchId: clinicBranchId,
+  });
+
   return useMemo(() => ({
     appointments: appointmentState.appointments,
     updateAppointmentInState: appointmentState.updateAppointmentInState,
@@ -59,11 +66,13 @@ export const useCalendarData = ({
     updateNoteInState: noteState.updateNoteInState,
     refetchNotes: noteState.refetch,
 
+    dailyStats: statsState.dailyStats,
+    refetchStats: statsState.refetchStats,
+
     // Unified loading / error — consumers can gate rendering on these
     loading: appointmentState.loading || blockState.loading,
     error: appointmentState.error || blockState.error,
   }), [
-    appointmentState.appointments,
     appointmentState.updateAppointmentInState,
     appointmentState.addAppointmentToState,
     appointmentState.removeAppointmentFromState,
@@ -82,5 +91,8 @@ export const useCalendarData = ({
     noteState.removeNoteFromState,
     noteState.updateNoteInState,
     noteState.refetch,
+    statsState.dailyStats,
+    statsState.refetchStats,
+    appointmentState.appointments,
   ]);
 };

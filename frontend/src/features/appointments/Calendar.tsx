@@ -548,6 +548,8 @@ const CalendarComponent: React.FC<CalendarProps> = ({
     addNoteToState,
     removeNoteFromState,
     updateNoteInState,
+    dailyStats,
+    refetchStats,
   } = useCalendarData({
     startDate,
     endDate,
@@ -561,17 +563,44 @@ const CalendarComponent: React.FC<CalendarProps> = ({
   // addAppointmentToState / updateAppointmentInState are already filter-aware.
   // No manual guard needed here — any event that doesn't match the current
   // practitioner or branch is silently dropped by the hook.
+  
   const handleWsAppointmentCreated = useCallback((apt: Appointment) => {
     addAppointmentToState(apt);
-  }, [addAppointmentToState]);
+    refetchStats();
+  }, [addAppointmentToState, refetchStats]);
+
+  const handleWsAppointmentUpdated = useCallback((apt: Appointment) => {
+    updateAppointmentInState(apt);
+    refetchStats();
+  }, [updateAppointmentInState, refetchStats]);
+
+  const handleWsAppointmentDeleted = useCallback((id: number) => {
+    removeAppointmentFromState(id);
+    refetchStats();
+  }, [removeAppointmentFromState, refetchStats]);
+
+  const handleWsBlockCreated = useCallback((block: BlockAppointment) => {
+    addBlockAppointmentToState(block);
+    refetchStats();
+  }, [addBlockAppointmentToState, refetchStats]);
+
+  const handleWsBlockUpdated = useCallback((block: BlockAppointment) => {
+    updateBlockAppointmentInState(block);
+    refetchStats();
+  }, [updateBlockAppointmentInState, refetchStats]);
+
+  const handleWsBlockDeleted = useCallback((id: number) => {
+    removeBlockAppointmentFromState(id);
+    refetchStats();
+  }, [removeBlockAppointmentFromState, refetchStats]);
 
   const { isConnected: isLive } = useCalendarSocket({
     onAppointmentCreated: handleWsAppointmentCreated,
-    onAppointmentUpdated: updateAppointmentInState,
-    onAppointmentDeleted: removeAppointmentFromState,
-    onBlockCreated:       addBlockAppointmentToState,
-    onBlockUpdated:       updateBlockAppointmentInState,
-    onBlockDeleted:       removeBlockAppointmentFromState,
+    onAppointmentUpdated: handleWsAppointmentUpdated,
+    onAppointmentDeleted: handleWsAppointmentDeleted,
+    onBlockCreated:       handleWsBlockCreated,
+    onBlockUpdated:       handleWsBlockUpdated,
+    onBlockDeleted:       handleWsBlockDeleted,
     onNoteCreated:        addNoteToState,
     onNoteUpdated:        updateNoteInState,
     onNoteDeleted:        removeNoteFromState,
@@ -2562,13 +2591,11 @@ const CalendarComponent: React.FC<CalendarProps> = ({
               <div className="bg-gray-50 border-r border-gray-200" />
               {multiPractitioners.map((p) => {
                 const practId  = typeof p.id === 'number' ? p.id : null;
-                const colAppts = practId != null ? dayAppts.filter(a => a.practitioner === practId) : [];
+                const dateStr = format(currentDate, 'yyyy-MM-dd');
                 return (
                   <DayStatsBlock
                     key={String(p.id)}
-                    date={currentDate}
-                    appointments={colAppts}
-                    availability={p.availability}
+                    stats={practId != null ? dailyStats?.[dateStr]?.[practId] : undefined}
                     compact
                   />
                 );
@@ -2652,9 +2679,7 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           </div>
           {/* ── Day statistics footer ── */}
           <DayStatsBlock
-            date={currentDate}
-            appointments={getAppointmentsForDate(currentDate)}
-            availability={practitionerAvailability}
+            stats={numericPractitionerId != null ? dailyStats?.[format(currentDate, 'yyyy-MM-dd')]?.[numericPractitionerId] : undefined}
           />
         </div>
         {sharedModals}
@@ -3017,18 +3042,15 @@ const CalendarComponent: React.FC<CalendarProps> = ({
             >
               <div className="bg-gray-50 border-r border-gray-200" />
               {weekDays.map(day => {
-                const dayAppts  = getAppointmentsForDate(day);
+                const dateStr = format(day, 'yyyy-MM-dd');
                 return (
                   <React.Fragment key={`stats-${day.toISOString()}`}>
                     {multiPractitioners.map((p) => {
                       const practId  = typeof p.id === 'number' ? p.id : null;
-                      const colAppts = practId != null ? dayAppts.filter(a => a.practitioner === practId) : [];
                       return (
                         <DayStatsBlock
-                          key={`${day.toISOString()}-${p.id}`}
-                          date={day}
-                          appointments={colAppts}
-                          availability={p.availability}
+                          key={p.id}
+                          stats={practId != null ? dailyStats?.[dateStr]?.[practId] : undefined}
                           compact
                         />
                       );
@@ -3136,15 +3158,16 @@ const CalendarComponent: React.FC<CalendarProps> = ({
           {/* ── Weekly statistics footer row ── */}
           <div className="shrink-0 border-t border-gray-200 grid grid-cols-[55px_repeat(7,1fr)] pb-18">
             <div className="bg-gray-50 border-r border-gray-200" />
-            {weekDays.map(day => (
-              <DayStatsBlock
-                key={day.toISOString()}
-                date={day}
-                appointments={getAppointmentsForDate(day)}
-                availability={practitionerAvailability}
-                compact
-              />
-            ))}
+            {weekDays.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              return (
+                <DayStatsBlock
+                  key={day.toISOString()}
+                  stats={numericPractitionerId != null ? dailyStats?.[dateStr]?.[numericPractitionerId] : undefined}
+                  compact
+                />
+              );
+            })}
           </div>
         </div>
         {sharedModals}

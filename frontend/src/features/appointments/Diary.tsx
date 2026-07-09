@@ -532,9 +532,8 @@ export const Diary: React.FC = () => {
     const endTotalMins = hour * 60 + minutes + rebookData.duration_minutes;
     const endH = Math.floor(endTotalMins / 60);
     const endM = endTotalMins % 60;
-    const clinicId = selectedClinicBranch ?? user.clinic ?? 0;
     const data: CreateAppointmentData = {
-      clinic:           clinicId as number,
+      clinic:           rebookData.clinic,
       patient:          rebookData.patient,
       practitioner:     slot.practitionerId ?? rebookData.practitioner ?? undefined,
       service:          rebookData.service ?? undefined,
@@ -554,9 +553,9 @@ export const Diary: React.FC = () => {
       exitRebook();
     } catch (err: unknown) {
       const detail = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        ? (err as any).response?.data
         : undefined;
-      toast.error(detail ?? 'Failed to rebook appointment');
+      toast.error(typeof detail === 'object' ? JSON.stringify(detail) : (detail ?? 'Failed to rebook appointment'));
     }
   };
 

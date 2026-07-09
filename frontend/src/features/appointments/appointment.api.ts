@@ -107,6 +107,34 @@ export const getAppointments = async (
   return response.data;
 };
 
+export interface DailyOccupancyStats {
+  available_minutes: number;
+  occupied_minutes: number;
+  occupancy_pct: number;
+  total_clients: number;
+  new_clients: number;
+}
+
+// Stats mapped by YYYY-MM-DD -> Practitioner ID -> Stats
+export type DailyStatsResponse = Record<string, Record<number, DailyOccupancyStats>>;
+
+export const getDailyStats = async (params: {
+  start_date: string;
+  end_date: string;
+  clinic_branch: number;
+}): Promise<DailyStatsResponse> => {
+  const query = new URLSearchParams({
+    start_date: params.start_date,
+    end_date: params.end_date,
+    clinic_branch: String(params.clinic_branch),
+  });
+  const response = await axiosInstance.get<DailyStatsResponse>(
+    `/appointments/daily_stats/?${query.toString()}`
+  );
+  return response.data;
+};
+
+
 // Get upcoming appointments for a patient (future dates only)
 export const getUpcomingAppointments = async (
   patientId: number,

@@ -1299,6 +1299,36 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         serializer = AppointmentSerializer(appointments, many=True, context={'request': request})
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='daily_stats')
+    def daily_stats(self, request):
+        """
+        GET /api/appointments/daily_stats/?start_date=2026-07-01&end_date=2026-07-07&clinic_branch=1
+        Returns daily occupancy stats for calendar day footers.
+        """
+        from datetime import datetime
+        from apps.appointments.occupancy_service import get_occupancy_stats
+        
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        branch_id = request.query_params.get('clinic_branch')
+        
+        if not start_date_str or not end_date_str or not branch_id:
+            return Response({"error": "start_date, end_date, and clinic_branch are required."}, status=400)
+            
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            branch_id = int(branch_id)
+        except ValueError:
+            return Response({"error": "Invalid date or branch format."}, status=400)
+            
+        # Optional practitioner filter
+        prac_id_str = request.query_params.get('practitioner')
+        practitioner_ids = [int(prac_id_str)] if prac_id_str and prac_id_str.isdigit() else None
+
+        stats = get_occupancy_stats(branch_id, start_date, end_date, practitioner_ids)
+        return Response(stats)
+
 
 # ── Other ViewSets (unchanged) ────────────────────────────────────────────────
 

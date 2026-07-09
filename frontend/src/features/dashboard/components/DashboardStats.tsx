@@ -18,7 +18,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
       id: 'occupancy',
       title: "Today's Occupancy",
       value: `${stats.todayOccupancy.current}/${stats.todayOccupancy.total}`,
-      subtitle: `${stats.todayOccupancy.percentage}% Capacity`,
+      subtitle: `${Number(stats.todayOccupancy.percentage.toFixed(2))}% Capacity`,
       icon: Users,
       gradient: 'from-blue-500 to-blue-600',
       bgColor: 'bg-blue-50',
