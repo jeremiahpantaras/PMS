@@ -5,13 +5,11 @@ import type { DashboardStats as StatsType } from '../types/dashboard.types';
 interface DashboardStatsProps {
   stats: StatsType;
   isLoading?: boolean;
-  layout?: 'horizontal' | 'vertical';
 }
 
 export const DashboardStats: React.FC<DashboardStatsProps> = ({ 
   stats, 
-  isLoading, 
-  layout = 'horizontal' 
+  isLoading
 }) => {
   const cards = [
     {
@@ -66,7 +64,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
 
   if (isLoading) {
     return (
-      <div className={`${layout === 'vertical' ? 'flex flex-col gap-4' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'}`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 animate-pulse min-h-[160px]">
             <div className="h-10 w-10 bg-gray-200 rounded-xl mb-3"></div>
@@ -80,17 +78,16 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
   }
 
   return (
-    <div className={`${layout === 'vertical' ? 'flex flex-col gap-4' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'}`}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <div
             key={card.id}
             className={`
-              bg-white rounded-2xl border-2 ${card.borderColor} 
-              p-4 sm:p-5 hover:shadow-xl transition-all duration-300 group 
-              flex flex-col justify-between overflow-hidden
-              ${layout === 'vertical' ? 'min-h-[160px]' : 'min-h-[160px]'}
+              bg-white rounded-2xl border border-gray-100 
+              p-4 sm:p-5 hover:shadow-md shadow-sm transition-all duration-300 group 
+              flex flex-col justify-between overflow-hidden min-h-[160px]
             `}
           >
             {/* Top Section: Icon + Badge */}

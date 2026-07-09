@@ -1,32 +1,17 @@
 import React from 'react';
-import { Sidebar } from './Sidebar';
-import { MobileHeader } from './MobileHeader';
-import { useSidebar } from '@/hooks/useSidebar';
+import { TopNavigation } from './TopNavigation';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const { sidebarWidth, isMobile } = useSidebar();
-
   return (
-    <div className="min-h-screen bg-clinical-cloud overflow-hidden">
-      {/* Mobile Header */}
-      {isMobile && <MobileHeader />}
+    <div className="min-h-screen bg-clinical-cloud overflow-hidden flex flex-col">
+      <TopNavigation />
       
-      {/* Sidebar */}
-      <Sidebar />
-      
-      {/* Main Content Area - Full height, no scroll */}
-      <main 
-        className="transition-all duration-300 ease-in-out h-screen overflow-hidden"
-        style={{ 
-          marginLeft: isMobile ? '0' : `${sidebarWidth}px`,
-          marginTop: isMobile ? '64px' : '0',
-          height: isMobile ? 'calc(100vh - 64px)' : '100vh',
-        }}
-      >
+      {/* Main Content Area - Full height beneath the top navbar */}
+      <main className="flex-1 transition-all duration-300 ease-in-out h-[calc(100vh-64px)] overflow-hidden mt-[64px] w-full">
         {children}
       </main>
     </div>

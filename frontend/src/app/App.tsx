@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
-import { SidebarProvider } from '@/contexts/SidebarContext';
+// Removed SidebarProvider
 import { ProtectedRoute, PublicRoute, ClinicMemberRoute, ClinicSetupRoute, ChangePasswordRoute, ResetPasswordRoute, OnboardingPasswordRoute } from './router';
 import { LogoutConfirmModal } from '@/components/modals/LogoutConfirmModal';
 import { SessionExpiryWarningModal } from '@/components/modals/SessionExpiryWarningModal';
@@ -214,7 +214,7 @@ function App() {
   if (isInitializing) return <LoadingScreen />;
 
   return (
-    <SidebarProvider>
+    <>
       <BrowserRouter>
         <Toaster
           position="top-right"
@@ -355,7 +355,7 @@ function App() {
         <SessionGuard />
         <Analytics />
       </BrowserRouter>
-    </SidebarProvider>
+    </>
   );
 }
 

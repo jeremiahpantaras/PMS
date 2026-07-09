@@ -163,17 +163,16 @@ export const Diary: React.FC = () => {
         setSelectedPractitioner(own.id);
       }
     } else {
-      // All-branches practitioner (e.g. Admin+Practitioner with no branch).
-      // Explicitly reset to the All Branches tab so switching away from a
-      // previously-cached specific branch actually takes effect.
-      if (!hasAutoSelectedBranch.current) {
+      // All-branches practitioner (e.g. Admin with no branch).
+      // Explicitly reset to the first available branch.
+      if (!hasAutoSelectedBranch.current && branches.length > 0) {
         hasAutoSelectedBranch.current = true;
-        setSelectedClinicBranch(null);
+        setSelectedClinicBranch(branches[0].id);
         setSelectedPractitioner(own.id);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPractitioner, isStaff, user?.practitioner_id, user?.id, practitioners]);
+  }, [isPractitioner, isStaff, user?.practitioner_id, user?.id, practitioners, branches]);
 
   // ── Stale-selection guard ──────────────────────────────────────────────────
   // After every practitioners list change (e.g. post-refetch following a role
@@ -199,11 +198,11 @@ export const Diary: React.FC = () => {
   }, [practitioners, selectedPractitioner, cachedOwnId]);
 
   // ── Route / State Protection Guard ───────────────────────────────────────────
-  // Prevent restricted practitioners from accessing "All Branches" (null).
-  // If they somehow bypass the UI, immediately force them to their first assigned branch.
+  // Since "All Branches" is removed, ensure selectedClinicBranch is never null
+  // once branches are loaded.
   useEffect(() => {
-    if (isRestrictedPractitioner && selectedClinicBranch === null) {
-      if (practitionerBranchIds && practitionerBranchIds.length > 0) {
+    if (selectedClinicBranch === null && branches.length > 0) {
+      if (isRestrictedPractitioner && practitionerBranchIds && practitionerBranchIds.length > 0) {
         // Reset compare mode and switch to first assigned branch
         setSelectedClinicBranch(practitionerBranchIds[0]);
         setCompareMode(false);
@@ -215,18 +214,17 @@ export const Diary: React.FC = () => {
         } else {
           setSelectedPractitioner(null);
         }
+      } else {
+        // For Admins/Owners, just pick the first available branch
+        setSelectedClinicBranch(branches[0].id);
       }
     }
-  }, [isRestrictedPractitioner, selectedClinicBranch, practitionerBranchIds, cachedOwnBranchId, cachedOwnId]);
+  }, [selectedClinicBranch, branches, isRestrictedPractitioner, practitionerBranchIds, cachedOwnBranchId, cachedOwnId]);
 
   // True when the currently selected branch tab is the user's "own" clinic:
-  // - Branch-assigned practitioner/staff: their home branch tab is active.
-  // - All-branches practitioner (e.g. Admin+Practitioner with no branch): the
-  //   "All Branches" tab (null) is considered their home view.
   const isOwnAssignedClinic =
     (isPractitioner || isStaff) && (
-      (cachedOwnBranchId !== null && selectedClinicBranch === cachedOwnBranchId) ||
-      (cachedOwnBranchId === null  && selectedClinicBranch === null)
+      (cachedOwnBranchId !== null && selectedClinicBranch === cachedOwnBranchId)
     );
 
   // Compute the availability to pass to Calendar
@@ -341,7 +339,7 @@ export const Diary: React.FC = () => {
     setShowFilterDropdown(false);
   };
 
-  const handleClinicBranchSelect = (branchId: number | null) => {
+  const handleClinicBranchSelect = (branchId: number) => {
     setSelectedClinicBranch(branchId);
     // Always reset compare state when switching tabs
     setCompareMode(false);
@@ -354,17 +352,8 @@ export const Diary: React.FC = () => {
       } else {
         setSelectedPractitioner(null);
       }
-    } else if ((isPractitioner || isStaff) && cachedOwnBranchId === null) {
-      // All-branches practitioner (e.g. Admin+Practitioner with no branch assignment):
-      // restore own selection when returning to "All Branches" tab; clear on specific
-      // branch tabs (they won't be in the branch-filtered practitioner list anyway).
-      if (branchId === null) {
-        setSelectedPractitioner(cachedOwnId);
-      } else {
-        setSelectedPractitioner(null);
-      }
     } else {
-      // Admin-only: always clear filter when switching branches
+      // Admin or unassigned Practitioner: always clear filter when switching branches
       setSelectedPractitioner(null);
     }
   };
@@ -635,27 +624,6 @@ export const Diary: React.FC = () => {
         {branches.length > 0 && (
           <div className="flex-shrink-0 bg-clinical-cloud border-b border-gray-200">
             <div className="flex items-center overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
-
-              {/* All Branches */}
-              <button
-                onClick={() => {
-                  if (!isRestrictedPractitioner) handleClinicBranchSelect(null);
-                }}
-                disabled={loadingBranches || isRestrictedPractitioner}
-                title={isRestrictedPractitioner ? "Practitioners can only view their assigned branches." : undefined}
-                className={`
-                  relative flex items-center gap-1.5 px-4 py-2 text-[11px] font-medium whitespace-nowrap
-                  transition-all duration-200 border-b-2
-                  ${selectedClinicBranch === null
-                    ? 'bg-white text-care-blue border-care-blue shadow-sm'
-                    : 'bg-transparent text-steady-slate border-transparent hover:text-trust-harbor hover:bg-gray-100/50'
-                  }
-                  ${(loadingBranches || isRestrictedPractitioner) ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
-                `}
-              >
-                <Building2 className="w-3 h-3" />
-                <span>All Branches</span>
-              </button>
 
               {/* Individual Branch Tabs */}
               {branches.map((branch) => {

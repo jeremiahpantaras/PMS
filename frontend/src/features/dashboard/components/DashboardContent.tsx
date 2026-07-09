@@ -1,5 +1,4 @@
 import React from 'react';
-import { useSidebar } from '@/hooks/useSidebar';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { DashboardStats } from './DashboardStats';
 import { BookingsPerTypeChart } from './BookingsPerTypeChart';
@@ -8,9 +7,16 @@ import { LiveOccupancyWidget } from './LiveOccupancyWidget';
 import { ClinicianPerformance } from './ClinicianPerformance';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
+import { useAuth } from '@/hooks/useAuth';
+
 export const DashboardContent: React.FC = () => {
-  const { isMobile, isExpanded } = useSidebar();
+  const { user } = useAuth();
   const { data, isLoading, error, refresh } = useDashboardData();
+
+  const hour = new Date().getHours();
+  let timeOfDay = 'evening';
+  if (hour < 12) timeOfDay = 'morning';
+  else if (hour < 18) timeOfDay = 'afternoon';
 
   if (error) {
     return (
@@ -37,23 +43,15 @@ export const DashboardContent: React.FC = () => {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header - Fixed */}
       <div
-        className="flex-shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur-sm"
-        style={{
-          padding: isMobile ? '1rem' : isExpanded ? '1.5rem 2rem' : '1.5rem',
-        }}
+        className="flex-shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur-sm p-4 md:p-6 lg:px-8"
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-trust-harbor mb-1 font-heading">
-              Dashboard Overview
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 font-heading">
+              Hi there, {user?.first_name || 'User'}!
             </h1>
-            <p className="text-sm text-steady-slate font-body">
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+            <p className="text-sm text-gray-500 font-body">
+              Good {timeOfDay}. Here are the Clinic details for today
             </p>
           </div>
           {!isLoading && (
@@ -70,15 +68,11 @@ export const DashboardContent: React.FC = () => {
 
       {/* Bento Grid Layout - Scrollable content with bottom padding */}
       <div
-        className="flex-1 overflow-y-auto"
-        style={{
-          padding: isMobile ? '1rem' : isExpanded ? '2rem' : '1.5rem',
-          paddingBottom: isMobile ? '2rem' : '2.5rem', // ✅ Added extra bottom padding
-        }}
+        className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-8 md:pb-10"
       >
-        {isMobile ? (
-          // Mobile: Stack vertically
-          <div className="space-y-4">
+        <div className="flex flex-col gap-6">
+          {/* Top Row: KPI Cards */}
+          <div className="w-full">
             <DashboardStats
               stats={
                 data?.stats || {
@@ -90,41 +84,23 @@ export const DashboardContent: React.FC = () => {
               }
               isLoading={isLoading}
             />
-            <LiveOccupancyWidget />
-            <BookingsPerTypeChart data={data?.bookingsByType || []} isLoading={isLoading} />
-            <WeeklyBookingsChart  data={data?.weeklyBookings  || []} isLoading={isLoading} />
-            <ClinicianPerformance />
           </div>
-        ) : (
-          // Desktop: Bento Grid (12 columns)
-          <div className="grid grid-cols-12 gap-6">
-            {/* Left Column: Stats Cards */}
-            <div className="col-span-12 lg:col-span-4 xl:col-span-3 flex flex-col gap-6">
-              <DashboardStats
-                stats={
-                  data?.stats || {
-                    todayOccupancy: { current: 0, total: 0, percentage: 0 },
-                    todayBookings: 0,
-                    todayNewClients: 0,
-                    todayCancellations: 0,
-                  }
-                }
-                isLoading={isLoading}
-                layout="vertical"
-              />
-              {/* Live Occupancy — sits below stats in the left column */}
-              <LiveOccupancyWidget />
+
+          {/* Bottom Area: 70/30 Split */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column (70%) */}
+            <div className="lg:col-span-8 flex flex-col gap-6">
+              <WeeklyBookingsChart data={data?.weeklyBookings || []} isLoading={isLoading} />
+              <BookingsPerTypeChart data={data?.bookingsByType || []} isLoading={isLoading} />
             </div>
 
-            {/* Right Column: Charts */}
-            <div className="col-span-12 lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
-              <BookingsPerTypeChart data={data?.bookingsByType || []} isLoading={isLoading} />
-              <WeeklyBookingsChart  data={data?.weeklyBookings  || []} isLoading={isLoading} />
-              {/* Clinician Performance — full width of right column */}
+            {/* Right Column (30%) */}
+            <div className="lg:col-span-4 flex flex-col gap-6">
+              <LiveOccupancyWidget />
               <ClinicianPerformance />
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
