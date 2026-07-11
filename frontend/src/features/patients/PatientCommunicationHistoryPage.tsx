@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
   Mail, MessageSquare, Check, X, Send, Reply,
   Loader2, ChevronLeft, ChevronRight, MessageCircle,
-  Building2, AlertCircle, Clock,
+  Building2, AlertCircle, Clock, CalendarDays,
 } from 'lucide-react';
 import {
   communicationApi,
