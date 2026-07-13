@@ -31,6 +31,7 @@ export interface CommunicationLogEntry {
   patient: number | null;
   patient_name: string;
   appointment: number | null;
+  appointment_color: string | null;
   comm_type: string;
   comm_type_display: string;
   channel: string;

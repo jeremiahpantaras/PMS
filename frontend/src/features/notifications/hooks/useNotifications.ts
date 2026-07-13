@@ -174,6 +174,13 @@ export function useNotifications(isOpen: boolean, onIncoming?: (n: Notification)
           return;
         }
 
+        if (data.type === 'communication.updated' && data.communication_log) {
+          window.dispatchEvent(
+            new CustomEvent('communicationUpdated', { detail: data.communication_log })
+          );
+          return;
+        }
+
         if (data.type === 'pong') return;
 
       } catch (err) {

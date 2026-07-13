@@ -181,6 +181,12 @@ class CommunicationLogSerializer(serializers.ModelSerializer):
     practitioner_name    = serializers.SerializerMethodField()
     reply_count          = serializers.SerializerMethodField()
     attachment_count     = serializers.SerializerMethodField()
+    appointment_color    = serializers.CharField(
+        source='appointment.service.color_hex',
+        read_only=True,
+        allow_null=True,
+        default=None
+    )
 
     class Meta:
         model  = CommunicationLog
@@ -190,6 +196,7 @@ class CommunicationLogSerializer(serializers.ModelSerializer):
             'patient',
             'patient_name',
             'appointment',
+            'appointment_color',
             'practitioner',
             'practitioner_name',
             'comm_type',

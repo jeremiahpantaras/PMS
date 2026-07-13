@@ -1961,6 +1961,29 @@ class PublicRebookingLinkView(APIView):
         link.new_appointment = new_appt
         link.save(update_fields=['is_used', 'used_at', 'new_appointment'])
 
+        # Update the most recent APPOINTMENT_REMINDER communication log for this appointment
+        try:
+            from apps.notifications.models import CommunicationLog
+            from apps.notifications.services.notification_service import broadcast_communication_log_updated
+            updated_count = CommunicationLog.objects.filter(
+                appointment=original,
+                comm_type='APPOINTMENT_REMINDER',
+                status='SENT',
+            ).order_by('-created_at').update(
+                status='REPLIED',
+                patient_reply='RESCHEDULE',
+                replied_at=timezone.now(),
+            )
+            if updated_count:
+                updated_log = CommunicationLog.objects.filter(
+                    appointment=original,
+                    comm_type='APPOINTMENT_REMINDER'
+                ).order_by('-created_at').first()
+                if updated_log:
+                    broadcast_communication_log_updated(updated_log)
+        except Exception as e:
+            logger.warning('Failed to update CommunicationLog for rebook token #%s: %s', link.id, e)
+
         return Response({
             'detail': 'Appointment successfully booked!',
             'appointment_id': new_appt.id,
@@ -2075,7 +2098,8 @@ class PublicAppointmentConfirmView(APIView):
         # Update the most recent APPOINTMENT_REMINDER communication log for this appointment
         try:
             from apps.notifications.models import CommunicationLog
-            CommunicationLog.objects.filter(
+            from apps.notifications.services.notification_service import broadcast_communication_log_updated
+            updated_count = CommunicationLog.objects.filter(
                 appointment=appt,
                 comm_type='APPOINTMENT_REMINDER',
                 status='SENT',
@@ -2084,6 +2108,13 @@ class PublicAppointmentConfirmView(APIView):
                 patient_reply='Y',
                 replied_at=timezone.now(),
             )
+            if updated_count:
+                updated_log = CommunicationLog.objects.filter(
+                    appointment=appt,
+                    comm_type='APPOINTMENT_REMINDER'
+                ).order_by('-created_at').first()
+                if updated_log:
+                    broadcast_communication_log_updated(updated_log)
         except Exception as e:
             logger.warning('Failed to update CommunicationLog for confirm token #%s: %s', ct.id, e)
 
@@ -2226,7 +2257,8 @@ class PublicAppointmentCancelView(APIView):
         # Update the most recent APPOINTMENT_REMINDER communication log for this appointment
         try:
             from apps.notifications.models import CommunicationLog
-            CommunicationLog.objects.filter(
+            from apps.notifications.services.notification_service import broadcast_communication_log_updated
+            updated_count = CommunicationLog.objects.filter(
                 appointment=appt,
                 comm_type='APPOINTMENT_REMINDER',
                 status='SENT',
@@ -2235,6 +2267,13 @@ class PublicAppointmentCancelView(APIView):
                 patient_reply='N',
                 replied_at=timezone.now(),
             )
+            if updated_count:
+                updated_log = CommunicationLog.objects.filter(
+                    appointment=appt,
+                    comm_type='APPOINTMENT_REMINDER'
+                ).order_by('-created_at').first()
+                if updated_log:
+                    broadcast_communication_log_updated(updated_log)
         except Exception as e:
             logger.warning('Failed to update CommunicationLog for cancel token #%s: %s', ct.id, e)
 

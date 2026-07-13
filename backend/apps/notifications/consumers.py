@@ -68,6 +68,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             'notification': event['notification'],
         })
 
+    # ── Handler for communication.updated events ──────────────────────────────
+    async def communication_updated(self, event):
+        """Called by channel layer group_send when a CommunicationLog is updated."""
+        await self.send_json({
+            'type': 'communication.updated',
+            'communication_log': event['communication_log'],
+        })
+
     # ── Handler for permissions_updated events ────────────────────────────────
     async def permissions_updated(self, event):
         """

@@ -115,3 +115,47 @@ def create_notification(
     _push_to_all_clinic_users(notification)
 
     return notification
+
+
+def broadcast_communication_log_updated(comm_log) -> None:
+    """
+    Broadcasts a CommunicationLog update (e.g. status change to REPLIED) 
+    via WebSocket to all active users in the clinic.
+    """
+    try:
+        from channels.layers import get_channel_layer
+        from apps.notifications.serializers import CommunicationLogSerializer
+
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return
+
+        payload = CommunicationLogSerializer(comm_log).data
+        main_clinic = _get_main_clinic(comm_log.clinic)
+
+        all_branch_ids = list(
+            main_clinic.get_all_branches().values_list('id', flat=True)
+        )
+
+        users = User.objects.filter(
+            is_active=True,
+            is_deleted=False,
+            clinic_id__in=all_branch_ids,
+        ).values_list('id', flat=True)
+
+        for user_id in users:
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{user_id}',
+                {
+                    'type': 'communication.updated',
+                    'communication_log': payload,
+                }
+            )
+
+        logger.debug(
+            'CommunicationLog %s pushed to %d users in clinic %s via WebSocket',
+            comm_log.id, len(users), main_clinic.id
+        )
+
+    except Exception as exc:
+        logger.exception('broadcast_communication_log_updated failed: %s', exc)

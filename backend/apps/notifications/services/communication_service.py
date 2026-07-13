@@ -87,7 +87,7 @@ def _log_communication(
     status: str = 'SENT',
     error_message: str = '',
 ) -> CommunicationLog:
-    return CommunicationLog.objects.create(
+    log = CommunicationLog.objects.create(
         clinic=clinic.main_clinic,
         patient=patient,
         appointment=appointment,
@@ -99,6 +99,11 @@ def _log_communication(
         status=status,
         error_message=error_message,
     )
+    
+    from apps.notifications.services.notification_service import broadcast_communication_log_updated
+    broadcast_communication_log_updated(log)
+    
+    return log
 
 
 def _send_email(*, recipient, subject, template_prefix, context, clinic,
