@@ -55,6 +55,8 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [patientName, setPatientName] = useState<string>('');
   const [selectedCaseId, setSelectedCaseId] = useState<number | ''>('');
+  const [amendmentReason, setAmendmentReason] = useState<string>('');
+  const [isSigned, setIsSigned] = useState<boolean>(false);
 
   // Fetch note data and templates on mount
   const fetchData = useCallback(async () => {
@@ -69,6 +71,7 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
       setPatientName(noteData.patient_name);
       setNoteDate(noteData.date);
       setSelectedAppointment(noteData.appointment);
+      setIsSigned(noteData.is_signed);
       if (noteData.patient_case) {
         setSelectedCaseId(noteData.patient_case);
       }
@@ -141,6 +144,11 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
       return;
     }
 
+    if (isSigned && !amendmentReason.trim()) {
+      toast.error('Please provide an amendment reason for editing a signed note');
+      return;
+    }
+
     setSaving(true);
     try {
       console.log('[ClinicalNote Edit] Incoming Request:', JSON.stringify({
@@ -148,12 +156,14 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
         date: noteDate,
         appointment: selectedAppointment,
         content: content,
+        amendment_reason: amendmentReason,
       }, null, 2));
 
       await updateNote(noteId, {
         date: noteDate,
         appointment: selectedAppointment,
         content,
+        amendment_reason: amendmentReason,
       });
 
       // Assign to case if selected (via API)
@@ -309,6 +319,23 @@ export const EditClinicalNoteModal: React.FC<EditClinicalNoteModalProps> = ({
                       sections={selectedTemplate.structure.sections as TemplateSection[]}
                       values={content as Record<string, unknown>}
                       onChange={(fieldId, value) => setContent((prev) => ({ ...prev, [fieldId]: value }))}
+                    />
+                  </div>
+                )}
+
+                {/* Amendment Reason */}
+                {isSigned && (
+                  <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 mt-6">
+                    <label className="flex items-center gap-2 text-sm font-medium text-amber-800 mb-2">
+                      Amendment Reason
+                    </label>
+                    <textarea
+                      value={amendmentReason}
+                      onChange={(e) => setAmendmentReason(e.target.value)}
+                      placeholder="Required: Please explain why you are amending this signed note..."
+                      className="w-full px-3 py-2 text-sm border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                      rows={2}
+                      required
                     />
                   </div>
                 )}

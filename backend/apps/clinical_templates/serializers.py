@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ClinicalTemplate, ClinicalNote, ClinicalNoteAuditLog
+from .models import ClinicalTemplate, ClinicalNote, ClinicalNoteAuditLog, ClinicalNoteVersion
 from django.utils import timezone
 from django.db import models
 from apps.appointments.models import Appointment
@@ -94,6 +94,7 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
             'appointment', 'appointment_date', 'appointment_time', 'appointment_service', 'appointment_practitioner',
             'clinic', 'template', 'template_name', 'template_version', 'patient_case',
             'date', 'note_type', 'is_signed', 'signed_at', 'is_draft', 'last_autosave',
+            'version_number', 'amendment_reason',
             'content', 'decrypted_content', 'chart_annotation_data', 'created_at', 'updated_at'
         ]
         extra_kwargs = {
@@ -108,7 +109,7 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
         }
         read_only_fields = [
             'id', 'signed_at', 'last_autosave', 'created_at', 'updated_at',
-            'template_version', 'is_signed'
+            'template_version', 'is_signed', 'version_number'
         ]
     
     def get_practitioner_avatar(self, obj) -> str | None:
@@ -222,6 +223,7 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
             validated['extracted_content'] = final_content if final_content is not None else {}
+            validated['has_content_update'] = True
             
         return validated
     
@@ -257,6 +259,8 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
         content = validated_data.pop('extracted_content', {})
         # Also pop 'content' just in case DRF left it there
         validated_data.pop('content', None)
+        # Pop the tracking flag so it doesn't get passed to the model constructor
+        validated_data.pop('has_content_update', None)
         
         print(f'\n{"="*60}')
         print(f'[CREATE TRACE] Step 5: Inside create()')
@@ -353,6 +357,16 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
         print(f'{"="*60}\n')
         # ---------------------------------------------------------
 
+        # Create initial ClinicalNoteVersion
+        ClinicalNoteVersion.objects.create(
+            clinical_note=instance,
+            version_number=1,
+            encrypted_content=instance.encrypted_content,
+            chart_annotation_data=instance.chart_annotation_data,
+            amendment_reason=instance.amendment_reason,
+            created_by=request.user if request else None
+        )
+
         # Log creation
         self._create_audit_log(instance, 'CREATED')
 
@@ -365,6 +379,8 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
         # Also pop 'content' just in case DRF left it there
         validated_data.pop('content', None)
 
+        has_content_update = validated_data.pop('has_content_update', False)
+
         # Prevent editing signed notes
         if instance.is_signed:
             raise serializers.ValidationError('Cannot edit a signed clinical note')
@@ -374,13 +390,27 @@ class ClinicalNoteSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
 
         # Apply unified content assignment logic
-        self._apply_content(instance, content)
+        if has_content_update:
+            self._apply_content(instance, content)
+            instance.version_number += 1
 
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"[ClinicalNote Edit] Before Save: instance.encrypted_content={instance.encrypted_content}")
 
         instance.save()
+        
+        # Create new ClinicalNoteVersion only if content was explicitly updated
+        if has_content_update:
+            request = self.context.get('request')
+            ClinicalNoteVersion.objects.create(
+                clinical_note=instance,
+                version_number=instance.version_number,
+                encrypted_content=instance.encrypted_content,
+                chart_annotation_data=instance.chart_annotation_data,
+                amendment_reason=instance.amendment_reason,
+                created_by=request.user if request else None
+            )
 
         logger.info(f"[ClinicalNote Edit] After Save: instance.encrypted_content={instance.encrypted_content}")
         
@@ -450,3 +480,36 @@ class ClinicalNoteAuditLogSerializer(serializers.ModelSerializer):
         model = ClinicalNoteAuditLog
         fields = '__all__'
         read_only_fields = '__all__'
+
+
+class ClinicalNoteVersionSerializer(serializers.ModelSerializer):
+    """Serializer for clinical note version snapshots"""
+    
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    content = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ClinicalNoteVersion
+        fields = [
+            'id', 'clinical_note', 'version_number', 'content', 'chart_annotation_data',
+            'amendment_reason', 'created_by', 'created_by_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'clinical_note', 'version_number', 'content', 'chart_annotation_data',
+            'amendment_reason', 'created_by', 'created_by_name', 'created_at', 'updated_at'
+        ]
+        
+    def get_content(self, obj):
+        """Return decrypted content (only if user has permission)"""
+        request = self.context.get('request')
+        
+        # Security check: Only return content to authorized users
+        if request and request.user:
+            note = obj.clinical_note
+            # Allow practitioner, admins, or same-clinic staff
+            if (note.practitioner.user == request.user or 
+                request.user.is_admin or 
+                (request.user.clinic == note.clinic and request.user.is_staff)):
+                return obj.content
+        
+        return None

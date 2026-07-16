@@ -75,7 +75,10 @@ export const createNote = async (data: CreateClinicalNoteData): Promise<Clinical
   return response.data;
 };
 
-export const updateNote = async (id: number, data: Partial<{ content: Record<string, any>; date?: string; appointment?: number }>): Promise<ClinicalNote> => {
+export const updateNote = async (
+  id: number, 
+  data: Partial<{ content: Record<string, any>; date?: string; appointment?: number; amendment_reason?: string }>
+): Promise<ClinicalNote> => {
   const response = await axiosInstance.patch(`${BASE_URL}/notes/${id}/`, data);
   return response.data;
 };
@@ -92,6 +95,29 @@ export const autosaveNote = async (id: number, content: Record<string, any>): Pr
 
 export const getNoteAuditLog = async (id: number) => {
   const response = await axiosInstance.get(`${BASE_URL}/notes/${id}/audit_log/`);
+  return response.data;
+};
+
+export interface ClinicalNoteVersion {
+  id: number;
+  clinical_note: number;
+  version_number: number;
+  content: Record<string, any> | null;
+  chart_annotation_data: Record<string, { chart_type: string; doodle_data: Record<string, unknown>[] }> | null;
+  amendment_reason: string;
+  created_by: number | null;
+  created_by_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getNoteHistory = async (id: number): Promise<ClinicalNoteVersion[]> => {
+  const response = await axiosInstance.get(`${BASE_URL}/notes/${id}/history/`);
+  return response.data;
+};
+
+export const getNoteHistoryDetail = async (id: number, versionId: number): Promise<ClinicalNoteVersion> => {
+  const response = await axiosInstance.get(`${BASE_URL}/notes/${id}/history/${versionId}/`);
   return response.data;
 };
 

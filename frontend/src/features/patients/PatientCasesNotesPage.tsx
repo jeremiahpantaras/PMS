@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, ChevronRight, FileText, FolderKanban, Loader2, Mail, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
+import { CheckCircle, ChevronRight, FileText, FolderKanban, History, Loader2, Mail, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createRoot } from 'react-dom/client';
 import { getNotes, getNote, getPrintNote } from '@/features/clinical-template/clinical-templates.api';
@@ -8,6 +8,7 @@ import { ClinicalNoteTemplate } from '@/features/clinical-template/components/Cl
 import { CreateClinicalNoteModal } from '@/features/clinical-template/components/CreateClinicalNoteModal';
 import { EditClinicalNoteModal } from '@/features/clinical-template/components/EditClinicalNoteModal';
 import { SendClinicalNoteModal } from '@/features/clinical-template/components/SendClinicalNoteModal';
+import { ClinicalNoteHistoryModal } from '@/features/clinical-template/components/ClinicalNoteHistoryModal';
 import { useClinicSettings } from '@/hooks/useClinicSettings';
 import { getPractitioners } from '@/features/clinics/clinic.api';
 import type { Practitioner } from '@/features/clinics/clinic.api';
@@ -51,6 +52,7 @@ const NoteDetailCard = ({ note, onEdit }: NoteDetailCardProps) => {
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const { emailEnabled } = useClinicSettings();
 
   useEffect(() => {
@@ -170,6 +172,19 @@ const NoteDetailCard = ({ note, onEdit }: NoteDetailCardProps) => {
             <Pencil className="w-3 h-3" />
             Edit
           </button>
+          
+          {/* History Button */}
+          {((displayNote as any).version_number ?? 1) > 1 && (
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+              title={`View Version History`}
+            >
+              <History className="w-3 h-3" />
+              History ({(displayNote as any).version_number})
+            </button>
+          )}
           <button
             type="button"
             onClick={() => emailEnabled && setSendEmailOpen(true)}
@@ -312,6 +327,12 @@ const NoteDetailCard = ({ note, onEdit }: NoteDetailCardProps) => {
         onClose={() => setSendEmailOpen(false)}
         noteId={note.id}
         patientName={displayNote.patient_name ?? ''}
+      />
+      <ClinicalNoteHistoryModal
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        noteId={note.id}
+        templateStructure={template?.structure}
       />
     </div>
   );

@@ -212,6 +212,10 @@ class ClinicalNote(TimeStampedModel, SoftDeleteModel):
     # Format: { "<field_id>": { "chart_type": "body|head|spine", "doodle_data": [...strokes] } }
     chart_annotation_data = models.JSONField(null=True, blank=True)
     
+    # Level 2 Audit History
+    version_number = models.PositiveIntegerField(default=1)
+    amendment_reason = models.TextField(blank=True, default='')
+    
     class Meta:
         db_table = 'clinical_notes_v2'
         ordering = ['-date', '-created_at']
@@ -248,6 +252,54 @@ class ClinicalNote(TimeStampedModel, SoftDeleteModel):
         self.is_draft = False
         self.signed_at = timezone.now()
         self.save(update_fields=['is_signed', 'is_draft', 'signed_at'])
+
+
+class ClinicalNoteVersion(TimeStampedModel):
+    """
+    Immutable snapshots of ClinicalNotes for Level 2 Audit History.
+    """
+    clinical_note = models.ForeignKey(
+        ClinicalNote,
+        on_delete=models.CASCADE,
+        related_name='versions'
+    )
+    version_number = models.PositiveIntegerField()
+    encrypted_content = models.TextField(
+        blank=True,
+        default='',
+        help_text='AES encrypted JSON content snapshot'
+    )
+    chart_annotation_data = models.JSONField(null=True, blank=True)
+    amendment_reason = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_clinical_note_versions'
+    )
+
+    class Meta:
+        db_table = 'clinical_note_versions'
+        ordering = ['-version_number']
+        indexes = [
+            models.Index(fields=['clinical_note', 'version_number']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['clinical_note', 'version_number'],
+                name='unique_note_version'
+            )
+        ]
+
+    def __str__(self):
+        return f"Version {self.version_number} of {self.clinical_note}"
+    
+    @property
+    def content(self):
+        """Decrypt and return content as dict"""
+        if not self.encrypted_content:
+            return {}
+        return FieldEncryptor.decrypt(self.encrypted_content)
 
 
 class ClinicalNoteAuditLog(TimeStampedModel):

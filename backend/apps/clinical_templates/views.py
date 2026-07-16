@@ -10,7 +10,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from .models import ClinicalTemplate, ClinicalNote, ClinicalNoteAuditLog
 from .serializers import (
-    ClinicalTemplateSerializer, ClinicalNoteSerializer, ClinicalNoteAuditLogSerializer
+    ClinicalTemplateSerializer, ClinicalNoteSerializer, ClinicalNoteAuditLogSerializer, ClinicalNoteVersionSerializer
 )
 from .permissions import (
     IsAdminOrReadOnly, IsSameClinic, IsPractitionerOrAdmin, CanEditClinicalNote
@@ -336,6 +336,38 @@ class ClinicalNoteViewSet(viewsets.ModelViewSet):
         note = self.get_object()
         logs = note.audit_logs.all()
         serializer = ClinicalNoteAuditLogSerializer(logs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def history(self, request, pk=None):
+        """
+        Get version history for a clinical note.
+        
+        GET /api/clinical-notes/{id}/history/
+        """
+        note = self.get_object()
+        versions = note.versions.all().order_by('-version_number')
+        serializer = ClinicalNoteVersionSerializer(versions, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path=r'history/(?P<version_id>\d+)')
+    def history_detail(self, request, pk=None, version_id=None):
+        """
+        Get a specific version of a clinical note.
+        
+        GET /api/clinical-notes/{id}/history/{version_id}/
+        """
+        note = self.get_object()
+        try:
+            from .models import ClinicalNoteVersion
+            version = note.versions.get(id=version_id)
+        except ClinicalNoteVersion.DoesNotExist:
+            return Response(
+                {'detail': 'Version not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = ClinicalNoteVersionSerializer(version, context={'request': request})
         return Response(serializer.data)
     
     def _get_client_ip(self):

@@ -17,6 +17,7 @@ export interface ChartStroke {
 export interface ChartAnnotation {
   canvas_image: string | null;
   doodle_data: ChartStroke[];
+  chart_type?: string;
 }
 
 // ─── Color Palette ───────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ export const ChartDrawingCanvas: React.FC<ChartDrawingCanvasProps> = ({
   // ── Load chart image ──────────────────────────────────────────────────────
   useEffect(() => {
     const img = new window.Image();
+    img.crossOrigin = 'Anonymous';
     img.src = chartImageMap[chartType];
     img.onload = () => setChartImage(img);
   }, [chartType]);
@@ -108,11 +110,15 @@ export const ChartDrawingCanvas: React.FC<ChartDrawingCanvasProps> = ({
       if (!onChange) return;
       // Defer so Konva has rendered the new stroke
       setTimeout(() => {
-        const dataURL = stageRef.current?.toDataURL({ pixelRatio: 1.5 }) ?? null;
-        onChange({ canvas_image: dataURL, doodle_data: latestStrokes });
+        try {
+          const dataURL = stageRef.current?.toDataURL({ pixelRatio: 1.5 }) ?? null;
+          onChange({ canvas_image: dataURL, doodle_data: latestStrokes, chart_type: chartType });
+        } catch (err) {
+          console.error('Failed to generate canvas image:', err);
+        }
       }, 60);
     },
-    [onChange],
+    [onChange, chartType],
   );
 
   // ── Drawing handlers ──────────────────────────────────────────────────────

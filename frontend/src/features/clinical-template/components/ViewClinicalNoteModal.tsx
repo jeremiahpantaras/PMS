@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { X, FileText, Loader2, Printer, Mail, CheckCircle, Pencil } from 'lucide-react';
+import { X, FileText, Loader2, Printer, Mail, CheckCircle, Pencil, History } from 'lucide-react';
 import { getNote, getPrintNote } from '../clinical-templates.api';
 import type { ClinicalNote, ClinicalTemplate, TemplateSection, TemplateField } from '@/types/clinicalTemplate';
 import { ClinicalNoteTemplate } from './ClinicalNoteTemplate';
 import { SendClinicalNoteModal } from './SendClinicalNoteModal';
+import { ClinicalNoteHistoryModal } from './ClinicalNoteHistoryModal';
 import toast from 'react-hot-toast';
 import { useClinicSettings } from '@/hooks/useClinicSettings';
 
@@ -58,6 +59,7 @@ export const ViewClinicalNoteModal: React.FC<ViewClinicalNoteModalProps> = ({
   const [template, setTemplate] = useState<ClinicalTemplate | null>(null);
   const [loading, setLoading] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
   const { emailEnabled } = useClinicSettings();
 
@@ -181,6 +183,19 @@ export const ViewClinicalNoteModal: React.FC<ViewClinicalNoteModalProps> = ({
                 Edit Note
               </button>
             )}
+            
+            {/* View History Button */}
+            {(note?.version_number ?? 1) > 1 && (
+              <button
+                onClick={() => setHistoryOpen(true)}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+                title="View Version History"
+              >
+                <History className="w-4 h-4" />
+                History ({note?.version_number})
+              </button>
+            )}
+
             <button
               onClick={() => emailEnabled && setSendEmailOpen(true)}
               disabled={!emailEnabled}
@@ -416,6 +431,13 @@ export const ViewClinicalNoteModal: React.FC<ViewClinicalNoteModalProps> = ({
         onClose={() => setSendEmailOpen(false)}
         noteId={noteId}
         patientName={note?.patient_name ?? ''}
+      />
+
+      <ClinicalNoteHistoryModal
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        noteId={noteId}
+        templateStructure={template?.structure}
       />
     </div>
   );
