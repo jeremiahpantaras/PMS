@@ -1,5 +1,6 @@
 import React from 'react';
 import { DocumentFooter } from '@/components/DocumentFooter';
+import { SignatureViewer } from '@/components/SignatureViewer';
 
 export interface ConsentFormTemplateData {
   clinicName: string;
@@ -222,7 +223,7 @@ export const ConsentFormTemplate: React.FC<ConsentFormTemplateData> = ({
             minWidth: '280px',
           }}
         >
-          <img
+          <SignatureViewer
             src={signature}
             alt={`Signature of ${patientName}`}
             style={{ height: '80px', maxWidth: '360px', objectFit: 'contain', display: 'block' }}

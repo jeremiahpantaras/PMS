@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { X, RotateCcw } from 'lucide-react';
 import { DocumentFooter } from '@/components/DocumentFooter';
+import { SignaturePad, type SignaturePadRef } from '@/components/SignaturePad';
 
 interface ClinicConsentFormViewerProps {
   isOpen: boolean;
@@ -27,8 +28,7 @@ export const ClinicConsentFormViewer: React.FC<ClinicConsentFormViewerProps> = (
   onClose,
   onSigned,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const signaturePadRef = useRef<SignaturePadRef>(null);
   const [hasSignature, setHasSignature] = useState(false);
 
   const today = useMemo(() => {
@@ -36,73 +36,14 @@ export const ClinicConsentFormViewer: React.FC<ClinicConsentFormViewerProps> = (
     return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   }, []);
 
-  useEffect(() => {
-    if (!isOpen || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    if (!context) return;
-
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.strokeStyle = '#111827';
-    context.lineWidth = 2;
-  }, [isOpen]);
-
-  const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-  };
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-
-    canvas.setPointerCapture(e.pointerId);
-    const { x, y } = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setIsDrawing(true);
-    setHasSignature(true);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!isDrawing || !canvas || !ctx) return;
-
-    const { x, y } = getPos(e);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (canvas.hasPointerCapture(e.pointerId)) {
-      canvas.releasePointerCapture(e.pointerId);
-    }
-    setIsDrawing(false);
-  };
-
   const handleClear = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    signaturePadRef.current?.clear();
     setHasSignature(false);
   };
 
   const handleAgree = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !hasSignature) return;
-    const signatureData = canvas.toDataURL('image/png');
+    const signatureData = signaturePadRef.current?.getSignatureData();
+    if (!signatureData) return;
     onSigned(signatureData);
     onClose();
   };
@@ -266,15 +207,9 @@ export const ClinicConsentFormViewer: React.FC<ClinicConsentFormViewerProps> = (
                   minWidth: '280px',
                 }}
               >
-                <canvas
-                  ref={canvasRef}
-                  width={760}
-                  height={160}
-                  className="w-full h-40 touch-none"
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerLeave={handlePointerUp}
+                <SignaturePad
+                  ref={signaturePadRef}
+                  onChange={(isEmpty) => setHasSignature(!isEmpty)}
                 />
               </div>
               <p
