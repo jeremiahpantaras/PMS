@@ -6,11 +6,19 @@ import { useStaffManagement }      from '../../hooks/useStaffManagement';
 import type { CreateStaffData, StaffMember } from '../../types/staff.types';
 import { useAuthStore }            from '@/store/auth.store';
 import { usePermissions }          from '@/hooks/usePermissions';
+import { DeleteStaffModal }        from '../../components/modals/DeleteStaffModal';
+import { getPractitionerRoleImpact } from '../../services/StaffService';
+import type { PractitionerRoleImpact } from '../../types/staff.types';
+import toast from 'react-hot-toast';
 
 export const Staff: React.FC = () => {
   const [isModalOpen, setIsModalOpen]     = useState(false);
   const [searchQuery, setSearchQuery]     = useState('');
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
+  const [deleteImpact, setDeleteImpact] = useState<PractitionerRoleImpact | undefined>();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const currentUser = useAuthStore(s => s.user);
   const { isOwner, isManager, managerBranches } = usePermissions();
@@ -20,6 +28,41 @@ export const Staff: React.FC = () => {
     createStaff, updateStaff, deleteStaff,
     toggleStaffStatus, refreshStaff,
   } = useStaffManagement();
+
+  const handleDeleteClick = async (staffMember: StaffMember) => {
+    setStaffToDelete(staffMember);
+    const isPractitioner = staffMember.roles?.includes('PRACTITIONER') || staffMember.role === 'PRACTITIONER';
+    
+    if (isPractitioner) {
+      try {
+        const impact = await getPractitionerRoleImpact(staffMember.id);
+        setDeleteImpact(impact);
+      } catch (err) {
+        toast.error('Failed to analyze deletion impact');
+        return;
+      }
+    } else {
+      setDeleteImpact(undefined);
+    }
+    
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!staffToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteStaff(staffToDelete.id);
+      setIsDeleteModalOpen(false);
+      setStaffToDelete(null);
+      setDeleteImpact(undefined);
+      toast.success('User deleted successfully');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to delete user');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleModalSubmit = async (data: CreateStaffData) => {
     if (selectedStaff) await updateStaff(selectedStaff.id, data);
@@ -125,7 +168,7 @@ export const Staff: React.FC = () => {
         loading={loading}
         currentUserId={currentUser?.id}
         onEdit={handleEdit}
-        onDelete={async id => await deleteStaff(id)}
+        onDelete={handleDeleteClick}
         onToggleStatus={async (id, isActive) => await toggleStaffStatus(id, isActive)}
       />
 
@@ -137,6 +180,21 @@ export const Staff: React.FC = () => {
         editingStaff={selectedStaff}
         currentUserId={currentUser?.id}
       />
+      
+      {staffToDelete && (
+        <DeleteStaffModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setStaffToDelete(null);
+          }}
+          onConfirm={handleConfirmDelete}
+          loading={isDeleting}
+          staffName={`${staffToDelete.first_name} ${staffToDelete.last_name}`}
+          impact={deleteImpact}
+          isPractitioner={staffToDelete.roles?.includes('PRACTITIONER') || staffToDelete.role === 'PRACTITIONER'}
+        />
+      )}
     </div>
   );
 };

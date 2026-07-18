@@ -294,6 +294,55 @@ class PractitionerViewSet(viewsets.ModelViewSet):
             return self.queryset
         return self.queryset.filter(clinic=user.clinic)
 
+    @action(detail=True, methods=['get'])
+    def deletion_impact(self, request, pk=None):
+        practitioner = self.get_object()
+        from apps.appointments.models import Appointment
+        from django.utils import timezone
+        
+        future_appointments_count = Appointment.objects.filter(
+            practitioner=practitioner,
+            date__gte=timezone.localdate(),
+            status__in=['SCHEDULED', 'CONFIRMED', 'PENDING']
+        ).count()
+        
+        return Response({
+            "future_appointments": future_appointments_count
+        })
+
+    def perform_destroy(self, instance):
+        from apps.appointments.models import Appointment
+        from django.utils import timezone
+        import uuid
+        
+        # 1. Cancel future appointments
+        future_appointments = Appointment.objects.filter(
+            practitioner=instance,
+            date__gte=timezone.localdate(),
+            status__in=['SCHEDULED', 'CONFIRMED', 'PENDING']
+        )
+        for appt in future_appointments:
+            appt.status = 'CANCELLED'
+            appt.cancellation_reason = 'Practitioner is no longer available.'
+            appt.cancelled_at = timezone.now()
+            appt.cancelled_by = self.request.user
+            appt.save(update_fields=['status', 'cancellation_reason', 'cancelled_at', 'cancelled_by'])
+            
+        # 2. Release email uniqueness constraints by soft-deleting user & renaming email
+        user = instance.user
+        if user:
+            # Generate a unique suffix so email can be reused
+            unique_suffix = str(uuid.uuid4())[:8]
+            old_email = user.email
+            # Prepend 'deleted_{suffix}_' to the email to ensure uniqueness
+            user.email = f"deleted_{unique_suffix}_{old_email}"[:254] # Ensure fits max length
+            user.is_active = False
+            user.save(update_fields=['email', 'is_active'])
+            user.soft_delete()
+            
+        # 3. Soft-delete the Practitioner instance (avoids CASCADE dropping historical records)
+        instance.soft_delete()
+
 
 class LocationViewSet(viewsets.ModelViewSet):
     queryset           = Location.objects.filter(is_deleted=False)

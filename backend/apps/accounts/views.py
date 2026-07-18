@@ -1733,10 +1733,37 @@ class UserViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        import uuid
+        
+        # Free up the email to allow reuse
+        unique_suffix = str(uuid.uuid4())[:8]
+        old_email = instance.email
+        instance.email = f"deleted_{unique_suffix}_{old_email}"[:254]
+        
         instance.is_deleted = True
         instance.is_active  = False
-        instance.save()
+        instance.save(update_fields=['email', 'is_deleted', 'is_active'])
 
+        # Cascade soft-delete to Practitioner if it exists
+        if hasattr(instance, 'practitioner_profile'):
+            practitioner = instance.practitioner_profile
+            # Check for future appointments and cancel them
+            from apps.appointments.models import Appointment
+            from django.utils import timezone
+            
+            future_appointments = Appointment.objects.filter(
+                practitioner=practitioner,
+                date__gte=timezone.localdate(),
+                status__in=['SCHEDULED', 'CONFIRMED', 'PENDING']
+            )
+            for appt in future_appointments:
+                appt.status = 'CANCELLED'
+                appt.cancellation_reason = 'Practitioner is no longer available.'
+                appt.cancelled_at = timezone.now()
+                appt.cancelled_by = request.user
+                appt.save(update_fields=['status', 'cancellation_reason', 'cancelled_at', 'cancelled_by'])
+                
+            practitioner.soft_delete()
         logger.info(f"User soft deleted: {instance.email} by {request.user.email}")
 
         return Response(

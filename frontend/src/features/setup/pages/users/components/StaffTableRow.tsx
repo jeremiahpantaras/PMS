@@ -7,7 +7,7 @@ interface Props {
   staff:          StaffMember;
   currentUserId?: number;
   onEdit:         (s: StaffMember) => void;
-  onDelete:       (id: number) => void;
+  onDelete:       (staff: StaffMember) => void;
   onToggleStatus: (id: number, isActive: boolean) => void;
 }
 
@@ -142,10 +142,7 @@ export const StaffTableRow: React.FC<Props> = ({
             <Edit2 className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {
-              if (window.confirm(`Delete "${staff.first_name} ${staff.last_name}"? This cannot be undone.`))
-                onDelete(staff.id);
-            }}
+            onClick={() => onDelete(staff)}
             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
             title="Delete"
           >

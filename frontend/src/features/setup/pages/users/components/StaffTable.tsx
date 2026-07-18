@@ -8,7 +8,7 @@ interface Props {
   loading:        boolean;
   currentUserId?: number;
   onEdit:         (s: StaffMember) => void;
-  onDelete:       (id: number) => void;
+  onDelete:       (staff: StaffMember) => void;
   onToggleStatus: (id: number, isActive: boolean) => void;
 }
 
