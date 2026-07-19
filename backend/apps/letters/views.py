@@ -6,6 +6,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import LetterTemplate, Letter
 from .serializers import LetterTemplateSerializer, LetterSerializer
+from apps.records.models import CaseDocument
+from .services import LetterGeneratorService
+from apps.patients.models import Patient
+from django.core.files.base import ContentFile
 
 import logging
 
@@ -114,6 +118,81 @@ class LetterViewSet(viewsets.ModelViewSet):
         if user.is_practitioner and not user.is_admin:
             qs = qs.filter(practitioner__user=user)
         return qs
+
+    @action(detail=False, methods=['post'])
+    def generate(self, request):
+        """
+        Generates a new Letter from a template.
+        Expects: template_id, patient_id, subject
+        Optional: patient_case_id
+        """
+        template_id = request.data.get('template_id')
+        patient_id = request.data.get('patient_id')
+        subject = request.data.get('subject')
+        patient_case_id = request.data.get('patient_case_id')
+
+        if not all([template_id, patient_id, subject]):
+            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            template = LetterTemplate.objects.get(id=template_id, clinic=request.user.clinic)
+            patient = Patient.objects.get(id=patient_id, clinic=request.user.clinic)
+            practitioner = getattr(request.user, 'practitioner', None)
+            
+            # 1. Render content
+            rendered_content = LetterGeneratorService.replace_variables(
+                template.content_html,
+                patient=patient,
+                practitioner=practitioner
+            )
+            
+            # Optionally wrap in header/footer
+            full_html = f"{template.header_html or ''}{rendered_content}{template.footer_html or ''}"
+            
+            # 2. Generate PDF
+            pdf_bytes = LetterGeneratorService.generate_pdf(full_html)
+            
+            # 3. Create Letter record
+            letter = Letter.objects.create(
+                clinic=request.user.clinic,
+                patient=patient,
+                patient_case_id=patient_case_id,
+                practitioner=practitioner,
+                template=template,
+                subject=subject,
+                content_html=rendered_content,
+                status='DRAFT'
+            )
+            
+            # Save PDF file
+            file_name = f"Letter_{letter.id}_{patient.get_full_name().replace(' ', '_')}.pdf"
+            letter.rendered_pdf.save(file_name, ContentFile(pdf_bytes), save=True)
+            
+            # 4. Sync to CaseDocument
+            CaseDocument.objects.create(
+                patient=patient,
+                patient_case_id=patient_case_id,
+                clinic=request.user.clinic,
+                uploaded_by=request.user,
+                title=subject,
+                category='LETTER',
+                source_type='LETTER',
+                source_id=letter.id,
+                file=letter.rendered_pdf,
+                file_name=file_name,
+                file_size=len(pdf_bytes),
+                mime_type='application/pdf'
+            )
+            
+            return Response(self.get_serializer(letter).data, status=status.HTTP_201_CREATED)
+            
+        except LetterTemplate.DoesNotExist:
+            return Response({'error': 'Template not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Patient.DoesNotExist:
+            return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Letter generation error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
     def sign(self, request, pk=None):
