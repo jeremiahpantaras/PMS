@@ -96,7 +96,7 @@ export const CaseSessionHistoryModal: React.FC<CaseSessionHistoryModalProps> = (
             </button>
           </div>
 
-          <div className="p-6 overflow-y-auto custom-scrollbar max-h-96">
+          <div className="p-6 overflow-y-auto custom-scrollbar max-h-[330px]">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-600 rounded-full animate-spin mb-4" />
