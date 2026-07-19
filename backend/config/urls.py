@@ -9,7 +9,10 @@ from django.http import JsonResponse
 from apps.accounts.views import AuthViewSet, UserViewSet, RoleViewSet, PermissionViewSet, PermissionGroupViewSet
 from apps.clinics.views import ClinicViewSet, PractitionerViewSet, LocationViewSet, ClinicConsentFormViewSet
 from apps.appointments.views import AppointmentViewSet, PractitionerScheduleViewSet, AppointmentReminderViewSet, BlockAppointmentViewSet, CalendarNoteViewSet, PublicRebookingLinkView, PublicRebookingSlotsView, PublicAppointmentConfirmView, TriggerRemindersWebhookView, PublicAppointmentCancelView
-from apps.records.views import ClinicalNoteViewSet, NoteTemplateViewSet, OutcomeMeasureViewSet, AttachmentViewSet
+from apps.records.views import (
+    ClinicalNoteViewSet, NoteTemplateViewSet, OutcomeMeasureViewSet,
+    AttachmentViewSet, CaseDocumentViewSet
+)
 from apps.billing.views import (
     AgeingDebtEntryViewSet,
     InvoiceViewSet, InvoiceItemViewSet, PaymentViewSet,
@@ -61,6 +64,7 @@ router.register(r'clinical-notes',   ClinicalNoteViewSet,   basename='clinical-n
 router.register(r'note-templates',   NoteTemplateViewSet,   basename='note-templates')
 router.register(r'outcome-measures', OutcomeMeasureViewSet, basename='outcome-measures')
 router.register(r'attachments',      AttachmentViewSet,     basename='attachments')
+router.register(r'case-documents',   CaseDocumentViewSet,   basename='case-documents')
 
 # Billing
 router.register(r'ageing-debt-entries', AgeingDebtEntryViewSet, basename='ageing-debt-entries')
@@ -89,6 +93,7 @@ urlpatterns = [
 
     path('api/', include('apps.patients.urls')),
     path('api/clinical-templates/', include('apps.clinical_templates.urls')),
+    path('api/letters/', include('apps.letters.urls')),
     path('api/', include('apps.inventory.urls')),
     path('api/', include('apps.contacts.urls')),
     path('api/', include('apps.messages.urls')),

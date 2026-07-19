@@ -12,12 +12,12 @@ import { ClinicalNoteHistoryModal } from '@/features/clinical-template/component
 import { useClinicSettings } from '@/hooks/useClinicSettings';
 import { getPractitioners } from '@/features/clinics/clinic.api';
 import type { Practitioner } from '@/features/clinics/clinic.api';
-import { CaseModal, type CaseFormData } from './CaseModal';
-import { AddCaseSessionModal } from './components/AddCaseSessionModal';
-import { RemoveCaseSessionModal } from './components/RemoveCaseSessionModal';
-import { CaseSessionHistoryModal } from './components/CaseSessionHistoryModal';
-import { RemoveLimitModal } from './components/RemoveLimitModal';
-import { usePatientProfileContext } from './context/PatientProfileContext';
+import { CaseModal, type CaseFormData } from '@/features/patients/CaseModal';
+import { AddCaseSessionModal } from '@/features/patients/components/AddCaseSessionModal';
+import { RemoveCaseSessionModal } from '@/features/patients/components/RemoveCaseSessionModal';
+import { CaseSessionHistoryModal } from '@/features/patients/components/CaseSessionHistoryModal';
+import { RemoveLimitModal } from '@/features/patients/components/RemoveLimitModal';
+import { usePatientProfileContext } from '@/features/patients/context/PatientProfileContext';
 import {
     createPatientCase as apiCreatePatientCase,
   updatePatientCase as apiUpdatePatientCase,
@@ -26,8 +26,8 @@ import {
   addCaseSessions,
   removeCaseSessions,
   removeCaseSessionLimit,
-} from './patientCases.api';
-import { formatDate } from './patientProfile.utils.tsx';
+} from '@/features/patients/patientCases.api';
+import { formatDate } from '@/features/patients/patientProfile.utils.tsx';
 import type { ClinicalNote, ClinicalTemplate, TemplateSection, TemplateField } from '@/types/clinicalTemplate';
 import type { PatientCase, PatientCaseStatus } from '@/types/patient';
 
@@ -401,7 +401,7 @@ const getMonthLabel = (monthValue: string): string => {
   });
 };
 
-export const PatientCasesNotesPage = () => {
+export const NotesTab = () => {
   const {
     patient,
     clinicalNotes,
@@ -1082,4 +1082,4 @@ export const PatientCasesNotesPage = () => {
   );
 };
 
-export default PatientCasesNotesPage;
+export default NotesTab;

@@ -177,3 +177,99 @@ class Attachment(TimeStampedModel, SoftDeleteModel):
     
     def __str__(self):
         return f"{self.file_name} - {self.patient.get_full_name()}"
+
+
+class CaseDocument(TimeStampedModel, SoftDeleteModel):
+    """
+    Documents organized by patient case — generated PDFs, letters,
+    reports, uploads, and attachments.
+
+    Architecture Decisions:
+    - Replaces the limited Attachment model for case-level document management
+    - source_type + source_id enable polymorphic linking to clinical notes, letters, etc.
+    - Uses the default Django storage backend (FileSystem dev / Cloudinary prod)
+    """
+
+    CATEGORY_CHOICES = [
+        ('CLINICAL_NOTE', 'Clinical Note'),
+        ('LETTER', 'Letter'),
+        ('REPORT', 'Report'),
+        ('LAB_RESULT', 'Lab Result'),
+        ('IMAGING', 'Imaging'),
+        ('REFERRAL', 'Referral'),
+        ('INSURANCE', 'Insurance'),
+        ('ATTACHMENT', 'Attachment'),
+        ('OTHER', 'Other'),
+    ]
+
+    SOURCE_TYPE_CHOICES = [
+        ('UPLOAD', 'Manual Upload'),
+        ('CLINICAL_NOTE', 'Clinical Note'),
+        ('LETTER', 'Letter'),
+        ('REPORT', 'Report'),
+    ]
+
+    patient = models.ForeignKey(
+        'patients.Patient',
+        on_delete=models.CASCADE,
+        related_name='case_documents',
+    )
+    patient_case = models.ForeignKey(
+        'patients.PatientCase',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documents',
+    )
+    clinic = models.ForeignKey(
+        'clinics.Clinic',
+        on_delete=models.CASCADE,
+        related_name='case_documents',
+    )
+    uploaded_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='uploaded_case_documents',
+    )
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='OTHER',
+    )
+
+    # Source tracking (polymorphic-like reference without GenericFK)
+    source_type = models.CharField(
+        max_length=20,
+        choices=SOURCE_TYPE_CHOICES,
+        default='UPLOAD',
+    )
+    source_id = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='PK of the source record (ClinicalNote, Letter, etc.)',
+    )
+
+    # File
+    file = models.FileField(upload_to='case_documents/')
+    file_name = models.CharField(max_length=255)
+    file_size = models.IntegerField(default=0, help_text='File size in bytes')
+    mime_type = models.CharField(max_length=100, default='application/octet-stream')
+
+    # Versioning
+    version = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        db_table = 'case_documents'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['patient', 'patient_case', '-created_at']),
+            models.Index(fields=['clinic', 'category']),
+            models.Index(fields=['source_type', 'source_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} — {self.patient.get_full_name()}"

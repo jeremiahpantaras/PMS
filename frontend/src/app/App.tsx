@@ -61,9 +61,12 @@ import { Profile }        from '@/features/profile/Profile';
 import PatientProfileLayout from '@/features/patients/PatientProfileLayout';
 import PatientProfilePage from '@/features/patients/PatientProfilePage';
 import PatientAppointmentsPage from '@/features/patients/PatientAppointmentsPage';
-import PatientCasesNotesPage from '@/features/patients/PatientCasesNotesPage';
+import ClinicalDocumentationWorkspace from '@/features/clinical-documentation/ClinicalDocumentationWorkspace';
+import NotesTab from '@/features/clinical-documentation/tabs/NotesTab';
+import { LettersTab } from '@/features/clinical-documentation/tabs/LettersTab';
+import { HistoryTab } from '@/features/clinical-documentation/tabs/HistoryTab';
+import { DocumentsTab } from '@/features/clinical-documentation/tabs/DocumentsTab';
 import PatientUnassignedNotesPage from '@/features/patients/PatientUnassignedNotesPage';
-import PatientDocumentsPage from '@/features/patients/PatientDocumentsPage';
 import { PatientCommunicationHistoryPage } from '@/features/patients/PatientCommunicationHistoryPage';
 import ClientSettings from '@/features/patients/ClientSettings';
 import { PatientProfile } from '@/features/patients/PatientProfile';
@@ -321,10 +324,17 @@ function App() {
             <Route index element={<Navigate to="profile" replace />} />
             <Route path="profile" element={<PatientProfilePage />} />
             <Route path="appointments" element={<PatientAppointmentsPage />} />
-            <Route path="cases" element={<PatientCasesNotesPage />} />
+            <Route path="clinical" element={<ClinicalDocumentationWorkspace />}>
+              <Route index element={<Navigate to="notes" replace />} />
+              <Route path="notes" element={<NotesTab />} />
+              <Route path="letters" element={<LettersTab />} />
+              <Route path="history" element={<HistoryTab />} />
+              <Route path="documents" element={<DocumentsTab />} />
+            </Route>
+            <Route path="cases" element={<Navigate to="../clinical/notes" replace />} />
             <Route path="unassigned-notes" element={<PatientUnassignedNotesPage />} />
-            <Route path="notes" element={<Navigate to="../cases" replace />} />
-            <Route path="documents" element={<PatientDocumentsPage />} />
+            <Route path="notes" element={<Navigate to="../clinical/notes" replace />} />
+            <Route path="documents" element={<Navigate to="../clinical/documents" replace />} />
             <Route path="communications" element={<PatientCommunicationHistoryPage />} />
             <Route path="settings"  element={<ClientSettings />} />
           </Route>

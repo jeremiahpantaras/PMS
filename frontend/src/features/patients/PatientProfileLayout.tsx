@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Calendar, FileText, FolderKanban, MessageSquare, Settings, UserCircle2, Files } from 'lucide-react';
+import { Calendar, FileText, FolderKanban, MessageSquare, Settings, UserCircle2 } from 'lucide-react';
 import { Navigate, NavLink, Outlet, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout';
 import { PatientProfileProvider, usePatientProfileContext } from './context/PatientProfileContext';
@@ -69,19 +69,14 @@ const PatientProfileShell = ({ patientId }: { patientId: number }) => {
                   icon={<Calendar className="w-4 h-4" />}
                 />
                 <NavItem
-                  label="Cases & Clinical Notes"
-                  to={`/patients/${patientId}/cases`}
+                  label="Clinical Documentation"
+                  to={`/patients/${patientId}/clinical`}
                   icon={<FolderKanban className="w-4 h-4" />}
                 />
                 <NavItem
                   label="Unassigned Notes"
                   to={`/patients/${patientId}/unassigned-notes`}
                   icon={<FileText className="w-4 h-4" />}
-                />
-                <NavItem
-                  label="Documents"
-                  to={`/patients/${patientId}/documents`}
-                  icon={<Files className="w-4 h-4" />}
                 />
                 <NavItem
                   label="Communication History"

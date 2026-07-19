@@ -4,11 +4,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from .models import ClinicalNote, NoteTemplate, OutcomeMeasure, Attachment
 from .serializers import (
     ClinicalNoteSerializer, NoteTemplateSerializer,
-    OutcomeMeasureSerializer, AttachmentSerializer
+    OutcomeMeasureSerializer, AttachmentSerializer,
+    CaseDocumentSerializer
 )
+from .models import ClinicalNote, NoteTemplate, OutcomeMeasure, Attachment, CaseDocument
 
 
 class ClinicalNoteViewSet(viewsets.ModelViewSet):
@@ -124,3 +125,24 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             uploaded_by=self.request.user,
             file_size=file.size if file else 0
         )
+
+
+class CaseDocumentViewSet(viewsets.ModelViewSet):
+    """
+    CRUD operations for CaseDocuments (letters, clinical notes, uploads).
+    """
+
+    queryset = CaseDocument.objects.filter(is_deleted=False).select_related(
+        'patient', 'patient_case', 'clinic', 'uploaded_by'
+    )
+    serializer_class = CaseDocumentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['patient', 'patient_case', 'category', 'source_type']
+    search_fields = ['title', 'description', 'file_name']
+    ordering_fields = ['created_at', 'category']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = self.queryset.filter(clinic=user.clinic)
+        return qs
