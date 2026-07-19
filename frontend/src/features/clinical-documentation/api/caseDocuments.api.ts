@@ -24,7 +24,7 @@ export interface CaseDocument {
 }
 
 export const getCaseDocuments = async (patientId: string | number): Promise<CaseDocument[]> => {
-  const response = await api.get(`/api/case-documents/?patient=${patientId}`);
+  const response = await api.get(`/case-documents/?patient=${patientId}`);
   return response.data;
 };
 
@@ -48,7 +48,7 @@ export const uploadCaseDocument = async (
     formData.append('description', description);
   }
   
-  const response = await api.post('/api/case-documents/', formData, {
+  const response = await api.post('/case-documents/', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -57,5 +57,5 @@ export const uploadCaseDocument = async (
 };
 
 export const deleteCaseDocument = async (id: number): Promise<void> => {
-  await api.delete(`/api/case-documents/${id}/`);
+  await api.delete(`/case-documents/${id}/`);
 };
