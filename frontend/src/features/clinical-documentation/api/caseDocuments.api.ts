@@ -25,7 +25,8 @@ export interface CaseDocument {
 
 export const getCaseDocuments = async (patientId: string | number): Promise<CaseDocument[]> => {
   const response = await api.get(`/case-documents/?patient=${patientId}`);
-  return response.data;
+  // Handle paginated responses (DRF) or direct arrays
+  return response.data.results || response.data;
 };
 
 export const uploadCaseDocument = async (
