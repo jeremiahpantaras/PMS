@@ -100,6 +100,8 @@ urlpatterns = [
     path('api/', include('apps.notifications.urls')),
     path('api/subscription/', include('apps.subscriptions.urls')),
     path('api/support/', include('apps.support.urls')),
+    path('api/gateway/', include('apps.gateway.urls')),
+    path('api/sms/', include('apps.smsgateway.urls')),
 
     path('api/auth/verify-token/', AuthViewSet.as_view({'post': 'verify_token'}), name='verify-token'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

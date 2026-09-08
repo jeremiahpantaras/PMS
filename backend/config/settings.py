@@ -74,6 +74,8 @@ INSTALLED_APPS = [
     'apps.subscriptions',
     'apps.letters',
     'apps.support',
+    'apps.gateway',
+    'apps.smsgateway',
 ]
 
 # ── Django Channels ───────────────────────────────────────────────────────────
@@ -319,6 +321,12 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
     ),
     'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user_sms': '60/min',
+    }
 }
 
 # JWT Settings
@@ -468,3 +476,7 @@ LOGGING = {
 
 # Create logs directory if it doesn't exist
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
+# ── SMS Gateway Settings ──────────────────────────────────────────────────────
+# This secret is required for the Android app to register itself and obtain a Bearer token.
+GATEWAY_REGISTRATION_SECRET = os.getenv('GATEWAY_REGISTRATION_SECRET', 'malasakit-default-secret-change-in-prod')

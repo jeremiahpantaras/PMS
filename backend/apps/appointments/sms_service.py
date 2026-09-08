@@ -26,64 +26,17 @@ def _normalize_phone(phone: str) -> str | None:
     return phone if phone.startswith('+') else None
 
 
-def _build_sms_body(appointment) -> str:
-    """Build the SMS reminder message body."""
-    patient   = appointment.patient
-    clinic    = appointment.clinic
-
-    practitioner_name = (
-        appointment.practitioner.user.get_full_name()
-        if appointment.practitioner and appointment.practitioner.user
-        else 'your practitioner'
-    )
-
-    location_name = (
-        appointment.location.name
-        if appointment.location
-        else clinic.name
-    )
-
-    date_str = appointment.date.strftime('%a, %b %d %Y')
-    time_str = appointment.start_time.strftime('%I:%M %p')
-
-    lines = [
-        f"Hi {patient.first_name}!",
-        f"",
-        f"📅 Appointment Reminder",
-        f"Date : {date_str}",
-        f"Time : {time_str}",
-        f"With : {practitioner_name}",
-        f"At   : {location_name}",
-        f"",
-    ]
-
-    if getattr(clinic, 'phone', ''):
-        lines.append(f"To reschedule/cancel call: {clinic.phone}")
-
-    lines.append(f"– {clinic.name}")
-
-    return '\n'.join(lines)
-
-
 def send_appointment_reminder_sms(appointment) -> tuple[bool, str]:
     """
-    Send a reminder SMS to the patient for their upcoming appointment.
+    Send a reminder SMS to the patient for their upcoming appointment using the integrated SMS Gateway.
 
     Returns:
         (success: bool, error_message: str)
     """
     # ── Guard: SMS must be enabled ────────────────────────────────────────────
-    if not settings.SMS_REMINDERS_ENABLED:
+    if not getattr(settings, 'SMS_REMINDERS_ENABLED', True):
         msg = "SMS reminders are disabled (SMS_REMINDERS_ENABLED=False)."
         logger.info(msg)
-        return False, msg
-
-    # ── Guard: Twilio credentials must exist ─────────────────────────────────
-    if not all([settings.TWILIO_ACCOUNT_SID,
-                settings.TWILIO_AUTH_TOKEN,
-                settings.TWILIO_FROM_NUMBER]):
-        msg = "Twilio credentials not configured."
-        logger.error(msg)
         return False, msg
 
     patient = appointment.patient
@@ -103,21 +56,87 @@ def send_appointment_reminder_sms(appointment) -> tuple[bool, str]:
         logger.warning(msg)
         return False, msg
 
-    # ── Build message body ────────────────────────────────────────────────────
-    body = _build_sms_body(appointment)
+    practitioner_name = (
+        appointment.practitioner.user.get_full_name()
+        if appointment.practitioner and appointment.practitioner.user
+        else 'your practitioner'
+    )
+    location_name = (
+        appointment.location.name
+        if appointment.location
+        else clinic.name
+    )
 
-    # ── Send via Twilio ───────────────────────────────────────────────────────
+    # ── Generate action tokens for SMS links ──────────────────────────────────
+    frontend_base = getattr(settings, 'FRONTEND_URL', 'https://app.mespms.com').rstrip('/')
+    confirm_url = ''
+    cancel_url = ''
+    rebook_url = ''
+
     try:
-        from twilio.rest import Client
-        from twilio.base.exceptions import TwilioRestException
+        from apps.appointments.models import AppointmentConfirmToken, AppointmentCancelToken, RebookingLink
 
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        # 1. Confirm Token
+        AppointmentConfirmToken.objects.filter(
+            appointment=appointment, is_used=False
+        ).update(is_used=True, used_at=timezone.now())
+        confirm_token = AppointmentConfirmToken.objects.create(appointment=appointment)
+        confirm_url = f"{frontend_base}/confirm/{confirm_token.token}"
 
-        message = client.messages.create(
-            body = body,
-            from_= settings.TWILIO_FROM_NUMBER,
-            to   = to_number,
+        # 2. Cancel Token
+        AppointmentCancelToken.objects.filter(
+            appointment=appointment, is_used=False
+        ).update(is_used=True, used_at=timezone.now())
+        cancel_token = AppointmentCancelToken.objects.create(appointment=appointment)
+        cancel_url = f"{frontend_base}/cancel/{cancel_token.token}"
+
+        # 3. Rebook Token
+        RebookingLink.objects.filter(
+            appointment=appointment, is_used=False
+        ).update(is_used=True, used_at=timezone.now())
+        rebook_token = RebookingLink.objects.create(patient=patient, appointment=appointment)
+        rebook_url = f"{frontend_base}/rebook/{rebook_token.token}"
+    except Exception as e:
+        logger.warning("Could not create SMS tokens for appt #%s: %s", appointment.id, e)
+
+    context = {
+        'patient_first_name':  patient.first_name,
+        'patient_full_name':   patient.get_full_name(),
+        'appointment_date':    appointment.date.strftime('%a, %b %d %Y'),
+        'appointment_time':    appointment.start_time.strftime('%I:%M %p'),
+        'practitioner_name':   practitioner_name,
+        'location_name':       location_name,
+        'clinic_name':         clinic.name,
+        'confirm_url':         confirm_url,
+        'cancel_url':          cancel_url,
+        'rebook_url':          rebook_url,
+    }
+
+    try:
+        from django.template.loader import render_to_string
+        body = render_to_string('appointments/sms/reminder.txt', context).strip()
+    except Exception as e:
+        msg = f"SMS Template render error for appointment {appointment.id}: {e}"
+        logger.error(msg)
+        return False, msg
+
+    # ── Queue SMS via SMSGateway ──────────────────────────────────────────────
+    try:
+        from apps.smsgateway.models import SMSMessage
+        from apps.smsgateway.tasks import dispatch_sms_task
+
+        sms_message = SMSMessage.objects.create(
+            recipient_number=to_number,
+            body=body,
+            status=SMSMessage.STATUS_QUEUED
         )
+        
+        try:
+            dispatch_sms_task.delay(str(sms_message.id))
+        except Exception as e:
+            # Silently pass if Celery/Redis is not running in production to save money.
+            # The message is safely queued in the DB for the Android app to pick up!
+            pass
 
         # ── Log to AppointmentReminder ────────────────────────────────────────
         from apps.appointments.models import AppointmentReminder
@@ -149,13 +168,13 @@ def send_appointment_reminder_sms(appointment) -> tuple[bool, str]:
             logger.warning("Failed to create CommunicationLog in sms_service: %s", comm_e)
 
         logger.info(
-            "SMS reminder sent → appointment_id=%s patient=%s phone=%s sid=%s",
-            appointment.id, patient.id, to_number, message.sid,
+            "SMS reminder queued → appointment_id=%s patient=%s phone=%s sms_id=%s",
+            appointment.id, patient.id, to_number, sms_message.id,
         )
         return True, ''
 
     except Exception as e:
-        error_msg = f"Twilio error for appointment {appointment.id}: {e}"
+        error_msg = f"SMS Gateway error for appointment {appointment.id}: {e}"
         logger.error(error_msg)
 
         # ── Log failed attempt ────────────────────────────────────────────────

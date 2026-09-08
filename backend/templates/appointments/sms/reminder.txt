@@ -1,0 +1,5 @@
+[Malasakit] Hi {{ patient_first_name }}! Reminder for your appt on {{ appointment_date }} at {{ appointment_time }} w/ {{ practitioner_name }}.
+
+Confirm: {{ confirm_url }}
+Cancel: {{ cancel_url }}
+Reschedule: {{ rebook_url }}
