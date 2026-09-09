@@ -356,7 +356,7 @@ class WebhookInboundView(APIView):
             except Exception:
                 pass
 
-            InboundSMS.objects.create(
+            inbound_sms = InboundSMS.objects.create(
                 sender_number=sender,
                 recipient_number=recipient,
                 body=body,
@@ -365,6 +365,66 @@ class WebhookInboundView(APIView):
                 processed_status='PENDING',
                 received_at=timezone.now()
             )
+
+            # ── Log all inbound messages and Auto-Process Y/N Replies ───────
+            reply_text = body.strip().upper()
+            try:
+                from apps.patients.models import Patient
+                from apps.appointments.models import Appointment
+                from apps.notifications.models import CommunicationLog
+                from apps.notifications.services.notification_service import broadcast_communication_log_updated
+
+                # Find patient by phone (normalized E164)
+                patient = Patient.objects.filter(phone=sender).first()
+                if patient:
+                    # Find closest upcoming scheduled appointment for linking
+                    appointment = Appointment.objects.filter(
+                        patient=patient,
+                        status__in=['SCHEDULED'],
+                        date__gte=timezone.now().date()
+                    ).order_by('date', 'start_time').first()
+
+                    # Process Y/N if applicable
+                    if reply_text in ["Y", "YES", "N", "NO"] and appointment:
+                        if reply_text in ["Y", "YES"]:
+                            appointment.status = 'CONFIRMED'
+                            appointment.save(update_fields=['status', 'updated_at'])
+                        else:
+                            appointment.status = 'CANCELLED'
+                            appointment.cancelled_at = timezone.now()
+                            appointment.save(update_fields=['status', 'cancelled_at', 'updated_at'])
+                            try:
+                                from apps.appointments.email_service import send_appointment_cancellation_email
+                                send_appointment_cancellation_email(appointment, "Patient cancelled via SMS reply")
+                            except Exception as cancel_ex:
+                                logger.warning("Could not send cancellation email for SMS reply: %s", cancel_ex)
+
+                    # Always log the reply, even if it's not Y/N
+                    new_log = CommunicationLog.objects.create(
+                        clinic=appointment.clinic if appointment else patient.clinic,
+                        patient=patient,
+                        appointment=appointment,
+                        practitioner=appointment.practitioner if appointment else None,
+                        comm_type='PATIENT_RESPONSE',
+                        channel='SMS',
+                        direction='INBOUND',
+                        status='DELIVERED',
+                        recipient=sender,
+                        subject=f"Patient Reply: {body[:30]}",
+                        body_preview=body[:2000],
+                        full_body=body,
+                    )
+                    try:
+                        broadcast_communication_log_updated(new_log)
+                    except Exception as bc_e:
+                        logger.warning("Failed to broadcast patient response log: %s", bc_e)
+                    
+                    # Mark as processed since we successfully logged it to the patient
+                    inbound_sms.processed_status = 'PROCESSED'
+                    inbound_sms.save(update_fields=['processed_status'])
+                    logger.info("WebhookInboundView: Logged inbound message from %s (appointment %s)", sender, appointment.id if appointment else "None")
+            except Exception as ex:
+                logger.error("WebhookInboundView: Error processing reply: %s", ex)
 
             logger.info(
                 "WebhookInboundView: device '%s' received inbound SMS from %s (msg_id=%s)",

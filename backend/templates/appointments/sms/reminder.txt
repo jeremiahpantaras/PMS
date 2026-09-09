@@ -1,5 +1,7 @@
-[Malasakit] Hi {{ patient_first_name }}! Reminder for your appt on {{ appointment_date }} at {{ appointment_time }} w/ {{ practitioner_name }}.
+Hi {{ patient_first_name }}! Reminder for your appointment on {{ appointment_date }} at {{ appointment_time }} with {{ clinic_name }}.
 
-Confirm: {{ confirm_url }}
-Cancel: {{ cancel_url }}
-Reschedule: {{ rebook_url }}
+if you wish to proceed with the scheduled appointment, Reply "Y" if yes, "N" if Cancel.
+
+If you wish to reschedule the appointment: {{ rebook_url }}
+
+thank you for choosing {{ clinic_name }}

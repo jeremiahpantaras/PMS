@@ -66,7 +66,7 @@ class Patient(TimeStampedModel, SoftDeleteModel):
         help_text='Send email notifications automatically for appointment reminders.',
     )
     sms_notifications_enabled = models.BooleanField(
-        default=False,
+        default=True,
         help_text='Send SMS notifications for appointment reminders (when SMS is enabled).',
     )
     allow_push_notifications = models.BooleanField(

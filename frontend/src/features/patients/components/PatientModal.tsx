@@ -57,7 +57,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     philhealth_number: '', hmo_provider: '', hmo_number: '',
     medical_conditions: '', allergies: '', medications: '',
     send_email_notifications: true,
-    sms_notifications_enabled: false,
+    sms_notifications_enabled: true,
   }), [user?.clinic]);
 
   const buildFormFromPatient = useCallback((currentPatient: Patient): CreatePatientData => ({
@@ -83,7 +83,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
     allergies:          currentPatient.allergies          || '',
     medications:        currentPatient.medications        || '',
     send_email_notifications: currentPatient.send_email_notifications ?? true,
-    sms_notifications_enabled: currentPatient.sms_notifications_enabled ?? false,
+    sms_notifications_enabled: currentPatient.sms_notifications_enabled ?? true,
   }), [user?.clinic]);
 
   const [formData, setFormData] = useState<CreatePatientData>(emptyForm);
@@ -585,16 +585,16 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                           <p className="text-xs text-gray-500">Receive appointment reminders and updates via email</p>
                         </div>
                       </label>
-                      <label className="flex items-center gap-3 cursor-not-allowed opacity-60">
+                      <label className="flex items-center gap-3 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={formData.sms_notifications_enabled ?? false}
-                          disabled
-                          className="w-4 h-4 text-gray-400 border-gray-300 rounded focus:ring-gray-500 cursor-not-allowed"
+                          onChange={(e) => setFormData(prev => ({ ...prev, sms_notifications_enabled: e.target.checked }))}
+                          className="w-4 h-4 text-sky-600 border-gray-300 rounded focus:ring-sky-500"
                         />
                         <div>
                           <p className="text-sm text-gray-900">SMS notifications</p>
-                          <p className="text-xs text-gray-500">Currently not available. Coming soon.</p>
+                          <p className="text-xs text-gray-500">Receive appointment reminders via text message</p>
                         </div>
                       </label>
                     </div>

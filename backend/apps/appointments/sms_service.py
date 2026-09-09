@@ -42,6 +42,18 @@ def send_appointment_reminder_sms(appointment) -> tuple[bool, str]:
     patient = appointment.patient
     clinic  = appointment.clinic
 
+    # ── Guard: Clinic master SMS switch ───────────────────────────────────────
+    if not getattr(clinic, 'sms_notifications_enabled', False):
+        msg = f"SMS reminders are disabled globally for clinic {clinic.id}."
+        logger.info(msg)
+        return False, msg
+
+    # ── Guard: Patient SMS opt-in switch ──────────────────────────────────────
+    if not getattr(patient, 'sms_notifications_enabled', False):
+        msg = f"Patient {patient.id} has opted out of SMS notifications."
+        logger.info(msg)
+        return False, msg
+
     # ── Guard: patient must have a phone number ───────────────────────────────
     raw_phone = getattr(patient, 'phone', None) or getattr(patient, 'contact_number', None)
     if not raw_phone:
