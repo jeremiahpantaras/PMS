@@ -15,6 +15,7 @@ import { Analytics } from "@vercel/analytics/react";
 // Public Pages
 import { LandingPage }            from '@/features/landing/LandingPage';
 import { UserManualPage }         from '@/features/landing/UserManualPage';
+import { DemoPage }               from '@/features/landing/DemoPage';
 import { Login }                  from '@/features/auth/Login';
 import { AdminRegister }          from '@/features/auth/AdminRegister';
 import { RegisterSuccess }        from '@/features/auth/RegisterSuccess';
@@ -82,7 +83,7 @@ import { SubscriptionEndedModal } from '@/features/setup/components/modals/Subsc
 import { SubscriptionInvoicePage } from '@/features/setup/pages/account/SubscriptionInvoicePage';
 
 // ─── Routes where internal components should NOT appear ────────────────────────────
-const PUBLIC_PATHS = ['/login', '/register', '/portal', '/clinic-setup', '/book', '/client-form', '/public', '/user-manual'];
+const PUBLIC_PATHS = ['/login', '/register', '/portal', '/clinic-setup', '/book', '/client-form', '/public', '/user-manual', '/demo'];
 
 const FloatingNotificationsGuard = () => {
   const location = useLocation();
@@ -217,6 +218,7 @@ function App() {
           {/* ── Public ─────────────────────────────────────────────── */}
           <Route path="/"                 element={<PublicRoute><LandingPage /></PublicRoute>} />
           <Route path="/user-manual"      element={<PublicRoute><UserManualPage /></PublicRoute>} />
+          <Route path="/demo"             element={<PublicRoute><DemoPage /></PublicRoute>} />
           <Route path="/login"            element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register"         element={<PublicRoute><AdminRegister /></PublicRoute>} />
           <Route path="/register/success" element={<PublicRoute><RegisterSuccess /></PublicRoute>} />

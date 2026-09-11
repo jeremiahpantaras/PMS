@@ -22,19 +22,25 @@ export const Hero: React.FC = () => {
             </p>
 
             {/* CTA Buttons */}
-            <div className="mt-10 flex flex-col sm:flex-row justify-center lg:justify-start gap-4">
+            <div className="mt-10 flex flex-col sm:flex-row flex-wrap justify-center lg:justify-start gap-4">
               <Link
                 to="/register"
                 className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-care-blue bg-white rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 font-body"
               >
                 Start Trial
               </Link>
-              <button
-                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+              <Link
+                to="/demo"
                 className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-white bg-trust-harbor border-2 border-white/20 rounded-xl hover:bg-trust-harbor/90 active:bg-trust-harbor/80 transition-all shadow-lg hover:shadow-xl font-body"
               >
                 Watch Demo
-              </button>
+              </Link>
+              <Link
+                to="/user-manual"
+                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-white bg-trust-harbor border-2 border-white/20 rounded-xl hover:bg-trust-harbor/90 active:bg-trust-harbor/80 transition-all shadow-lg hover:shadow-xl font-body"
+              >
+                Learn How It Works
+              </Link>
             </div>
           </div>
         </div>

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
-import { Footer } from './components/Footer';
 import { ManualSidebar } from './components/user-manual/ManualSidebar';
 import { ManualSearch } from './components/user-manual/ManualSearch';
 import { DocChapter } from './components/user-manual/DocChapter';
@@ -35,12 +34,18 @@ export const UserManualPage: React.FC = () => {
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
       
-      <main className="flex-1 pt-32 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="max-w-6xl mx-auto">
+      {/* Desktop Sidebar (Fixed Left) */}
+      <div className="hidden lg:block fixed left-0 top-0 bottom-0 w-[20rem] xl:w-[22rem] pt-28 bg-gray-50/30 border-r border-gray-100 z-40">
+        <ManualSidebar activeChapterId={activeChapterId} />
+      </div>
+
+      {/* Main Content */}
+      <main className="flex-1 pt-32 pb-20 w-full px-4 sm:px-6 lg:pl-[22rem] xl:pl-[26rem] lg:pr-12 xl:pr-24">
+        <div className="w-full max-w-5xl">
           {/* Header */}
-          <div className="text-center mb-10 pb-8 border-b border-gray-100">
+          <div className="mb-10 pb-8 border-b border-gray-100">
             <h1 className="text-4xl md:text-5xl font-bold text-trust-harbor font-heading mb-4">Documentation</h1>
-            <p className="text-lg md:text-xl text-gray-600 font-body max-w-3xl mx-auto">
+            <p className="text-lg md:text-xl text-gray-600 font-body max-w-3xl">
               Welcome to the official documentation for the Malasakit System. Here you will find step-by-step guides on how to use and navigate the platform.
             </p>
           </div>
@@ -48,12 +53,14 @@ export const UserManualPage: React.FC = () => {
           {/* Search */}
           <ManualSearch />
 
-          <div className="flex flex-col lg:flex-row gap-12">
-            {/* Sidebar */}
-            <ManualSidebar activeChapterId={activeChapterId} />
+          <div className="flex flex-col mt-12 gap-12">
+            {/* Mobile Sidebar */}
+            <div className="block lg:hidden w-full">
+              <ManualSidebar activeChapterId={activeChapterId} />
+            </div>
 
             {/* Content Area */}
-            <div className="w-full lg:w-3/4 min-h-[500px]">
+            <div className="w-full min-h-[500px]">
               <Suspense fallback={
                 <div className="animate-pulse space-y-8">
                   <div className="h-10 bg-gray-200 rounded w-1/3"></div>
@@ -76,7 +83,6 @@ export const UserManualPage: React.FC = () => {
         </div>
       </main>
 
-      <Footer />
     </div>
   );
 };
