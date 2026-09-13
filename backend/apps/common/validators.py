@@ -16,7 +16,7 @@ def validate_international_phone(value: str) -> None:
     try:
         # Default to 'PH' region if no '+' is provided, but allow any valid international number
         parsed = phonenumbers.parse(value, "PH")
-        if not phonenumbers.is_valid_number(parsed):
+        if not phonenumbers.is_possible_number(parsed):
             raise ValidationError("Please enter a valid phone number.")
     except NumberParseException:
         raise ValidationError("Please enter a valid phone number format (e.g. +639XXXXXXXXX).")
@@ -32,7 +32,7 @@ def normalize_international_phone(value: str) -> str:
 
     try:
         parsed = phonenumbers.parse(value, "PH")
-        if phonenumbers.is_valid_number(parsed):
+        if phonenumbers.is_possible_number(parsed):
             return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
     except NumberParseException:
         pass

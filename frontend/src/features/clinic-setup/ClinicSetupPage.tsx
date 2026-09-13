@@ -709,14 +709,13 @@ export const ClinicSetupPage: React.FC = () => {
                   </p>
                 </div>
               </label>
-              <label className="flex items-start gap-3 cursor-not-allowed opacity-50">
+              <label className="flex items-start gap-3 cursor-pointer">
                 <div className="mt-0.5 shrink-0">
-                  <input type="checkbox" checked={smsNotifEnabled} disabled className="w-4 h-4 rounded border-gray-300 text-gray-400 cursor-not-allowed" />
+                  <input type="checkbox" checked={smsNotifEnabled} onChange={(e) => setSmsNotifEnabled(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 cursor-pointer" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 flex items-center gap-2">
+                  <p className="text-xs font-semibold text-gray-700 flex items-center gap-2">
                     SMS Notifications
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded-full">Coming Soon</span>
                   </p>
                 </div>
               </label>

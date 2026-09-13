@@ -5,7 +5,7 @@ import { ClinicLocationPicker } from '@/components/maps/ClinicLocationPicker';
 import type { ReverseGeocodeResult } from '@/components/maps/ClinicLocationPicker';
 import { forwardGeocode } from '@/utils/geocode';
 import type { ClinicBranch, CreateBranchData } from '@/types/clinic';
-import { formatPHPhone, isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
+import { isValidPHPhone, normalizePHPhone } from '@/utils/phoneFormatter';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 
@@ -91,7 +91,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
         setForm({
           location,
           email:           branch.email           || '',
-          phone:           branch.phone ? formatPHPhone(branch.phone) : '',
+          phone:           branch.phone || '',
           address:         branch.address         || '',
           city:            branch.city            || '',
           province:        branch.province        || '',
@@ -141,13 +141,17 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.location.trim()) errs.location = 'Location / barangay name is required';
-    if (!form.email.trim())    errs.email    = 'Email is required';
-    else if (!isValidPHPhone(form.phone)) errs.phone = 'Enter a valid phone number';
+    
+    if (!form.email.trim()) errs.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email format';
+
+    if (!form.phone) errs.phone = 'Phone number is required';
+    else if (!isValidPHPhone(form.phone)) errs.phone = 'Please enter a valid phone number';
+
     if (!form.address.trim())  errs.address  = 'Address is required';
     if (!form.city.trim())     errs.city     = 'City is required';
     if (!form.province.trim()) errs.province = 'Province is required';
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      errs.email = 'Invalid email format';
+    
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -457,25 +461,22 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                     </div>
                   </label>
 
-                  {/* SMS (placeholder) */}
-                  <label className="flex items-start gap-3 cursor-not-allowed opacity-50">
+                  {/* SMS Notifications */}
+                  <label className="flex items-start gap-3 cursor-pointer">
                     <div className="mt-0.5 flex-shrink-0">
                       <input
                         type="checkbox"
                         checked={smsNotifEnabled}
-                        disabled
-                        className="w-4 h-4 rounded border-gray-300 cursor-not-allowed"
+                        onChange={(e) => setSmsNotifEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 cursor-pointer"
                       />
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+                      <p className="text-xs font-medium text-gray-700 flex items-center gap-1.5">
                         SMS Notifications
-                        <span className="text-xs px-1.5 py-0.5 bg-sky-100 text-sky-600 rounded-full font-normal">
-                          Coming Soon
-                        </span>
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        SMS reminders will be available in a future update.
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Send automatic SMS reminders for appointments.
                       </p>
                     </div>
                   </label>

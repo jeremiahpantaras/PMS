@@ -26,6 +26,6 @@ export const isValidPHPhone = (value: string): boolean => {
  * PhoneInput already returns E.164, so this is mostly a pass-through now.
  */
 export const normalizePHPhone = (value: string): string => {
-  return value;
+  return value ? value.replace(/\s+/g, '') : '';
 };
 

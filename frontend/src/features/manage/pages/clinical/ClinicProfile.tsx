@@ -282,6 +282,28 @@ export const ClinicProfile: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const [isSavingNotifs, setIsSavingNotifs] = useState(false);
+  const handleSaveNotifications = async () => {
+    if (!clinic) return;
+    setIsSavingNotifs(true);
+    try {
+      const payload: Partial<ClinicProfileSetupPayload> = {
+        ...form,
+        email_notifications_enabled: emailNotifEnabled,
+        sms_notifications_enabled: smsNotifEnabled,
+      };
+      const updated = await setupClinicProfile(clinic.id, payload as ClinicProfileSetupPayload);
+      setClinic(updated);
+      syncFormFromClinic(updated);
+      invalidateClinicSettingsCache();
+      toast.success('Notification preferences updated successfully.');
+    } catch (err: unknown) {
+      toast.error('Failed to update notifications.');
+    } finally {
+      setIsSavingNotifs(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!validate() || !clinic) return;
     setIsSaving(true);
@@ -684,75 +706,63 @@ export const ClinicProfile: React.FC = () => {
               Notification Preferences
             </h3>
 
-            {isEditing ? (
-              <div className="space-y-4">
-                {/* Email toggle */}
-                <label className="flex items-start gap-4 cursor-pointer group">
-                  <div className="mt-0.5 flex-shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={emailNotifEnabled}
-                      onChange={(e) => setEmailNotifEnabled(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-care-blue focus:ring-care-blue cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800 group-hover:text-care-blue transition-colors">
-                      Email Notifications
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Master switch for all clinic emails — reminders, booking confirmations, and welcome messages.
-                    </p>
-                  </div>
-                </label>
-
-                {/* SMS toggle (disabled placeholder) */}
-                <label className="flex items-start gap-4 cursor-not-allowed opacity-50">
-                  <div className="mt-0.5 flex-shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={smsNotifEnabled}
-                      disabled
-                      className="w-4 h-4 rounded border-gray-300 cursor-not-allowed"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                      SMS Notifications
-                      <span className="text-xs px-1.5 py-0.5 bg-sky-100 text-sky-600 rounded-full">Coming Soon</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      SMS reminders will be available in a future update.
-                    </p>
-                  </div>
-                </label>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <Mail className="w-4 h-4 text-care-blue" />
+            <div className="space-y-4">
+              {/* Email toggle */}
+              <label className="flex items-start gap-4 cursor-pointer group">
+                <div className="mt-0.5 flex-shrink-0 relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={emailNotifEnabled}
+                    onChange={(e) => setEmailNotifEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-care-blue"></div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-800 group-hover:text-care-blue transition-colors">
                     Email Notifications
-                  </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    emailNotifEnabled
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-600'
-                  }`}>
-                    {emailNotifEnabled ? 'Enabled' : 'Disabled'}
-                  </span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Master switch for all clinic emails — reminders, booking confirmations, and welcome messages.
+                  </p>
                 </div>
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Bell className="w-4 h-4" />
+              </label>
+
+              {/* SMS toggle */}
+              <label className="flex items-start gap-4 cursor-pointer">
+                <div className="mt-0.5 flex-shrink-0 relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={smsNotifEnabled}
+                    onChange={(e) => setSmsNotifEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-care-blue"></div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
                     SMS Notifications
-                  </div>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-600">
-                    Coming Soon
-                  </span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Master switch for all clinic SMS — reminders, booking confirmations, and welcome messages.
+                  </p>
                 </div>
-              </div>
-            )}
+              </label>
+
+              {/* Save Notifications Button */}
+              {clinic && !isEditing && (emailNotifEnabled !== clinic.email_notifications_enabled || smsNotifEnabled !== clinic.sms_notifications_enabled) && (
+                <div className="pt-2 border-t border-gray-100 mt-4 flex justify-end">
+                  <button
+                    onClick={handleSaveNotifications}
+                    disabled={isSavingNotifs}
+                    className="px-4 py-1.5 text-sm font-medium text-white bg-care-blue hover:bg-care-blue/90 rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSavingNotifs && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Save Changes
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
